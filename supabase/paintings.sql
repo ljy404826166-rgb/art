@@ -1,0 +1,3 @@
+-- Legacy file retained for migration history.
+-- The app should read from public.published_artworks, not public.paintings.
+-- Execute supabase/schema.sql for the canonical artwork schema and RLS policies.
