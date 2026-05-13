@@ -1366,13 +1366,15 @@ function toggleFavorite(id) {
   render();
 }
 
-function refreshRecommendations() {
+async function refreshRecommendations(options = {}) {
+  const { renderAfter = true } = options;
   state.recommendationIds = shuffle(artworks()).map((item) => item.id);
   state.tagOrder = shuffle(allTags()).map((tag) => tag.name);
   state.visibleTagCount = TAG_BATCH_SIZE;
   state.rowLimits.clear();
   state.rowLimits.set("recommendation", ROW_BATCH_SIZE);
-  renderHome();
+  await preloadInitialHomeImageRatios();
+  if (renderAfter) renderHome();
 }
 
 function maybeLoadMoreTagSections() {
@@ -1391,8 +1393,8 @@ function canPullRefresh() {
   return state.activeView === "home" && !state.loading && !state.error && !state.query.trim() && window.scrollY <= 0;
 }
 
-function pullRefreshHome() {
-  refreshRecommendations();
+async function pullRefreshHome() {
+  await refreshRecommendations();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -1414,7 +1416,12 @@ function handleTouchEnd() {
   state.pulling = false;
   state.pullStartY = 0;
   state.pullDistance = 0;
-  if (shouldRefresh) pullRefreshHome();
+  if (shouldRefresh) {
+    pullRefreshHome().catch((error) => {
+      console.warn("Recommendation refresh failed", error);
+      renderHome();
+    });
+  }
 }
 
 function handlePointerStart(event) {
@@ -1523,8 +1530,7 @@ async function loadPaintings() {
 
   try {
     state.paintings = await fetchPaintings();
-    refreshRecommendations();
-    await preloadInitialHomeImageRatios();
+    await refreshRecommendations({ renderAfter: false });
   } catch (error) {
     state.error = error instanceof Error ? error.message : "未知错误";
   } finally {
@@ -1542,7 +1548,12 @@ nodes.categorySearch?.addEventListener("input", (event) => {
   state.categoryQuery = event.target.value;
   renderCategories();
 });
-nodes.refresh?.addEventListener("click", refreshRecommendations);
+nodes.refresh?.addEventListener("click", () => {
+  refreshRecommendations().catch((error) => {
+    console.warn("Recommendation refresh failed", error);
+    renderHome();
+  });
+});
 nodes.profilePanelButtons.forEach((button) => {
   button.addEventListener("click", () => openProfileRoute(button.dataset.profilePanel));
 });
