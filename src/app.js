@@ -1135,7 +1135,14 @@ nodes.install.addEventListener("click", async () => {
 });
 
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js"));
+  window.addEventListener("load", async () => {
+    try {
+      const registration = await navigator.serviceWorker.register("/sw.js");
+      await registration.update();
+    } catch (error) {
+      console.warn("Service worker registration failed", error);
+    }
+  });
 }
 
 render();
