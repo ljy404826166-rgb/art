@@ -898,6 +898,55 @@ function initialRecommendationCardWidth(item) {
   return cardWidthFromRatio(ratio);
 }
 
+function hasKnownImageRatio(item) {
+  const url = imageUrl(item);
+  return Boolean(Number(readImageRatioCache()[url]) || ratioFromDimensions(item.dimensions));
+}
+
+function preloadImageRatio(item) {
+  if (hasKnownImageRatio(item)) return Promise.resolve();
+
+  const url = imageUrl(item);
+  return new Promise((resolve) => {
+    const image = new Image();
+    const finish = () => resolve();
+    const timer = window.setTimeout(finish, 2500);
+
+    image.addEventListener(
+      "load",
+      () => {
+        window.clearTimeout(timer);
+        if (image.naturalWidth && image.naturalHeight) {
+          const cache = readImageRatioCache();
+          cache[url] = image.naturalWidth / image.naturalHeight;
+          writeImageRatioCache(cache);
+        }
+        resolve();
+      },
+      { once: true },
+    );
+    image.addEventListener(
+      "error",
+      () => {
+        window.clearTimeout(timer);
+        resolve();
+      },
+      { once: true },
+    );
+    image.src = url;
+  });
+}
+
+async function preloadInitialHomeImageRatios() {
+  const items = [];
+  for (const section of homeSections().slice(0, 5)) {
+    items.push(...section.artworks.slice(0, 3));
+  }
+
+  const uniqueItems = [...new Map(items.map((item) => [imageUrl(item), item])).values()];
+  await Promise.all(uniqueItems.map(preloadImageRatio));
+}
+
 function recommendationCard(item) {
   const card = document.createElement("article");
   card.className = "recommendation-card";
@@ -1473,6 +1522,7 @@ async function loadPaintings() {
   try {
     state.paintings = await fetchPaintings();
     refreshRecommendations();
+    await preloadInitialHomeImageRatios();
   } catch (error) {
     state.error = error instanceof Error ? error.message : "未知错误";
   } finally {
