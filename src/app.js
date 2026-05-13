@@ -898,19 +898,12 @@ function initialRecommendationCardWidth(item) {
   return cardWidthFromRatio(ratio);
 }
 
-function hasKnownImageRatio(item) {
-  const url = imageUrl(item);
-  return Boolean(Number(readImageRatioCache()[url]) || ratioFromDimensions(item.dimensions));
-}
-
 function preloadImageRatio(item) {
-  if (hasKnownImageRatio(item)) return Promise.resolve();
-
   const url = imageUrl(item);
   return new Promise((resolve) => {
     const image = new Image();
     const finish = () => resolve();
-    const timer = window.setTimeout(finish, 2500);
+    const timer = window.setTimeout(finish, 6000);
 
     image.addEventListener(
       "load",
@@ -921,7 +914,11 @@ function preloadImageRatio(item) {
           cache[url] = image.naturalWidth / image.naturalHeight;
           writeImageRatioCache(cache);
         }
-        resolve();
+        if (typeof image.decode === "function") {
+          image.decode().then(resolve).catch(resolve);
+        } else {
+          resolve();
+        }
       },
       { once: true },
     );
@@ -933,6 +930,7 @@ function preloadImageRatio(item) {
       },
       { once: true },
     );
+    image.decoding = "async";
     image.src = url;
   });
 }
@@ -953,7 +951,7 @@ function recommendationCard(item) {
   card.style.setProperty("--art-card-width", `${initialRecommendationCardWidth(item)}px`);
   card.innerHTML = `
     <button class="recommendation-image" type="button" aria-label="查看 ${escapeHtml(item.title)}" data-art-title="${escapeHtml(item.title)}">
-      <img loading="lazy" src="${escapeHtml(imageUrl(item))}" alt="${escapeHtml(item.title)}" />
+      <img loading="eager" decoding="async" fetchpriority="high" src="${escapeHtml(imageUrl(item))}" alt="${escapeHtml(item.title)}" />
     </button>
     <div class="recommendation-copy">
       <h3>${escapeHtml(item.title)}</h3>
