@@ -24,6 +24,40 @@ export async function currentUserId(): Promise<string | null> {
   return data.user?.id ?? null;
 }
 
+export type UserSummary = {
+  id: string;
+  email: string | null;
+  phone: string | null;
+};
+
+export async function currentUserSummary(): Promise<UserSummary | null> {
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data.user) return null;
+
+  return {
+    id: data.user.id,
+    email: data.user.email ?? null,
+    phone: data.user.phone ?? null,
+  };
+}
+
+export async function signOutCurrentUser(): Promise<void> {
+  const { error } = await supabase.auth.signOut();
+  if (error) throw new Error(error.message);
+}
+
+export function clearLocalFavorites(): void {
+  localStorage.removeItem(favoriteKey);
+}
+
+export function clearLocalHistory(): void {
+  localStorage.removeItem(historyKey);
+}
+
+export function clearLocalDownloads(): void {
+  localStorage.removeItem("artArchive:downloads");
+}
+
 export async function syncFavorite(artworkId: string, isFavorite: boolean): Promise<void> {
   const userId = await currentUserId();
   if (!userId) return;
