@@ -968,6 +968,7 @@ function recommendationCard(item) {
 
 function attachRecommendationImageSizing(card) {
   const image = card.querySelector("img");
+  const imageButton = card.querySelector(".recommendation-image");
   const applySize = () => {
     if (!image.naturalWidth || !image.naturalHeight) return;
     const ratio = image.naturalWidth / image.naturalHeight;
@@ -976,6 +977,7 @@ function attachRecommendationImageSizing(card) {
     const cache = readImageRatioCache();
     cache[image.currentSrc || image.src] = ratio;
     writeImageRatioCache(cache);
+    imageButton.classList.add("is-loaded");
   };
 
   if (image.complete) applySize();
