@@ -48,6 +48,7 @@ const state = {
   pullStartY: 0,
   pullDistance: 0,
   pulling: false,
+  pullRefreshing: false,
   categoryInitialized: false,
 };
 
@@ -166,6 +167,7 @@ const nodes = {
   librarySourceText: document.querySelector("#librarySourceText"),
   search: document.querySelector("#searchInput"),
   status: document.querySelector("#statusBand"),
+  pullRefresh: document.querySelector("#pullRefreshIndicator"),
   refresh: document.querySelector("#refreshButton"),
   profileRefresh: document.querySelector("#profileRefreshButton"),
   quickFavorite: document.querySelector("#favoritesButton"),
@@ -1397,7 +1399,14 @@ function maybeLoadMoreTagSections() {
 }
 
 function canPullRefresh() {
-  return state.activeView === "home" && !state.loading && !state.error && !state.query.trim() && window.scrollY <= 0;
+  return (
+    state.activeView === "home" &&
+    !state.loading &&
+    !state.error &&
+    !state.query.trim() &&
+    !state.pullRefreshing &&
+    window.scrollY <= 0
+  );
 }
 
 async function pullRefreshHome() {
@@ -1405,16 +1414,34 @@ async function pullRefreshHome() {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
+function updatePullRefreshIndicator(phase, distance = state.pullDistance) {
+  if (!nodes.pullRefresh) return;
+  const threshold = 72;
+  const progress = Math.min(distance / threshold, 1);
+  const offset = phase === "refreshing" ? 42 : Math.min(distance * 0.48, 42);
+
+  nodes.pullRefresh.dataset.state = phase;
+  nodes.pullRefresh.style.setProperty("--pull-progress", String(progress));
+  nodes.pullRefresh.style.setProperty("--pull-offset", `${Math.round(offset)}px`);
+  nodes.pullRefresh.setAttribute("aria-hidden", String(phase === "idle"));
+}
+
+function resetPullRefreshIndicator(delay = 220) {
+  window.setTimeout(() => updatePullRefreshIndicator("idle", 0), delay);
+}
+
 function handleTouchStart(event) {
   if (!canPullRefresh()) return;
   state.pullStartY = event.touches[0].clientY;
   state.pullDistance = 0;
   state.pulling = true;
+  updatePullRefreshIndicator("pulling", 0);
 }
 
 function handleTouchMove(event) {
   if (!state.pulling) return;
   state.pullDistance = Math.max(0, event.touches[0].clientY - state.pullStartY);
+  updatePullRefreshIndicator(state.pullDistance >= 72 ? "ready" : "pulling");
 }
 
 function handleTouchEnd() {
@@ -1422,13 +1449,25 @@ function handleTouchEnd() {
   const shouldRefresh = state.pullDistance >= 72 && canPullRefresh();
   state.pulling = false;
   state.pullStartY = 0;
-  state.pullDistance = 0;
   if (shouldRefresh) {
-    pullRefreshHome().catch((error) => {
-      console.warn("Recommendation refresh failed", error);
-      renderHome();
-    });
+    state.pullRefreshing = true;
+    updatePullRefreshIndicator("refreshing", state.pullDistance);
+    pullRefreshHome()
+      .catch((error) => {
+        console.warn("Recommendation refresh failed", error);
+        renderHome();
+      })
+      .finally(() => {
+        state.pullRefreshing = false;
+        state.pullDistance = 0;
+        updatePullRefreshIndicator("done", 0);
+        resetPullRefreshIndicator();
+      });
+    return;
   }
+  state.pullDistance = 0;
+  updatePullRefreshIndicator("done", 0);
+  resetPullRefreshIndicator(140);
 }
 
 function handlePointerStart(event) {
@@ -1436,11 +1475,13 @@ function handlePointerStart(event) {
   state.pullStartY = event.clientY;
   state.pullDistance = 0;
   state.pulling = true;
+  updatePullRefreshIndicator("pulling", 0);
 }
 
 function handlePointerMove(event) {
   if (!state.pulling) return;
   state.pullDistance = Math.max(0, event.clientY - state.pullStartY);
+  updatePullRefreshIndicator(state.pullDistance >= 72 ? "ready" : "pulling");
 }
 
 function handlePointerEnd() {
@@ -1582,9 +1623,11 @@ window.addEventListener("scroll", maybeLoadMoreTagSections, { passive: true });
 window.addEventListener("touchstart", handleTouchStart, { passive: true });
 window.addEventListener("touchmove", handleTouchMove, { passive: true });
 window.addEventListener("touchend", handleTouchEnd, { passive: true });
+window.addEventListener("touchcancel", handleTouchEnd, { passive: true });
 window.addEventListener("pointerdown", handlePointerStart, { passive: true });
 window.addEventListener("pointermove", handlePointerMove, { passive: true });
 window.addEventListener("pointerup", handlePointerEnd, { passive: true });
+window.addEventListener("pointercancel", handlePointerEnd, { passive: true });
 window.addEventListener("keydown", (event) => {
   if (event.key === "Escape") closeProfileRoute();
   if (event.key === "Escape") closeDrawer();

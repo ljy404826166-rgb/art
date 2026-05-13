@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#ffffff" />
+    <meta
+      name="description"
+      content="艺藏 Art Archive 是一个用于欣赏、下载和学习公开领域绘画艺术品的移动端 App。"
+    />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/assets/icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/src/styles.css?v=home-search-grid1" />
+    <title>艺藏 Art Archive</title>
+  </head>
+  <body>
+    <div id="app">
+      <header class="app-shell">
+        <div class="topbar">
+          <strong class="screen-title">画廊</strong>
+          <div class="nav-actions">
+            <button class="icon-button" id="installButton" type="button" hidden aria-label="安装应用">
+              <span aria-hidden="true">⇩</span>
+            </button>
+            <button class="icon-button" id="favoritesButton" type="button" aria-label="查看收藏">
+              <span aria-hidden="true">♡</span>
+            </button>
+          </div>
+        </div>
+
+        <nav class="main-nav" aria-label="应用主导航">
+          <button class="main-nav-item" type="button" data-view-target="home" aria-pressed="true">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M3.5 10.8L12 4l8.5 6.8V20a1 1 0 0 1-1 1h-5.2v-5.6H9.7V21H4.5a1 1 0 0 1-1-1v-9.2Z" />
+            </svg>
+            <span>首页</span>
+          </button>
+          <button class="main-nav-item" type="button" data-view-target="categories" aria-pressed="false">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M4 4h6v6H4V4Zm10 0h6v6h-6V4ZM4 14h6v6H4v-6Zm10 0h6v6h-6v-6Z" />
+            </svg>
+            <span>分类</span>
+          </button>
+          <button class="main-nav-item" type="button" data-view-target="me" aria-pressed="false">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M12 12.5a4 4 0 1 0 0-8a4 4 0 0 0 0 8Zm-7 7.1c.7-3.5 3.4-5.6 7-5.6s6.3 2.1 7 5.6" />
+            </svg>
+            <span>我的</span>
+          </button>
+        </nav>
+      </header>
+
+      <main>
+        <section class="status-band" id="statusBand" hidden></section>
+
+        <section class="view-section" id="homeView" data-view-section="home">
+          <div class="pull-refresh-indicator" id="pullRefreshIndicator" data-state="idle" aria-hidden="true">
+            <svg viewBox="0 0 40 40" aria-hidden="true">
+              <circle class="pull-refresh-track" cx="20" cy="20" r="15.5" pathLength="100"></circle>
+              <circle class="pull-refresh-progress" cx="20" cy="20" r="15.5" pathLength="100"></circle>
+            </svg>
+          </div>
+
+          <section class="home-search app-shell" aria-label="搜索作品">
+            <label class="search-field" data-figma-node="41:3107">
+              <span class="search-icon" aria-hidden="true">
+                <img src="/assets/icon-search-figma.svg" alt="" />
+              </span>
+              <input id="searchInput" type="search" placeholder="星月夜" autocomplete="off" />
+              <button class="filter-button" type="button" aria-label="筛选">
+                <img src="/assets/icon-filter-figma.svg" alt="" />
+              </button>
+            </label>
+          </section>
+
+          <section class="app-shell recommendation-section" id="gallery">
+            <div class="recommendation-feed" id="galleryGrid" aria-live="polite"></div>
+          </section>
+        </section>
+
+        <section class="view-section category-page" id="categoriesView" data-view-section="categories" hidden>
+          <section class="category-search app-shell" aria-label="搜索分类作品">
+            <label class="category-search-field">
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M10.8 18a7.2 7.2 0 1 1 0-14.4a7.2 7.2 0 0 1 0 14.4Zm5.1-2.1 4.5 4.5" />
+              </svg>
+              <input id="categorySearchInput" type="search" placeholder="搜索画作、艺术家..." autocomplete="off" />
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M5 7h8m4 0h2M9 17h10M5 17h1m5-10a2 2 0 1 0 4 0 2 2 0 0 0-4 0Zm-5 10a2 2 0 1 0 4 0 2 2 0 0 0-4 0Z" />
+              </svg>
+            </label>
+          </section>
+          <section class="category-content app-shell">
+            <div class="category-filter-sections" id="categoryGrid" aria-label="标签分类"></div>
+            <div class="category-results-heading">
+              <h2 id="categoryResultTitle">分类结果</h2>
+              <p id="categoryResultEyebrow">0件作品</p>
+            </div>
+            <div class="category-results-grid" id="categoryResults" aria-live="polite"></div>
+          </section>
+        </section>
+
+        <section class="view-section profile-page app-shell" id="meView" data-view-section="me" hidden>
+          <div class="profile-hero">
+            <div class="avatar" aria-hidden="true">艺</div>
+            <div>
+              <p class="eyebrow">My archive</p>
+              <h1>我的</h1>
+              <p>管理收藏、查看资料库状态，并为未来账号、下载记录和学习足迹预留入口。</p>
+            </div>
+          </div>
+
+          <div class="profile-grid">
+            <article class="profile-panel">
+              <span class="metric" id="favoriteCount">0</span>
+              <h2>我的收藏</h2>
+              <p>收藏会保存在当前设备，接入 Supabase Auth 后可同步到账户。</p>
+              <button class="text-button" id="showFavoriteButton" type="button">查看收藏作品</button>
+            </article>
+            <article class="profile-panel">
+              <span class="metric" id="libraryCount">0</span>
+              <h2>资料库</h2>
+              <p id="librarySourceText">当前数据来自 Supabase paintings 表。</p>
+              <button class="text-button" id="profileRefreshButton" type="button">同步资料库</button>
+            </article>
+            <article class="profile-panel">
+              <span class="metric">Soon</span>
+              <h2>账号与下载</h2>
+              <p>这里将承载登录、下载历史、隐私设置和会员功能。</p>
+            </article>
+          </div>
+
+          <section class="favorites-section">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Favorites</p>
+                <h2>收藏作品</h2>
+              </div>
+            </div>
+            <div class="gallery-grid" id="favoriteGrid" aria-live="polite"></div>
+          </section>
+        </section>
+      </main>
+
+      <aside class="drawer detail-page" id="detailDrawer" aria-hidden="true" data-mounted="false" aria-labelledby="detailTitleCn">
+        <article class="drawer-card detail-card">
+<header class="detail-topbar">
+            <button class="detail-icon-button" id="drawerClose" type="button" aria-label="返回首页">
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M15 18L9 12L15 6" />
+              </svg>
+            </button>
+            <strong class="detail-brand">详情</strong>
+            <button class="detail-icon-button detail-favorite-icon" id="detailFavoriteButton" type="button" aria-label="收藏作品" aria-pressed="false">
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M20.84 4.61C20.33 4.1 19.73 3.7 19.07 3.43C18.41 3.16 17.7 3.02 16.99 3.02C16.28 3.02 15.57 3.16 14.91 3.43C14.25 3.7 13.65 4.1 13.14 4.61L12 5.75L10.86 4.61C9.83 3.58 8.43 3 6.97 3C5.51 3 4.11 3.58 3.08 4.61C2.05 5.64 1.47 7.04 1.47 8.5C1.47 9.96 2.05 11.36 3.08 12.39L12 21.31L20.92 12.39C21.43 11.88 21.83 11.28 22.1 10.62C22.37 9.96 22.51 9.25 22.51 8.54C22.51 7.83 22.37 7.12 22.1 6.46C21.83 5.8 21.35 5.12 20.84 4.61Z" />
+              </svg>
+            </button>
+          </header>
+
+          <main class="detail-main">
+            <img class="detail-hero-image" id="drawerImage" alt="" />
+
+            <section class="detail-info">
+              <div class="detail-title-block">
+                <h1 id="detailTitleCn"></h1>
+                <p id="detailTitleEn"></p>
+              </div>
+
+              <dl class="detail-meta-grid">
+                <div>
+                  <dt>创作者</dt>
+                  <dd id="detailCreator"></dd>
+                </div>
+                <div>
+                  <dt>现收藏于</dt>
+                  <dd id="detailLocation"></dd>
+                </div>
+                <div>
+                  <dt>创作于</dt>
+                  <dd id="detailCreated"></dd>
+                </div>
+                <div>
+                  <dt>材质</dt>
+                  <dd id="detailMedium"></dd>
+                </div>
+                <div>
+                  <dt>尺寸</dt>
+                  <dd id="detailDimensions"></dd>
+                </div>
+              </dl>
+
+              <div class="detail-description" id="detailDescription"></div>
+              <div class="detail-tags" id="detailTags" aria-label="作品标签"></div>
+            </section>
+          </main>
+        </article>
+      </aside>
+    </div>
+
+    <script type="module" src="/src/app.js?v=home-search-grid1"></script>
+  </body>
+</html>
