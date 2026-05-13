@@ -2011,13 +2011,22 @@ main {
 }
 
 .pull-refresh-indicator[data-state="ready"] .pull-refresh-progress,
-.pull-refresh-indicator[data-state="refreshing"] .pull-refresh-progress,
 .pull-refresh-indicator[data-state="done"] .pull-refresh-progress {
   stroke-dasharray: 100 100;
 }
 
 .pull-refresh-indicator[data-state="refreshing"] svg {
   animation: pullRefreshSpin 820ms linear infinite;
+}
+
+.pull-refresh-indicator[data-state="refreshing"] .pull-refresh-track {
+  stroke: rgba(31, 35, 40, 0.08);
+}
+
+.pull-refresh-indicator[data-state="refreshing"] .pull-refresh-progress {
+  stroke-dasharray: 34 100;
+  stroke-dashoffset: 0;
+  transition: none;
 }
 
 .pull-refresh-indicator[data-state="done"] {
