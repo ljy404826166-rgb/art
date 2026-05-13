@@ -1088,6 +1088,23 @@ button.profile-setting-row {
   background: #fff0f0;
 }
 
+.profile-route-message {
+  border-radius: 16px;
+  padding: 12px 14px;
+  color: #6b3a36;
+  background: #fbf4f2;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.profile-danger-row strong {
+  color: #c43232;
+}
+
+.profile-danger-row:disabled strong {
+  color: #111418;
+}
+
 @media (max-width: 430px) {
   .profile-setting-row {
     align-items: flex-start;

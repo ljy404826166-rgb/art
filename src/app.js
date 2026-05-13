@@ -416,6 +416,9 @@ function rerenderActiveProfileRoute() {
   if (nodes.profileRouteTitle.textContent === "设置") {
     renderSettingsRoute();
   }
+  if (nodes.profileRouteTitle.textContent === "安全中心") {
+    renderSecurityRoute();
+  }
 }
 
 function runLocalDataAction(action) {
@@ -476,6 +479,138 @@ function bindSettingsRouteEvents() {
   nodes.profileRouteMain.querySelectorAll("[data-local-action]").forEach((button) => {
     button.addEventListener("click", () => runLocalDataAction(button.dataset.localAction));
   });
+}
+
+function accountValue(value) {
+  return value ? escapeHtml(value) : "未绑定或未登录";
+}
+
+function securityRouteHtml() {
+  const loggedIn = Boolean(state.authSummary);
+  const authStatus = state.authLoaded ? (loggedIn ? "已登录" : "未登录") : "读取中";
+  const authTone = state.authLoaded ? (loggedIn ? "ok" : "muted") : "warning";
+  const message = state.routeMessage
+    ? `<div class="profile-route-message">${escapeHtml(state.routeMessage)}</div>`
+    : "";
+
+  return `
+    <section class="profile-route-page security-route">
+      <section class="profile-route-hero">
+        <p>手机号、邮箱与登录设备</p>
+        <h1>安全中心</h1>
+        <div>这里仅展示当前 Supabase Auth 可确认的账号状态；暂未接入的能力保持占位。</div>
+      </section>
+
+      ${message}
+
+      <section class="profile-setting-group">
+        <h2>账号状态</h2>
+        <div class="profile-setting-row">
+          <div><strong>登录状态</strong><span>${authStatus}</span></div>
+          ${profileStatusBadge(authStatus, authTone)}
+        </div>
+        <div class="profile-setting-row">
+          <div><strong>绑定邮箱</strong><span>${accountValue(state.authSummary?.email)}</span></div>
+          ${profileStatusBadge(state.authSummary?.email ? "来自 Auth" : "未配置", state.authSummary?.email ? "ok" : "muted")}
+        </div>
+        <div class="profile-setting-row">
+          <div><strong>绑定手机号</strong><span>${accountValue(state.authSummary?.phone)}</span></div>
+          ${profileStatusBadge(state.authSummary?.phone ? "来自 Auth" : "未配置", state.authSummary?.phone ? "ok" : "muted")}
+        </div>
+        <button class="profile-setting-row" type="button" data-security-action="refreshAuth">
+          <div><strong>刷新账号状态</strong><span>重新读取 Supabase Auth 当前用户。</span></div>
+        </button>
+      </section>
+
+      <section class="profile-setting-group">
+        <h2>安全管理</h2>
+        <button class="profile-setting-row is-disabled" type="button" disabled>
+          <div><strong>更换邮箱</strong><span>需要完整登录、验证邮件和回调页面后启用。</span></div>${profileStatusBadge("占位", "muted")}
+        </button>
+        <button class="profile-setting-row is-disabled" type="button" disabled>
+          <div><strong>更换手机号</strong><span>需要短信验证能力后启用。</span></div>${profileStatusBadge("占位", "muted")}
+        </button>
+        <button class="profile-setting-row is-disabled" type="button" disabled>
+          <div><strong>登录设备管理</strong><span>当前项目没有设备会话列表接口，暂不展示伪数据。</span></div>${profileStatusBadge("占位", "muted")}
+        </button>
+      </section>
+
+      <section class="profile-setting-group">
+        <h2>本机隐私</h2>
+        <button class="profile-setting-row" type="button" data-local-action="clearHistory"><div><strong>清除浏览历史</strong><span>${state.history.length} 条本机记录</span></div></button>
+        <button class="profile-setting-row" type="button" data-local-action="clearFavorites"><div><strong>清除本机收藏</strong><span>${state.favorites.size} 件作品</span></div></button>
+        <button class="profile-setting-row" type="button" data-local-action="clearDownloads"><div><strong>清除下载记录</strong><span>${Array.isArray(state.downloads) ? state.downloads.length : 0} 个文件</span></div></button>
+      </section>
+
+      <section class="profile-setting-group">
+        <h2>账号操作</h2>
+        <button class="profile-setting-row profile-danger-row" type="button" data-security-action="signOut" ${loggedIn ? "" : "disabled"}>
+          <div><strong>退出登录</strong><span>${loggedIn ? "退出当前 Supabase Auth 会话。" : "当前没有可退出的登录会话。"}</span></div>
+        </button>
+        <button class="profile-setting-row profile-danger-row is-disabled" type="button" disabled>
+          <div><strong>注销账号</strong><span>需要后端删除流程、二次确认和数据保留策略后启用。</span></div>${profileStatusBadge("占位", "muted")}
+        </button>
+      </section>
+    </section>
+  `;
+}
+
+function renderSecurityRoute() {
+  nodes.profileRouteTitle.textContent = "安全中心";
+  nodes.profileRouteMain.innerHTML = securityRouteHtml();
+  bindSecurityRouteEvents();
+}
+
+function bindSecurityRouteEvents() {
+  nodes.profileRouteMain.querySelectorAll("[data-local-action]").forEach((button) => {
+    button.addEventListener("click", () => runLocalDataAction(button.dataset.localAction));
+  });
+
+  nodes.profileRouteMain.querySelectorAll("[data-security-action]").forEach((button) => {
+    button.addEventListener("click", () => handleSecurityAction(button.dataset.securityAction));
+  });
+}
+
+async function handleSecurityAction(action) {
+  if (action === "refreshAuth") {
+    state.routeMessage = "正在刷新账号状态...";
+    renderSecurityRoute();
+    await loadAuthSummary({ rerenderRoute: true });
+    state.routeMessage = "账号状态已刷新。";
+    renderSecurityRoute();
+    return;
+  }
+
+  if (action === "signOut") {
+    if (!state.authSummary) return;
+    if (!window.confirm("确认退出当前账号？")) return;
+    state.routeMessage = "正在退出登录...";
+    renderSecurityRoute();
+    try {
+      await signOutCurrentUser();
+      state.authSummary = null;
+      state.authLoaded = true;
+      state.routeMessage = "已退出登录。";
+    } catch (error) {
+      state.routeMessage = `退出失败：${error instanceof Error ? error.message : "未知错误"}`;
+    }
+    renderProfile();
+    renderSecurityRoute();
+  }
+}
+
+async function loadAuthSummary(options = {}) {
+  state.authLoaded = false;
+  if (options.rerenderRoute && nodes.profileRouteTitle.textContent === "安全中心") renderSecurityRoute();
+  try {
+    state.authSummary = await currentUserSummary();
+  } catch (error) {
+    console.warn("Auth summary failed", error);
+    state.authSummary = null;
+  } finally {
+    state.authLoaded = true;
+    if (options.rerenderRoute && nodes.profileRouteTitle.textContent === "安全中心") renderSecurityRoute();
+  }
 }
 
 function profileRouteConfig(panel) {
@@ -540,6 +675,19 @@ function openProfileRoute(panel) {
       nodes.profileRoute.setAttribute("aria-hidden", "false");
     });
     document.body.classList.add("profile-route-open");
+    return;
+  }
+
+  if (panel === "security") {
+    window.clearTimeout(profileRouteCloseTimer);
+    state.routeMessage = "";
+    renderSecurityRoute();
+    nodes.profileRoute.dataset.mounted = "true";
+    requestAnimationFrame(() => {
+      nodes.profileRoute.setAttribute("aria-hidden", "false");
+    });
+    document.body.classList.add("profile-route-open");
+    loadAuthSummary({ rerenderRoute: true });
     return;
   }
 
@@ -1349,4 +1497,5 @@ if ("serviceWorker" in navigator) {
 }
 
 render();
+loadAuthSummary();
 loadPaintings();
