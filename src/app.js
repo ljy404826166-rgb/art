@@ -1,10 +1,20 @@
 import { fetchPaintings } from "./lib/paintings.ts";
 import {
+  readAppSettings,
+  resetAppSettings,
+  updateAppSettings,
+} from "./lib/app-settings.ts";
+import {
+  clearLocalDownloads,
+  clearLocalFavorites,
+  clearLocalHistory,
+  currentUserSummary,
   localFavoriteIds,
   localHistoryIds,
   recordRemoteHistory,
   saveLocalFavoriteIds,
   saveLocalHistoryIds,
+  signOutCurrentUser,
   syncFavorite,
 } from "./lib/user-library.ts";
 
@@ -21,6 +31,10 @@ const state = {
   activeProfilePanel: "favorites",
   categoryQuery: "",
   query: "",
+  settings: readAppSettings(),
+  authSummary: null,
+  authLoaded: false,
+  routeMessage: "",
   favorites: new Set(localFavoriteIds()),
   history: localHistoryIds(),
   downloads: JSON.parse(localStorage.getItem("artArchive:downloads") || "[]"),
@@ -175,6 +189,14 @@ let deferredInstallPrompt;
 let currentDetailItem = null;
 let detailCloseTimer;
 let profileRouteCloseTimer;
+
+function applyAppSettings() {
+  document.documentElement.dataset.theme = state.settings.theme;
+  document.documentElement.dataset.fontSize = state.settings.fontSize;
+  document.documentElement.dataset.motion = state.settings.motion;
+}
+
+applyAppSettings();
 
 function parseTags(value) {
   if (Array.isArray(value)) return value.map((tag) => String(tag).trim()).filter(Boolean);
