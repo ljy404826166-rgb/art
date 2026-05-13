@@ -308,6 +308,176 @@ function setProfilePanel(panel) {
   renderProfile();
 }
 
+function checkedText(value) {
+  return value ? "开启" : "关闭";
+}
+
+function settingSelected(current, value) {
+  return current === value ? "true" : "false";
+}
+
+function profileStatusBadge(text, tone = "neutral") {
+  return `<span class="profile-status-badge" data-tone="${escapeHtml(tone)}">${escapeHtml(text)}</span>`;
+}
+
+function settingsRouteHtml() {
+  const settings = state.settings;
+  const loggedIn = Boolean(state.authSummary);
+  const downloads = Array.isArray(state.downloads) ? state.downloads : [];
+
+  return `
+    <section class="profile-route-page settings-route">
+      <section class="profile-route-hero">
+        <p>应用偏好</p>
+        <h1>设置</h1>
+        <div>管理阅读体验、下载画质、缓存与数据同步。</div>
+      </section>
+
+      <section class="profile-setting-group">
+        <h2>显示与阅读</h2>
+        <div class="profile-setting-row">
+          <div><strong>主题</strong><span>当前完整视觉以浅色为主，深色主题先保存偏好</span></div>
+          <div class="profile-segmented" data-setting="theme">
+            <button type="button" data-value="system" aria-pressed="${settingSelected(settings.theme, "system")}">跟随系统</button>
+            <button type="button" data-value="light" aria-pressed="${settingSelected(settings.theme, "light")}">浅色</button>
+            <button type="button" data-value="dark" aria-pressed="${settingSelected(settings.theme, "dark")}">深色</button>
+          </div>
+        </div>
+        <div class="profile-setting-row">
+          <div><strong>字体大小</strong><span>影响详情页和个人页正文</span></div>
+          <div class="profile-segmented" data-setting="fontSize">
+            <button type="button" data-value="small" aria-pressed="${settingSelected(settings.fontSize, "small")}">小</button>
+            <button type="button" data-value="medium" aria-pressed="${settingSelected(settings.fontSize, "medium")}">标准</button>
+            <button type="button" data-value="large" aria-pressed="${settingSelected(settings.fontSize, "large")}">大</button>
+          </div>
+        </div>
+        <div class="profile-setting-row">
+          <div><strong>动画效果</strong><span>可降低页面动效强度</span></div>
+          <div class="profile-segmented" data-setting="motion">
+            <button type="button" data-value="full" aria-pressed="${settingSelected(settings.motion, "full")}">完整</button>
+            <button type="button" data-value="reduced" aria-pressed="${settingSelected(settings.motion, "reduced")}">减弱</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="profile-setting-group">
+        <h2>下载</h2>
+        <div class="profile-setting-row">
+          <div><strong>默认下载画质</strong><span>下载功能完善后使用该偏好</span></div>
+          <div class="profile-segmented" data-setting="downloadQuality">
+            <button type="button" data-value="standard" aria-pressed="${settingSelected(settings.downloadQuality, "standard")}">标准</button>
+            <button type="button" data-value="high" aria-pressed="${settingSelected(settings.downloadQuality, "high")}">高清</button>
+            <button type="button" data-value="original" aria-pressed="${settingSelected(settings.downloadQuality, "original")}">原图优先</button>
+          </div>
+        </div>
+        <button class="profile-setting-row profile-switch-row" type="button" data-toggle-setting="confirmBeforeDownload" aria-pressed="${String(settings.confirmBeforeDownload)}">
+          <div><strong>下载前确认</strong><span>${checkedText(settings.confirmBeforeDownload)}</span></div>
+          <span class="profile-switch" aria-hidden="true"></span>
+        </button>
+        <button class="profile-setting-row profile-switch-row" type="button" data-toggle-setting="saveDownloadHistory" aria-pressed="${String(settings.saveDownloadHistory)}">
+          <div><strong>保存下载记录</strong><span>${checkedText(settings.saveDownloadHistory)}</span></div>
+          <span class="profile-switch" aria-hidden="true"></span>
+        </button>
+      </section>
+
+      <section class="profile-setting-group">
+        <h2>数据与缓存</h2>
+        <button class="profile-setting-row" type="button" data-local-action="clearHistory"><div><strong>清除浏览历史</strong><span>${state.history.length} 条本机记录</span></div></button>
+        <button class="profile-setting-row" type="button" data-local-action="clearFavorites"><div><strong>清除本机收藏</strong><span>${state.favorites.size} 件作品</span></div></button>
+        <button class="profile-setting-row" type="button" data-local-action="clearDownloads"><div><strong>清除下载记录</strong><span>${downloads.length} 个文件</span></div></button>
+        <button class="profile-setting-row" type="button" data-local-action="resetSettings"><div><strong>重置应用偏好</strong><span>恢复默认设置</span></div></button>
+      </section>
+
+      <section class="profile-setting-group">
+        <h2>数据同步</h2>
+        <div class="profile-setting-row"><div><strong>收藏同步</strong><span>${loggedIn ? "已登录后自动同步收藏变更" : "未登录，仅保存在本机"}</span></div>${profileStatusBadge(loggedIn ? "可用" : "未登录", loggedIn ? "ok" : "muted")}</div>
+        <div class="profile-setting-row"><div><strong>浏览历史同步</strong><span>${loggedIn ? "已登录后自动同步浏览记录" : "未登录，仅保存在本机"}</span></div>${profileStatusBadge(loggedIn ? "可用" : "未登录", loggedIn ? "ok" : "muted")}</div>
+        <div class="profile-setting-row is-disabled"><div><strong>云端设置同步</strong><span>已有 user_settings 表，完整登录流程完成后启用</span></div>${profileStatusBadge("占位", "muted")}</div>
+      </section>
+
+      <section class="profile-setting-group">
+        <h2>关于</h2>
+        <div class="profile-setting-row"><div><strong>版本</strong><span>0.1.0</span></div></div>
+        <div class="profile-setting-row"><div><strong>数据来源</strong><span>Supabase、Artvee、芝加哥艺术博物馆等公开资料</span></div></div>
+        <div class="profile-setting-row is-disabled"><div><strong>隐私政策</strong><span>App Store / Google Play 上线前补齐</span></div>${profileStatusBadge("占位", "muted")}</div>
+        <div class="profile-setting-row is-disabled"><div><strong>用户协议</strong><span>上线前补齐</span></div>${profileStatusBadge("占位", "muted")}</div>
+      </section>
+    </section>
+  `;
+}
+
+function renderSettingsRoute() {
+  nodes.profileRouteTitle.textContent = "设置";
+  nodes.profileRouteMain.innerHTML = settingsRouteHtml();
+  bindSettingsRouteEvents();
+}
+
+function rerenderActiveProfileRoute() {
+  if (nodes.profileRouteTitle.textContent === "设置") {
+    renderSettingsRoute();
+  }
+}
+
+function runLocalDataAction(action) {
+  const messages = {
+    clearHistory: "确认清除本机浏览历史？",
+    clearFavorites: "确认清除本机收藏？",
+    clearDownloads: "确认清除下载记录？",
+    resetSettings: "确认恢复默认设置？",
+  };
+
+  if (!window.confirm(messages[action] || "确认执行该操作？")) return;
+
+  if (action === "clearHistory") {
+    clearLocalHistory();
+    state.history = [];
+  }
+
+  if (action === "clearFavorites") {
+    clearLocalFavorites();
+    state.favorites = new Set();
+  }
+
+  if (action === "clearDownloads") {
+    clearLocalDownloads();
+    state.downloads = [];
+  }
+
+  if (action === "resetSettings") {
+    state.settings = resetAppSettings();
+    applyAppSettings();
+  }
+
+  renderProfile();
+  rerenderActiveProfileRoute();
+}
+
+function bindSettingsRouteEvents() {
+  nodes.profileRouteMain.querySelectorAll("[data-setting]").forEach((group) => {
+    group.querySelectorAll("button[data-value]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const key = group.dataset.setting;
+        state.settings = updateAppSettings({ [key]: button.dataset.value });
+        applyAppSettings();
+        renderSettingsRoute();
+      });
+    });
+  });
+
+  nodes.profileRouteMain.querySelectorAll("[data-toggle-setting]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const key = button.dataset.toggleSetting;
+      state.settings = updateAppSettings({ [key]: !state.settings[key] });
+      applyAppSettings();
+      renderSettingsRoute();
+    });
+  });
+
+  nodes.profileRouteMain.querySelectorAll("[data-local-action]").forEach((button) => {
+    button.addEventListener("click", () => runLocalDataAction(button.dataset.localAction));
+  });
+}
+
 function profileRouteConfig(panel) {
   const favorites = favoriteArtworks();
   const history = historyArtworks();
@@ -362,6 +532,17 @@ function splitDisplayName(value) {
 }
 
 function openProfileRoute(panel) {
+  if (panel === "settings") {
+    window.clearTimeout(profileRouteCloseTimer);
+    renderSettingsRoute();
+    nodes.profileRoute.dataset.mounted = "true";
+    requestAnimationFrame(() => {
+      nodes.profileRoute.setAttribute("aria-hidden", "false");
+    });
+    document.body.classList.add("profile-route-open");
+    return;
+  }
+
   const config = profileRouteConfig(panel);
   window.clearTimeout(profileRouteCloseTimer);
   nodes.profileRouteTitle.textContent = config.title;
