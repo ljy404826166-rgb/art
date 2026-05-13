@@ -898,17 +898,18 @@ function initialRecommendationCardWidth(item) {
   return cardWidthFromRatio(ratio);
 }
 
-function preloadImageRatio(item) {
+function preloadImageRatio(item, options = {}) {
+  const { timeoutMs = 6000 } = options;
   const url = imageUrl(item);
   return new Promise((resolve) => {
     const image = new Image();
     const finish = () => resolve();
-    const timer = window.setTimeout(finish, 6000);
+    const timer = timeoutMs > 0 ? window.setTimeout(finish, timeoutMs) : 0;
 
     image.addEventListener(
       "load",
       () => {
-        window.clearTimeout(timer);
+        if (timer) window.clearTimeout(timer);
         if (image.naturalWidth && image.naturalHeight) {
           const cache = readImageRatioCache();
           cache[url] = image.naturalWidth / image.naturalHeight;
@@ -925,24 +926,32 @@ function preloadImageRatio(item) {
     image.addEventListener(
       "error",
       () => {
-        window.clearTimeout(timer);
+        if (timer) window.clearTimeout(timer);
         resolve();
       },
       { once: true },
     );
     image.decoding = "async";
+    image.loading = "eager";
+    image.fetchPriority = "high";
     image.src = url;
   });
 }
 
 async function preloadInitialHomeImageRatios() {
-  const items = [];
-  for (const section of homeSections().slice(0, 5)) {
-    items.push(...section.artworks.slice(0, 3));
+  const sections = homeSections();
+  const recommendationItems = sections[0]?.artworks.slice(0, 3) || [];
+  const secondaryItems = [];
+
+  for (const section of sections.slice(1, 5)) {
+    secondaryItems.push(...section.artworks.slice(0, 3));
   }
 
-  const uniqueItems = [...new Map(items.map((item) => [imageUrl(item), item])).values()];
-  await Promise.all(uniqueItems.map(preloadImageRatio));
+  const uniqueRecommendationItems = [...new Map(recommendationItems.map((item) => [imageUrl(item), item])).values()];
+  const uniqueSecondaryItems = [...new Map(secondaryItems.map((item) => [imageUrl(item), item])).values()];
+
+  await Promise.all(uniqueRecommendationItems.map((item) => preloadImageRatio(item, { timeoutMs: 0 })));
+  await Promise.all(uniqueSecondaryItems.map((item) => preloadImageRatio(item)));
 }
 
 function recommendationCard(item) {
