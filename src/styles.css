@@ -2297,23 +2297,21 @@ header.app-shell {
   display: grid;
   min-height: calc(100dvh - 68px - 82px - 92px);
   align-content: start;
-  padding: 24px 0 32px;
+  padding: 8px 0 32px;
 }
 
 .loading-row {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-  padding: 4px 2px 22px;
-  margin: 0;
-  overflow: hidden;
+  overflow-y: visible;
 }
 
 .loading-card {
   position: relative;
   display: flex;
-  width: 100%;
+  width: var(--art-card-width, 113px);
+  min-width: var(--art-card-width, 113px);
+  max-width: var(--art-card-width, 113px);
   height: 222px;
+  flex: 0 0 auto;
   flex-direction: column;
   overflow: hidden;
   border-radius: 8px;

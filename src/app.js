@@ -21,6 +21,7 @@ import {
 const ROW_BATCH_SIZE = 8;
 const TAG_BATCH_SIZE = 8;
 const RECOMMENDATION_IMAGE_HEIGHT = 172;
+const imageRatioCacheKey = "artArchive:imageRatios";
 
 const state = {
   paintings: [],
@@ -209,6 +210,35 @@ function parseTags(value) {
 function yearFrom(value) {
   const match = String(value || "").match(/\d{3,4}/);
   return match ? match[0] : "未知年代";
+}
+
+function readImageRatioCache() {
+  try {
+    return JSON.parse(localStorage.getItem(imageRatioCacheKey) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function writeImageRatioCache(cache) {
+  localStorage.setItem(imageRatioCacheKey, JSON.stringify(cache));
+}
+
+function ratioFromDimensions(value) {
+  const text = String(value || "")
+    .replace(/,/g, "")
+    .replace(/[×xX]/g, " x ");
+  const numbers = text.match(/\d+(?:\.\d+)?/g)?.map(Number).filter((number) => Number.isFinite(number));
+  if (!numbers || numbers.length < 2) return 0;
+
+  const [width, height] = numbers;
+  if (width <= 0 || height <= 0) return 0;
+  return width / height;
+}
+
+function cardWidthFromRatio(ratio) {
+  if (!ratio || !Number.isFinite(ratio)) return 113;
+  return Math.max(72, Math.round(ratio * RECOMMENDATION_IMAGE_HEIGHT));
 }
 
 function shuffle(list) {
@@ -861,9 +891,17 @@ function imageUrl(item) {
   return item.displayUrl || "/assets/icon.svg";
 }
 
+function initialRecommendationCardWidth(item) {
+  const url = imageUrl(item);
+  const cachedRatio = Number(readImageRatioCache()[url]);
+  const ratio = cachedRatio || ratioFromDimensions(item.dimensions);
+  return cardWidthFromRatio(ratio);
+}
+
 function recommendationCard(item) {
   const card = document.createElement("article");
   card.className = "recommendation-card";
+  card.style.setProperty("--art-card-width", `${initialRecommendationCardWidth(item)}px`);
   card.innerHTML = `
     <button class="recommendation-image" type="button" aria-label="查看 ${escapeHtml(item.title)}" data-art-title="${escapeHtml(item.title)}">
       <img loading="lazy" src="${escapeHtml(imageUrl(item))}" alt="${escapeHtml(item.title)}" />
@@ -883,8 +921,12 @@ function attachRecommendationImageSizing(card) {
   const image = card.querySelector("img");
   const applySize = () => {
     if (!image.naturalWidth || !image.naturalHeight) return;
-    const width = Math.round((image.naturalWidth / image.naturalHeight) * RECOMMENDATION_IMAGE_HEIGHT);
-    card.style.setProperty("--art-card-width", `${Math.max(72, width)}px`);
+    const ratio = image.naturalWidth / image.naturalHeight;
+    const width = cardWidthFromRatio(ratio);
+    card.style.setProperty("--art-card-width", `${width}px`);
+    const cache = readImageRatioCache();
+    cache[image.currentSrc || image.src] = ratio;
+    writeImageRatioCache(cache);
   };
 
   if (image.complete) applySize();
@@ -959,30 +1001,36 @@ function homeSections() {
 }
 
 function renderLoading() {
+  const skeletonRows = [
+    { title: "推荐", widths: [124, 174, 113] },
+    { title: "馆藏精选", widths: [138, 306] },
+    { title: "专题浏览", widths: [266, 136] },
+  ];
+
   nodes.grid.innerHTML = `
-    <section class="loading-gallery" aria-label="正在加载作品">
-      <div class="loading-row">
-        <article class="loading-card">
-          <span class="loading-image"></span>
-          <span class="loading-line loading-line-title"></span>
-          <span class="loading-line loading-line-meta"></span>
-        </article>
-        <article class="loading-card">
-          <span class="loading-image"></span>
-          <span class="loading-line loading-line-title"></span>
-          <span class="loading-line loading-line-meta"></span>
-        </article>
-        <article class="loading-card">
-          <span class="loading-image"></span>
-          <span class="loading-line loading-line-title"></span>
-          <span class="loading-line loading-line-meta"></span>
-        </article>
-        <article class="loading-card">
-          <span class="loading-image"></span>
-          <span class="loading-line loading-line-title"></span>
-          <span class="loading-line loading-line-meta"></span>
-        </article>
-      </div>
+    <section class="loading-gallery recommendation-feed" aria-label="正在加载作品">
+      ${skeletonRows
+        .map(
+          (row) => `
+            <section class="recommendation-group loading-group">
+              <h2>${row.title}</h2>
+              <div class="recommendation-row loading-row">
+                ${row.widths
+                  .map(
+                    (width) => `
+                      <article class="loading-card" style="--art-card-width: ${width}px">
+                        <span class="loading-image"></span>
+                        <span class="loading-line loading-line-title"></span>
+                        <span class="loading-line loading-line-meta"></span>
+                      </article>
+                    `,
+                  )
+                  .join("")}
+              </div>
+            </section>
+          `,
+        )
+        .join("")}
     </section>
   `;
 }
