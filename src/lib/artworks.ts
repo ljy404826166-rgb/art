@@ -64,7 +64,9 @@ function assertSupabaseConfig() {
   }
 }
 
-export async function fetchArtworksPage(options: ArtworkPageOptions = {}): Promise<ArtworkPageResult> {
+export async function fetchArtworksPage(
+  options: ArtworkPageOptions = {},
+): Promise<ArtworkPageResult> {
   assertSupabaseConfig();
 
   const limit = Math.max(1, Math.min(options.limit ?? defaultPageSize, 100));
@@ -111,12 +113,18 @@ export async function fetchArtworkById(id: string): Promise<ArtworkRecord | null
   return parseArtworkRecords([data])[0] ?? null;
 }
 
-export async function fetchArtworksByTag(tag: string, options: ArtworkPageOptions = {}): Promise<ArtworkRecord[]> {
+export async function fetchArtworksByTag(
+  tag: string,
+  options: ArtworkPageOptions = {},
+): Promise<ArtworkRecord[]> {
   const page = await fetchArtworksPage({ ...options, tag });
   return page.items;
 }
 
-export async function fetchArtworksByArtist(artist: string, options: ArtworkPageOptions = {}): Promise<ArtworkRecord[]> {
+export async function fetchArtworksByArtist(
+  artist: string,
+  options: ArtworkPageOptions = {},
+): Promise<ArtworkRecord[]> {
   const page = await fetchArtworksPage({ ...options, artist });
   return page.items;
 }

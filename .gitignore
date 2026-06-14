@@ -19,10 +19,16 @@ storage-backup/
 image-derivatives*.log
 image-derivatives-tmp/
 tmp/image-derivatives/
+tmp/
 backups/
 local-backups/
+docs/patches/
+docs/backups/
+*.patch
 
 # WeChat miniapp source is versioned, generated/import data is not.
+miniprogram/
+project.config.json
 miniapp/project.private.config.json
 !miniapp/data/
 miniapp/data/*.json
@@ -31,6 +37,7 @@ miniapp/data/*.jsonl
 !miniapp/data/.gitkeep
 !miniapp/data/fallback-artworks.js
 !miniapp/data/mock-artists.js
+project.private.config.json
 
 .idea/
 .codex/

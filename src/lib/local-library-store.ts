@@ -120,8 +120,13 @@ export async function saveArtworkPageCache<TItem>(
   });
 }
 
-export async function readArtworkPageCache<TItem>(key: string): Promise<ArtworkPageCacheEntry<TItem> | null> {
-  return ((await localLibraryDb.artworkPages.get(key)) as ArtworkPageCacheEntry<TItem> | undefined) ?? null;
+export async function readArtworkPageCache<TItem>(
+  key: string,
+): Promise<ArtworkPageCacheEntry<TItem> | null> {
+  return (
+    ((await localLibraryDb.artworkPages.get(key)) as ArtworkPageCacheEntry<TItem> | undefined) ??
+    null
+  );
 }
 
 export async function saveArtworkDetailCache<TItem>(id: string, item: TItem): Promise<void> {
@@ -132,6 +137,11 @@ export async function saveArtworkDetailCache<TItem>(id: string, item: TItem): Pr
   });
 }
 
-export async function readArtworkDetailCache<TItem>(id: string): Promise<ArtworkDetailCacheEntry<TItem> | null> {
-  return ((await localLibraryDb.artworkDetails.get(id)) as ArtworkDetailCacheEntry<TItem> | undefined) ?? null;
+export async function readArtworkDetailCache<TItem>(
+  id: string,
+): Promise<ArtworkDetailCacheEntry<TItem> | null> {
+  return (
+    ((await localLibraryDb.artworkDetails.get(id)) as ArtworkDetailCacheEntry<TItem> | undefined) ??
+    null
+  );
 }

@@ -151,7 +151,9 @@ const miniappDisplayFiles = [
 for (const file of miniappDisplayFiles) {
   const source = await readFile(new URL(`../${file}`, import.meta.url), "utf8");
   if (source.includes("download_url") || source.includes("original_url")) {
-    throw new Error(`Default miniapp display layer must not reference original/download images: ${file}`);
+    throw new Error(
+      `Default miniapp display layer must not reference original/download images: ${file}`,
+    );
   }
 }
 
