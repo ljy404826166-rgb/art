@@ -1,0 +1,48 @@
+<view class="profile-page">
+  <view class="profile-hero">
+    <view class="avatar">{{user.avatarText}}</view>
+    <view class="profile-copy">
+      <text class="profile-kicker">PRIVATE ROOM</text>
+      <text class="profile-name">{{user.name}}</text>
+      <text class="profile-role">{{user.role}}</text>
+    </view>
+  </view>
+
+  <view class="stats-grid">
+    <block wx:for="{{stats}}" wx:key="label">
+      <view class="stat-card" data-route="{{item.route}}" bindtap="openStat">
+        <text class="stat-value">{{item.value}}</text>
+        <text class="stat-label">{{item.label}}</text>
+      </view>
+    </block>
+  </view>
+
+  <view class="menu-sections">
+    <block wx:for="{{sections}}" wx:key="title">
+      <view class="menu-section">
+        <text class="menu-title">{{item.title}}</text>
+        <view class="menu-card">
+          <block wx:for="{{item.items}}" wx:key="label" wx:for-item="menuItem">
+            <view
+              class="menu-row {{menuItem.disabled ? 'is-disabled' : ''}}"
+              data-route="{{menuItem.route}}"
+              data-disabled="{{menuItem.disabled}}"
+              bindtap="openMenuItem"
+            >
+              <view class="menu-copy">
+                <image class="menu-icon" src="{{menuItem.icon}}" mode="aspectFit" />
+                <text class="menu-label">{{menuItem.label}}</text>
+              </view>
+              <text class="menu-arrow">›</text>
+            </view>
+          </block>
+        </view>
+      </view>
+    </block>
+  </view>
+
+  <button class="logout-button" bindtap="handleLogout">
+    <image class="logout-icon" src="/assets/icons/lucide/svg/log-out.svg" mode="aspectFit" />
+    <text>退出登录</text>
+  </button>
+</view>

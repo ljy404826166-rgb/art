@@ -1,0 +1,89 @@
+.artist-library-page {
+  min-height: 100vh;
+  padding: 44rpx 34rpx 140rpx;
+  background: #faf9f7;
+}
+
+.library-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24rpx;
+  margin-bottom: 30rpx;
+}
+
+.library-title {
+  color: #111111;
+  font-size: 46rpx;
+  font-weight: 950;
+  line-height: 58rpx;
+}
+
+.library-count {
+  color: #7a736d;
+  font-size: 25rpx;
+  line-height: 36rpx;
+}
+
+.artist-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24rpx;
+}
+
+.artist-card {
+  display: grid;
+  min-height: 268rpx;
+  justify-items: center;
+  border-radius: 28rpx;
+  padding: 32rpx 20rpx 28rpx;
+  text-align: center;
+  background: #ffffff;
+  box-shadow: 0 16rpx 38rpx rgba(31, 35, 40, 0.06);
+}
+
+.artist-card:active {
+  transform: translateY(1rpx);
+  opacity: 0.86;
+}
+
+.artist-avatar {
+  display: flex;
+  width: 92rpx;
+  height: 92rpx;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999rpx;
+  color: #5b3129;
+  background: #eee7df;
+  font-size: 36rpx;
+  font-weight: 950;
+}
+
+.artist-name {
+  margin-top: 18rpx;
+  color: #111111;
+  font-size: 28rpx;
+  font-weight: 950;
+  line-height: 38rpx;
+}
+
+.artist-en,
+.artist-meta {
+  display: block;
+  overflow: hidden;
+  width: 100%;
+  color: #746b65;
+  font-size: 22rpx;
+  line-height: 30rpx;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.artist-count {
+  margin-top: 8rpx;
+  color: #8a5b43;
+  font-size: 23rpx;
+  font-weight: 900;
+  line-height: 32rpx;
+}

@@ -1,0 +1,15 @@
+<view class="artwork-image-shell {{usage}} {{resolvedShape}}" style="{{frameStyle}}">
+  <view wx:if="{{loading}}" class="artwork-image-loading"></view>
+  <image
+    wx:if="{{currentSrc && !failed}}"
+    class="artwork-image-node {{loading ? 'is-loading' : ''}}"
+    src="{{currentSrc}}"
+    mode="{{resolvedMode}}"
+    lazy-load="{{lazyLoad}}"
+    bindload="handleLoad"
+    binderror="handleError"
+  />
+  <view wx:if="{{failed}}" class="artwork-image-fallback">
+    <text class="artwork-image-fallback-text">{{displayText}}</text>
+  </view>
+</view>

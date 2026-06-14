@@ -1,0 +1,102 @@
+<view class="page home-page">
+  <view class="search-shell">
+    <view class="search-icon" aria-label="search" bindtap="openSearchPage">
+      <image class="search-glyph" src="/assets/icons/lucide/svg/search.svg" mode="aspectFit" />
+    </view>
+    <input
+      class="search-input"
+      value="{{searchQuery}}"
+      placeholder="星月夜"
+      placeholder-class="search-placeholder"
+      confirm-type="search"
+      bindfocus="openSearchPage"
+      bindinput="handleSearchInput"
+    />
+    <button wx:if="{{searchQuery}}" class="search-action clear-action" bindtap="clearSearch">清除</button>
+    <view wx:else class="search-action filter-action" bindtap="openCategory" aria-label="筛选分类">
+      <image class="filter-glyph" src="/assets/icons/lucide/svg/sliders-horizontal.svg" mode="aspectFit" />
+    </view>
+  </view>
+
+  <error-state
+    wx:if="{{error}}"
+    title="云数据库暂不可用"
+    message="{{usingFallback ? '已显示本地备用作品。' : error}}"
+    bindretry="retryLoad"
+  />
+
+  <view wx:if="{{loading}}" class="home-skeleton-feed">
+    <view class="home-skeleton-group">
+      <view class="home-skeleton-head">
+        <view class="home-skeleton-title"></view>
+      </view>
+      <scroll-view class="home-skeleton-row" scroll-x="true" enable-flex="true" show-scrollbar="false">
+        <view class="home-skeleton-track">
+          <view class="home-skeleton-card compact"></view>
+          <view class="home-skeleton-card wide"></view>
+          <view class="home-skeleton-card compact"></view>
+        </view>
+      </scroll-view>
+    </view>
+
+    <view class="home-skeleton-group">
+      <view class="home-skeleton-head">
+        <view class="home-skeleton-title short"></view>
+      </view>
+      <scroll-view class="home-skeleton-row" scroll-x="true" enable-flex="true" show-scrollbar="false">
+        <view class="home-skeleton-track">
+          <view class="home-skeleton-card compact"></view>
+          <view class="home-skeleton-card compact"></view>
+          <view class="home-skeleton-card wide"></view>
+        </view>
+      </scroll-view>
+    </view>
+  </view>
+
+  <view wx:elif="{{searchQuery}}" class="recommendation-feed">
+    <view class="recommendation-group">
+      <view class="recommendation-group-head">
+        <text class="group-title">搜索结果</text>
+        <text class="group-count">{{searchResults.length}}件作品</text>
+      </view>
+
+      <empty-state wx:if="{{searchResults.length === 0}}" icon="/assets/icons/lucide/svg/search-x.svg" title="没有找到匹配作品" description="换一个画作、艺术家或标签试试。" />
+
+      <view wx:else class="search-results-grid">
+        <block wx:for="{{searchResults}}" wx:key="id">
+          <artwork-card artwork="{{item}}" bindtapcard="openDetail" />
+        </block>
+      </view>
+    </view>
+  </view>
+
+  <view wx:else class="recommendation-feed">
+    <block wx:for="{{sections}}" wx:key="key">
+      <view class="recommendation-group">
+        <view class="recommendation-group-head">
+          <text class="group-title">{{item.title}}</text>
+          <view
+            wx:if="{{item.showMore}}"
+            class="section-more"
+            data-tag="{{item.targetTag}}"
+            bindtap="openTagDetail"
+          >
+            <text class="section-more-text">查看更多</text>
+            <image class="section-more-icon" src="/assets/icons/lucide/svg/chevron-right.svg" mode="aspectFit" />
+          </view>
+        </view>
+
+        <scroll-view class="recommendation-row" scroll-x="true" enable-flex="true" show-scrollbar="false">
+          <view class="recommendation-track">
+            <block wx:for="{{item.items}}" wx:key="id" wx:for-item="artwork">
+              <view class="recommendation-card-shell {{artwork.homeCardClass}}">
+                <artwork-card artwork="{{artwork}}" variant="row" bindtapcard="openDetail" />
+              </view>
+            </block>
+          </view>
+        </scroll-view>
+      </view>
+    </block>
+    <loading-more wx:if="{{loadingMore}}" text="继续加载..." />
+  </view>
+</view>

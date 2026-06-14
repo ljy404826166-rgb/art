@@ -1,0 +1,7 @@
+{
+  "usingComponents": {
+    "empty-state": "../../components/empty-state/empty-state",
+    "error-state": "../../components/error-state/error-state",
+    "skeleton-card": "../../components/skeleton-card/skeleton-card"
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "pages": [
+    "pages/home/home",
+    "pages/search/search",
+    "pages/category/category",
+    "pages/tag/tag",
+    "pages/artists/artists",
+    "pages/detail/detail",
+    "pages/artist-detail/artist-detail",
+    "pages/favorites/favorites",
+    "pages/history/history",
+    "pages/followed-artists/followed-artists",
+    "pages/profile/profile"
+  ],
+  "window": {
+    "navigationBarTitleText": "画廊",
+    "navigationBarBackgroundColor": "#ffffff",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#ffffff",
+    "backgroundTextStyle": "dark"
+  },
+  "tabBar": {
+    "color": "#7a736d",
+    "selectedColor": "#111111",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "white",
+    "list": [
+      {
+        "pagePath": "pages/home/home",
+        "text": "首页",
+        "iconPath": "assets/tab/home.png",
+        "selectedIconPath": "assets/tab/home-active.png"
+      },
+      {
+        "pagePath": "pages/category/category",
+        "text": "分类",
+        "iconPath": "assets/tab/category.png",
+        "selectedIconPath": "assets/tab/category-active.png"
+      },
+      {
+        "pagePath": "pages/artists/artists",
+        "text": "画家",
+        "iconPath": "assets/tab/artists.png",
+        "selectedIconPath": "assets/tab/artists-active.png"
+      },
+      {
+        "pagePath": "pages/profile/profile",
+        "text": "我的",
+        "iconPath": "assets/tab/profile.png",
+        "selectedIconPath": "assets/tab/profile-active.png"
+      }
+    ]
+  },
+  "usingComponents": {
+    "artwork-card": "/components/artwork-card/artwork-card"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

@@ -1,0 +1,72 @@
+<view class="artist-detail-page">
+  <view wx:if="{{artist}}" class="artist-hero">
+    <view class="portrait">{{artist.avatarText}}</view>
+    <text class="artist-name">{{artist.nameZh}}</text>
+    <text class="artist-en">{{artist.nameEn}}</text>
+    <text class="artist-life">{{artist.nameEn}} ({{artist.lifespan}})</text>
+    <view class="follow-button {{isFollowed ? 'is-active' : ''}}" bindtap="toggleFollowArtist">
+      <image class="follow-icon" src="/assets/icons/lucide/svg/user.svg" mode="aspectFit" />
+      <text>{{isFollowed ? '已关注' : '关注画家'}}</text>
+    </view>
+    <text class="artist-bio">{{artist.bio}}</text>
+  </view>
+
+  <view wx:if="{{artist}}" class="info-panel">
+    <view class="info-row">
+      <view class="info-label">
+        <image class="info-icon" src="/assets/icons/lucide/svg/map-pin.svg" mode="aspectFit" />
+        <text>国籍</text>
+      </view>
+      <text class="info-value">{{artist.country}}</text>
+    </view>
+    <view class="info-row">
+      <view class="info-label">
+        <image class="info-icon" src="/assets/icons/lucide/svg/palette.svg" mode="aspectFit" />
+        <text>流派</text>
+      </view>
+      <text class="info-value">{{artist.styles.join('、')}}</text>
+    </view>
+    <view class="info-row">
+      <view class="info-label">
+        <image class="info-icon" src="/assets/icons/lucide/svg/book-open.svg" mode="aspectFit" />
+        <text>活跃时期</text>
+      </view>
+      <text class="info-value">{{artist.activePeriod}}</text>
+    </view>
+    <view class="info-row">
+      <view class="info-label">
+        <image class="info-icon" src="/assets/icons/lucide/svg/image.svg" mode="aspectFit" />
+        <text>代表作品</text>
+      </view>
+      <text class="info-value">{{artist.representativeWorks.join('、')}}</text>
+    </view>
+  </view>
+
+  <view wx:if="{{artist && artist.tags.length}}" class="tag-row">
+    <block wx:for="{{artist.tags}}" wx:key="*this">
+      <text class="artist-tag">{{item}}</text>
+    </block>
+  </view>
+
+  <error-state
+    wx:if="{{error}}"
+    title="作品读取失败"
+    message="{{usingFallback ? '已显示本地备用匹配结果。' : error}}"
+    show-retry="{{false}}"
+  />
+
+  <view wx:if="{{artist}}" class="works-head">
+    <text class="section-title">相关作品</text>
+    <text class="works-count">{{loading ? '读取中' : artworks.length + '件作品'}}</text>
+  </view>
+
+  <skeleton-card wx:if="{{loading}}" variant="grid" count="{{4}}" />
+
+  <empty-state wx:elif="{{artist && artworks.length === 0}}" title="暂未匹配到该画家的作品" description="画家简介仍可继续浏览。" />
+
+  <view wx:elif="{{artworks.length}}" class="works-grid">
+    <block wx:for="{{artworks}}" wx:key="id">
+      <artwork-card artwork="{{item}}" bindtapcard="openArtwork" />
+    </block>
+  </view>
+</view>

@@ -1,0 +1,32 @@
+.library-page {
+  min-height: 100vh;
+  padding: 44rpx 34rpx 140rpx;
+  background: #faf9f7;
+}
+
+.library-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24rpx;
+  margin-bottom: 30rpx;
+}
+
+.library-title {
+  color: #111111;
+  font-size: 46rpx;
+  font-weight: 950;
+  line-height: 58rpx;
+}
+
+.library-count {
+  color: #7a736d;
+  font-size: 25rpx;
+  line-height: 36rpx;
+}
+
+.library-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 28rpx;
+}

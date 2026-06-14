@@ -1,0 +1,74 @@
+<view class="category-page">
+  <view class="filter-panel">
+    <block wx:for="{{groupsView}}" wx:key="name">
+      <view class="filter-section {{item.expanded ? 'is-expanded' : ''}}">
+        <view class="filter-head">
+          <text class="filter-title">{{item.name}}</text>
+          <view
+            class="expand-button {{item.expanded ? 'is-expanded' : ''}}"
+            data-group="{{item.name}}"
+            bindtap="toggleGroup"
+          >
+            <image class="expand-icon" src="/assets/icons/lucide/svg/chevron-down.svg" mode="aspectFit" />
+          </view>
+        </view>
+
+        <scroll-view
+          wx:if="{{!item.expanded}}"
+          class="chip-scroll"
+          scroll-x="true"
+          show-scrollbar="false"
+        >
+          <view class="chip-track">
+            <block wx:for="{{item.visibleTags}}" wx:key="*this" wx:for-item="tag">
+              <view
+                class="tag-chip {{activeTag === tag ? 'is-active' : ''}}"
+                bindtap="selectTag"
+                data-tag="{{tag}}"
+              >
+                <text class="tag-label">{{tag}}</text>
+              </view>
+            </block>
+          </view>
+        </scroll-view>
+
+        <view wx:else class="chip-wrap">
+          <block wx:for="{{item.visibleTags}}" wx:key="*this" wx:for-item="tag">
+            <view
+              class="tag-chip {{activeTag === tag ? 'is-active' : ''}}"
+              bindtap="selectTag"
+              data-tag="{{tag}}"
+            >
+              <text class="tag-label">{{tag}}</text>
+            </view>
+          </block>
+        </view>
+      </view>
+    </block>
+  </view>
+
+  <error-state
+    wx:if="{{error}}"
+    title="分类查询失败"
+    message="{{usingFallback ? '已显示本地备用分类结果。' : error}}"
+    bindretry="retryLoad"
+  />
+
+  <view class="result-head">
+    <text class="section-title">分类结果</text>
+    <text class="result-count">{{loading ? '读取中' : resultCountText}}</text>
+  </view>
+
+  <skeleton-card wx:if="{{loading}}" variant="grid" count="{{4}}" />
+
+  <empty-state wx:elif="{{filteredArtworks.length === 0}}" title="暂无符合条件的作品" description="换一个标签或展开更多分类试试。" />
+
+  <view wx:else class="gallery-grid">
+    <block wx:for="{{filteredArtworks}}" wx:key="id">
+      <artwork-card artwork="{{item}}" bindtapcard="openDetail" />
+    </block>
+  </view>
+
+  <loading-more wx:if="{{loadingMore}}" text="继续加载..." />
+  <loading-more wx:elif="{{!hasMore && filteredArtworks.length}}" text="已显示当前分类作品" done="{{true}}" />
+</view>

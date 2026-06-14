@@ -1,0 +1,61 @@
+<view class="artists-page">
+  <view class="search-shell">
+    <view class="search-icon" aria-label="search">
+      <image class="search-glyph" src="/assets/icons/lucide/svg/search.svg" mode="aspectFit" />
+    </view>
+    <input
+      class="search-input"
+      value="{{query}}"
+      placeholder="搜索画家、流派、年代..."
+      placeholder-class="search-placeholder"
+      confirm-type="search"
+      bindinput="handleSearchInput"
+    />
+    <button wx:if="{{query}}" class="search-action" bindtap="clearSearch">清除</button>
+  </view>
+
+  <view class="filter-panel">
+    <block wx:for="{{groups}}" wx:key="key">
+      <view class="filter-section">
+        <view class="filter-head">
+          <text class="filter-title">{{item.name}}</text>
+        </view>
+        <scroll-view class="chip-scroll" scroll-x="true" show-scrollbar="false">
+          <view class="chip-track">
+            <block wx:for="{{item.tags}}" wx:key="*this" wx:for-item="tag">
+              <view
+                class="tag-chip {{item.activeTag === tag ? 'is-active' : ''}}"
+                data-key="{{item.key}}"
+                data-tag="{{tag}}"
+                bindtap="selectTag"
+              >
+                <text class="tag-label">{{tag}}</text>
+              </view>
+            </block>
+          </view>
+        </scroll-view>
+      </view>
+    </block>
+  </view>
+
+  <view class="result-head">
+    <text class="section-title">画家结果</text>
+    <text class="result-count">{{resultCountText}}</text>
+  </view>
+
+  <view wx:if="{{artists.length === 0}}" class="empty-state">暂无符合条件的画家</view>
+
+  <view wx:else class="artist-grid">
+    <block wx:for="{{artists}}" wx:key="id">
+      <view class="artist-card" data-id="{{item.id}}" bindtap="openArtist">
+        <view class="artist-avatar">{{item.avatarText}}</view>
+        <view class="artist-copy">
+          <text class="artist-name">{{item.nameZh}}</text>
+          <text class="artist-en">{{item.nameEn}}</text>
+          <text class="artist-meta">{{item.country}} · {{item.styles[0]}} · {{item.lifespan}}</text>
+          <text class="artist-count">{{item.artworkCount}}件作品</text>
+        </view>
+      </view>
+    </block>
+  </view>
+</view>

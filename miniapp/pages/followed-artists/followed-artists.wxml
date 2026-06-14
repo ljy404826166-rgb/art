@@ -1,0 +1,25 @@
+<view class="artist-library-page">
+  <view class="library-head">
+    <text class="library-title">关注画家</text>
+    <text class="library-count">{{artists.length}}位画家</text>
+  </view>
+
+  <empty-state
+    wx:if="{{artists.length === 0}}"
+    title="还没有关注画家"
+    description="在画家详情页点击关注后，会保存在这里。"
+    show-action="{{false}}"
+  />
+
+  <view wx:else class="artist-grid">
+    <block wx:for="{{artists}}" wx:key="id">
+      <view class="artist-card" data-id="{{item.id}}" bindtap="openArtist">
+        <view class="artist-avatar">{{item.avatarText}}</view>
+        <text class="artist-name">{{item.nameZh}}</text>
+        <text class="artist-en">{{item.nameEn}}</text>
+        <text class="artist-meta">{{item.country}} · {{item.lifespan}}</text>
+        <text class="artist-count">{{item.artworkCount}}件作品</text>
+      </view>
+    </block>
+  </view>
+</view>

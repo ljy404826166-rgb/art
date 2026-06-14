@@ -1,0 +1,11 @@
+<view class="skeleton-list {{variant}}">
+  <block wx:for="{{items}}" wx:key="*this">
+    <view class="skeleton-card">
+      <view class="skeleton-image"></view>
+      <view class="skeleton-copy">
+        <view class="skeleton-line title"></view>
+        <view class="skeleton-line meta"></view>
+      </view>
+    </view>
+  </block>
+</view>

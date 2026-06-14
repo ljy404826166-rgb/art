@@ -1,0 +1,4 @@
+<view class="loading-more {{done ? 'is-done' : ''}}">
+  <image wx:if="{{!done}}" class="loading-icon" src="/assets/icons/lucide/svg/loader-circle.svg" mode="aspectFit" />
+  <text>{{text}}</text>
+</view>

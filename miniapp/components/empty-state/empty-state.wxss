@@ -1,0 +1,40 @@
+.empty-state-panel {
+  display: grid;
+  justify-items: center;
+  gap: 14rpx;
+  margin: 24rpx 34rpx;
+  border-radius: 28rpx;
+  padding: 52rpx 36rpx;
+  background: #fbfaf8;
+  color: #5f5a55;
+}
+
+.empty-mark {
+  display: flex;
+  width: 96rpx;
+  height: 96rpx;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999rpx;
+  background: linear-gradient(135deg, #f0ece7, #e1d9d1);
+}
+
+.empty-icon {
+  display: block;
+  width: 52rpx;
+  height: 52rpx;
+}
+
+.empty-title {
+  color: #1f2328;
+  font-size: 30rpx;
+  font-weight: 850;
+  line-height: 42rpx;
+}
+
+.empty-description {
+  color: #8a837d;
+  font-size: 24rpx;
+  line-height: 36rpx;
+  text-align: center;
+}

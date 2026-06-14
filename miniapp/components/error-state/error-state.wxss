@@ -1,0 +1,68 @@
+.error-state-panel {
+  display: grid;
+  grid-template-columns: 60rpx minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 20rpx;
+  margin: 24rpx 34rpx;
+  border-radius: 28rpx;
+  padding: 26rpx 28rpx;
+  background: #fbfaf8;
+  box-shadow: 0 16rpx 42rpx rgba(30, 28, 25, 0.05);
+}
+
+.error-state-panel button::after {
+  border: 0;
+}
+
+.error-mark {
+  display: flex;
+  width: 60rpx;
+  height: 60rpx;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999rpx;
+  color: #ffffff;
+  background: #202124;
+  font-size: 32rpx;
+  font-weight: 900;
+}
+
+.error-icon {
+  display: block;
+  width: 34rpx;
+  height: 34rpx;
+}
+
+.error-copy {
+  display: grid;
+  gap: 4rpx;
+  min-width: 0;
+}
+
+.error-title {
+  color: #1f2328;
+  font-size: 28rpx;
+  font-weight: 850;
+  line-height: 38rpx;
+}
+
+.error-message {
+  overflow: hidden;
+  color: #7a736d;
+  font-size: 23rpx;
+  line-height: 34rpx;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.retry-button {
+  min-width: 112rpx;
+  height: 56rpx;
+  border-radius: 999rpx;
+  padding: 0 22rpx;
+  color: #ffffff;
+  background: #202124;
+  font-size: 24rpx;
+  font-weight: 800;
+  line-height: 56rpx;
+}

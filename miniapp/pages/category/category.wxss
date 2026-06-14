@@ -1,0 +1,169 @@
+.category-page {
+  min-height: 100vh;
+  padding: 56rpx 0 158rpx;
+  background: #ffffff;
+}
+
+.filter-panel {
+  display: grid;
+  gap: 46rpx;
+  padding: 0 0 16rpx;
+}
+
+.filter-section {
+  display: grid;
+  gap: 22rpx;
+}
+
+.filter-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 34rpx;
+}
+
+.filter-title {
+  color: #000000;
+  font-size: 38rpx;
+  font-weight: 900;
+  line-height: 48rpx;
+}
+
+.expand-button {
+  display: flex;
+  flex: 0 0 62rpx;
+  width: 62rpx;
+  min-width: 62rpx;
+  max-width: 62rpx;
+  height: 62rpx;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999rpx;
+  background: #f7f7f7;
+}
+
+.expand-icon {
+  display: block;
+  width: 28rpx;
+  height: 28rpx;
+  transform-origin: center;
+}
+
+.expand-button.is-expanded .expand-icon {
+  transform: rotate(180deg);
+}
+
+.chip-scroll {
+  width: 100%;
+  height: 60rpx;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.chip-track {
+  display: inline-block;
+  height: 60rpx;
+  padding: 0 34rpx;
+  white-space: nowrap;
+}
+
+.chip-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18rpx 20rpx;
+  padding: 0 34rpx;
+}
+
+.tag-chip {
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: auto;
+  min-width: auto;
+  max-width: 320rpx;
+  height: 54rpx;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999rpx;
+  padding: 0 28rpx;
+  color: #777777;
+  background: #f6f5f4;
+  font-size: 25rpx;
+  font-weight: 850;
+  line-height: 54rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.tag-label {
+  display: block;
+  max-width: 264rpx;
+  overflow: hidden;
+  line-height: 54rpx;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chip-track .tag-chip {
+  margin-right: 20rpx;
+}
+
+.chip-track .tag-chip:last-child {
+  margin-right: 0;
+}
+
+.chip-wrap .tag-chip {
+  margin: 0;
+}
+
+.tag-chip.is-active {
+  color: #ffffff;
+  background: #202124;
+}
+
+.notice-card,
+.loading-state,
+.empty-state {
+  margin-left: 34rpx;
+  margin-right: 34rpx;
+}
+
+.result-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24rpx;
+  margin: 44rpx 0 24rpx;
+  padding: 0 34rpx;
+}
+
+.section-title {
+  color: #000000;
+  font-size: 42rpx;
+  font-weight: 950;
+  line-height: 52rpx;
+}
+
+.result-count {
+  color: #5d524c;
+  font-size: 26rpx;
+  line-height: 36rpx;
+  white-space: nowrap;
+}
+
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 28rpx;
+  align-items: start;
+  padding: 0 34rpx;
+}
+
+.load-more {
+  padding: 34rpx 0 10rpx;
+  color: #8a837d;
+  font-size: 24rpx;
+  line-height: 34rpx;
+  text-align: center;
+}

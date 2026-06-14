@@ -1,0 +1,10 @@
+{
+  "enablePullDownRefresh": true,
+  "backgroundColor": "#ffffff",
+  "backgroundTextStyle": "dark",
+  "usingComponents": {
+    "empty-state": "../../components/empty-state/empty-state",
+    "error-state": "../../components/error-state/error-state",
+    "loading-more": "../../components/loading-more/loading-more"
+  }
+}

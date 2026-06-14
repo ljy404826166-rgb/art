@@ -1,0 +1,10 @@
+<view class="error-state-panel">
+  <view class="error-mark">
+    <image class="error-icon" src="{{icon}}" mode="aspectFit" />
+  </view>
+  <view class="error-copy">
+    <text class="error-title">{{title}}</text>
+    <text wx:if="{{message}}" class="error-message">{{message}}</text>
+  </view>
+  <button wx:if="{{showRetry}}" class="retry-button" bindtap="handleRetry">{{retryText}}</button>
+</view>
