@@ -25,6 +25,23 @@ local-backups/
 docs/patches/
 docs/backups/
 *.patch
+docs/*archive*.md
+docs/performance-optimization-app-hunks.md
+docs/performance-optimization-patch-manifest.md
+docs/performance-optimization-plan.md
+docs/product-landing-plan-report.md
+docs/superpowers/plans/2026-05-25-database-performance-scaling.md
+
+# Local one-off database fill/repair/delete scripts are kept out of version control.
+scripts/codex-fill-*.mjs
+scripts/fill-*.mjs
+scripts/repair-*.mjs
+scripts/rewrite-*.mjs
+scripts/report-latest-ingest.mjs
+scripts/supabase-delete-*.mjs
+scripts/supabase-fix-*.mjs
+scripts/supabase-repair-*.mjs
+scripts/verify-paintings-*.mjs
 
 # WeChat miniapp source is versioned, generated/import data is not.
 miniprogram/
