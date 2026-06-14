@@ -1,4 +1,11 @@
 import { supabase } from "./supabase";
+import {
+  clearIndexedFavorites,
+  clearIndexedHistory,
+  saveFavoriteIdsIndexed,
+  saveHistoryIdsIndexed,
+  uniqueIds,
+} from "./local-library-store";
 
 const favoriteKey = "artArchive:favorites";
 const historyKey = "artArchive:history";
@@ -8,7 +15,9 @@ export function localFavoriteIds(): string[] {
 }
 
 export function saveLocalFavoriteIds(ids: string[]): void {
-  localStorage.setItem(favoriteKey, JSON.stringify([...new Set(ids)]));
+  const normalizedIds = uniqueIds(ids);
+  localStorage.setItem(favoriteKey, JSON.stringify(normalizedIds));
+  void saveFavoriteIdsIndexed(normalizedIds).catch(() => undefined);
 }
 
 export function localHistoryIds(): string[] {
@@ -16,7 +25,9 @@ export function localHistoryIds(): string[] {
 }
 
 export function saveLocalHistoryIds(ids: string[]): void {
-  localStorage.setItem(historyKey, JSON.stringify([...new Set(ids)].slice(0, 50)));
+  const normalizedIds = uniqueIds(ids, 50);
+  localStorage.setItem(historyKey, JSON.stringify(normalizedIds));
+  void saveHistoryIdsIndexed(normalizedIds).catch(() => undefined);
 }
 
 export async function currentUserId(): Promise<string | null> {
@@ -48,10 +59,12 @@ export async function signOutCurrentUser(): Promise<void> {
 
 export function clearLocalFavorites(): void {
   localStorage.removeItem(favoriteKey);
+  void clearIndexedFavorites().catch(() => undefined);
 }
 
 export function clearLocalHistory(): void {
   localStorage.removeItem(historyKey);
+  void clearIndexedHistory().catch(() => undefined);
 }
 
 export function clearLocalDownloads(): void {
@@ -63,10 +76,9 @@ export async function syncFavorite(artworkId: string, isFavorite: boolean): Prom
   if (!userId) return;
 
   if (isFavorite) {
-    const { error } = await supabase.from("user_favorites").upsert(
-      { user_id: userId, artwork_id: artworkId },
-      { onConflict: "user_id,artwork_id" },
-    );
+    const { error } = await supabase
+      .from("user_favorites")
+      .upsert({ user_id: userId, artwork_id: artworkId }, { onConflict: "user_id,artwork_id" });
     if (error) throw new Error(error.message);
     return;
   }

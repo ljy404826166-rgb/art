@@ -36,7 +36,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
-function normalizeSettings(value: unknown): AppSettings {
+export function normalizeSettings(value: unknown): AppSettings {
   if (!isRecord(value)) return defaultAppSettings;
 
   return {

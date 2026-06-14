@@ -6,24 +6,40 @@
     <meta name="theme-color" content="#ffffff" />
     <meta
       name="description"
-      content="艺藏 Art Archive 是一个用于欣赏、下载和学习公开领域绘画艺术品的移动端 App。"
+      content="Art Archive 是一款用于欣赏、下载和学习公共领域绘画艺术品的移动端 App。"
     />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/assets/icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="/src/styles.css?v=home-search-grid1" />
-    <title>艺藏 Art Archive</title>
+    <link rel="stylesheet" href="/src/styles.css?v=section-more1" />
+    <title>Art Archive</title>
   </head>
   <body>
     <div id="app">
       <header class="app-shell">
-        <div class="topbar">
-          <strong class="screen-title">画廊</strong>
+        <div class="topbar" data-active-view="home">
+          <span class="topbar-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <path d="M5 19V7.5L12 4l7 3.5V19" />
+              <path d="M8.5 19v-7h7v7" />
+            </svg>
+          </span>
+          <div class="screen-heading">
+            <span class="screen-kicker">ART ARCHIVE</span>
+            <strong class="screen-title">画廊</strong>
+            <span class="screen-subtitle">今日馆藏</span>
+          </div>
           <div class="nav-actions">
             <button class="icon-button" id="installButton" type="button" hidden aria-label="安装应用">
-              <span aria-hidden="true">⇩</span>
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M12 3v11" />
+                <path d="m7 10 5 5 5-5" />
+                <path d="M5 21h14" />
+              </svg>
             </button>
             <button class="icon-button" id="favoritesButton" type="button" aria-label="查看收藏">
-              <span aria-hidden="true">♡</span>
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l8.8 8.8 8.8-8.8a5.5 5.5 0 0 0 0-7.8Z" />
+              </svg>
             </button>
           </div>
         </div>
@@ -52,6 +68,7 @@
 
       <main>
         <section class="status-band" id="statusBand" hidden></section>
+        <div class="motion-toast-region" id="motionToastRegion" aria-live="polite" aria-atomic="true"></div>
 
         <section class="view-section" id="homeView" data-view-section="home">
           <div class="pull-refresh-indicator" id="pullRefreshIndicator" data-state="idle" aria-hidden="true">
@@ -100,65 +117,39 @@
           </section>
         </section>
 
-        <section class="view-section profile-page app-shell" id="meView" data-view-section="me" hidden>
-          <div class="profile-hero">
-            <div class="avatar" aria-hidden="true">艺</div>
-            <div>
-              <p class="eyebrow">My archive</p>
-              <h1>我的</h1>
-              <p>管理收藏、查看资料库状态，并为未来账号、下载记录和学习足迹预留入口。</p>
-            </div>
-          </div>
-
-          <div class="profile-grid">
-            <article class="profile-panel">
-              <span class="metric" id="favoriteCount">0</span>
-              <h2>我的收藏</h2>
-              <p>收藏会保存在当前设备，接入 Supabase Auth 后可同步到账户。</p>
-              <button class="text-button" id="showFavoriteButton" type="button">查看收藏作品</button>
-            </article>
-            <article class="profile-panel">
-              <span class="metric" id="libraryCount">0</span>
-              <h2>资料库</h2>
-              <p id="librarySourceText">当前数据来自 Supabase paintings 表。</p>
-              <button class="text-button" id="profileRefreshButton" type="button">同步资料库</button>
-            </article>
-            <article class="profile-panel">
-              <span class="metric">Soon</span>
-              <h2>账号与下载</h2>
-              <p>这里将承载登录、下载历史、隐私设置和会员功能。</p>
-            </article>
-          </div>
-
-          <section class="favorites-section">
-            <div class="section-heading">
-              <div>
-                <p class="eyebrow">Favorites</p>
-                <h2>收藏作品</h2>
-              </div>
-            </div>
-            <div class="gallery-grid" id="favoriteGrid" aria-live="polite"></div>
-          </section>
-        </section>
+        <section class="view-section profile-page app-shell" id="meView" data-view-section="me" hidden></section>
       </main>
 
       <aside class="drawer detail-page" id="detailDrawer" aria-hidden="true" data-mounted="false" aria-labelledby="detailTitleCn">
         <article class="drawer-card detail-card">
-<header class="detail-topbar">
+          <header class="detail-topbar">
             <button class="detail-icon-button" id="drawerClose" type="button" aria-label="返回首页">
               <svg aria-hidden="true" viewBox="0 0 24 24">
                 <path d="M15 18L9 12L15 6" />
               </svg>
             </button>
             <strong class="detail-brand">详情</strong>
-            <button class="detail-icon-button detail-favorite-icon" id="detailFavoriteButton" type="button" aria-label="收藏作品" aria-pressed="false">
-              <svg aria-hidden="true" viewBox="0 0 24 24">
-                <path d="M20.84 4.61C20.33 4.1 19.73 3.7 19.07 3.43C18.41 3.16 17.7 3.02 16.99 3.02C16.28 3.02 15.57 3.16 14.91 3.43C14.25 3.7 13.65 4.1 13.14 4.61L12 5.75L10.86 4.61C9.83 3.58 8.43 3 6.97 3C5.51 3 4.11 3.58 3.08 4.61C2.05 5.64 1.47 7.04 1.47 8.5C1.47 9.96 2.05 11.36 3.08 12.39L12 21.31L20.92 12.39C21.43 11.88 21.83 11.28 22.1 10.62C22.37 9.96 22.51 9.25 22.51 8.54C22.51 7.83 22.37 7.12 22.1 6.46C21.83 5.8 21.35 5.12 20.84 4.61Z" />
-              </svg>
-            </button>
+            <div class="detail-actions">
+              <button class="detail-icon-button detail-download-icon" id="detailDownloadButton" type="button" aria-label="下载作品">
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <path d="M12 3v11" />
+                  <path d="m7 10 5 5 5-5" />
+                  <path d="M5 21h14" />
+                </svg>
+              </button>
+              <button class="detail-icon-button detail-favorite-icon" id="detailFavoriteButton" type="button" aria-label="收藏作品" aria-pressed="false">
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <path d="M20.84 4.61C20.33 4.1 19.73 3.7 19.07 3.43C18.41 3.16 17.7 3.02 16.99 3.02C16.28 3.02 15.57 3.16 14.91 3.43C14.25 3.7 13.65 4.1 13.14 4.61L12 5.75L10.86 4.61C9.83 3.58 8.43 3 6.97 3C5.51 3 4.11 3.58 3.08 4.61C2.05 5.64 1.47 7.04 1.47 8.5C1.47 9.96 2.05 11.36 3.08 12.39L12 21.31L20.92 12.39C21.43 11.88 21.83 11.28 22.1 10.62C22.37 9.96 22.51 9.25 22.51 8.54C22.51 7.83 22.37 7.12 22.1 6.46C21.83 5.8 21.35 5.12 20.84 4.61Z" />
+                </svg>
+              </button>
+            </div>
           </header>
 
           <main class="detail-main">
+            <div class="detail-viewer-frame" id="detailViewerFrame" hidden>
+              <div class="detail-iiif-viewer" id="detailIiifViewer"></div>
+              <span class="detail-viewer-badge">IIIF ZOOM</span>
+            </div>
             <img class="detail-hero-image" id="drawerImage" alt="" />
 
             <section class="detail-info">
@@ -198,6 +189,6 @@
       </aside>
     </div>
 
-    <script type="module" src="/src/app.js?v=home-search-grid1"></script>
+    <script type="module" src="/src/app.js?v=section-more1"></script>
   </body>
 </html>

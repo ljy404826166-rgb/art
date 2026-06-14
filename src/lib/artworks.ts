@@ -1,29 +1,39 @@
 import { hasSupabaseConfig, supabase } from "./supabase";
+import { type ArtworkRecord, parseArtworkRecords } from "./artwork-schema";
 
-export type ArtworkRecord = {
-  id: string;
-  slug: string;
-  title_cn: string;
-  title_en: string | null;
-  artist: string;
-  year_and_place: string | null;
-  location: string | null;
-  medium: string | null;
-  dimensions: string | null;
-  description: string | null;
-  tags: string[];
-  tags_text: string | null;
-  source_name: string | null;
-  source_url: string | null;
-  thumbnail_url: string | null;
-  display_url: string | null;
-  download_url: string | null;
-  iiif_url: string | null;
-  created_at: string;
-  updated_at: string;
+export type { ArtworkRecord } from "./artwork-schema";
+
+export type ArtworkPageOptions = {
+  limit?: number;
+  from?: number;
+  tag?: string;
+  artist?: string;
 };
 
-const columns = [
+export type ArtworkPageResult = {
+  items: ArtworkRecord[];
+  nextFrom: number | null;
+  hasMore: boolean;
+  totalCount: number | null;
+};
+
+const summaryColumns = [
+  "id",
+  "slug",
+  "title_cn",
+  "title_en",
+  "artist",
+  "year_and_place",
+  "dimensions",
+  "tags",
+  "tags_text",
+  "thumbnail_url",
+  "display_url",
+  "created_at",
+  "updated_at",
+].join(",");
+
+const detailColumns = [
   "id",
   "slug",
   "title_cn",
@@ -46,38 +56,67 @@ const columns = [
   "updated_at",
 ].join(",");
 
-export async function fetchArtworks(): Promise<ArtworkRecord[]> {
+const defaultPageSize = 80;
+
+function assertSupabaseConfig() {
   if (!hasSupabaseConfig) {
-    throw new Error("缺少 VITE_SUPABASE_URL 或 VITE_SUPABASE_ANON_KEY。");
+    throw new Error("Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY.");
   }
-
-  const { data, error } = await supabase
-    .from("published_artworks")
-    .select(columns)
-    .order("created_at", { ascending: false });
-
-  if (error) throw new Error(error.message);
-  return (data ?? []) as unknown as ArtworkRecord[];
 }
 
-export async function fetchArtworksByTag(tag: string): Promise<ArtworkRecord[]> {
-  const { data, error } = await supabase
+export async function fetchArtworksPage(options: ArtworkPageOptions = {}): Promise<ArtworkPageResult> {
+  assertSupabaseConfig();
+
+  const limit = Math.max(1, Math.min(options.limit ?? defaultPageSize, 100));
+  const from = Math.max(0, options.from ?? 0);
+  const to = from + limit;
+  let query = supabase
     .from("published_artworks")
-    .select(columns)
-    .contains("tags", [tag])
-    .order("created_at", { ascending: false });
+    .select(summaryColumns, { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range(from, to);
+
+  if (options.tag) query = query.contains("tags", [options.tag]);
+  if (options.artist) query = query.eq("artist", options.artist);
+
+  const { data, error, count } = await query;
 
   if (error) throw new Error(error.message);
-  return (data ?? []) as unknown as ArtworkRecord[];
+
+  const records = parseArtworkRecords(data ?? []);
+  return {
+    items: records.slice(0, limit),
+    hasMore: records.length > limit,
+    nextFrom: records.length > limit ? from + limit : null,
+    totalCount: count ?? null,
+  };
 }
 
-export async function fetchArtworksByArtist(artist: string): Promise<ArtworkRecord[]> {
+export async function fetchArtworks(): Promise<ArtworkRecord[]> {
+  const page = await fetchArtworksPage({ limit: defaultPageSize, from: 0 });
+  return page.items;
+}
+
+export async function fetchArtworkById(id: string): Promise<ArtworkRecord | null> {
+  assertSupabaseConfig();
+
   const { data, error } = await supabase
     .from("published_artworks")
-    .select(columns)
-    .eq("artist", artist)
-    .order("created_at", { ascending: false });
+    .select(detailColumns)
+    .eq("id", id)
+    .maybeSingle();
 
   if (error) throw new Error(error.message);
-  return (data ?? []) as unknown as ArtworkRecord[];
+  if (!data) return null;
+  return parseArtworkRecords([data])[0] ?? null;
+}
+
+export async function fetchArtworksByTag(tag: string, options: ArtworkPageOptions = {}): Promise<ArtworkRecord[]> {
+  const page = await fetchArtworksPage({ ...options, tag });
+  return page.items;
+}
+
+export async function fetchArtworksByArtist(artist: string, options: ArtworkPageOptions = {}): Promise<ArtworkRecord[]> {
+  const page = await fetchArtworksPage({ ...options, artist });
+  return page.items;
 }

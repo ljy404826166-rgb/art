@@ -21,6 +21,16 @@ create table if not exists public.user_downloads (
   unique (user_id, artwork_id, file_kind)
 );
 
+create table if not exists public.user_profiles (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  display_name text not null default '',
+  avatar_url text,
+  bio text,
+  location text,
+  website text,
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.user_settings (
   user_id uuid primary key references auth.users(id) on delete cascade,
   settings jsonb not null default '{}'::jsonb,
@@ -30,6 +40,7 @@ create table if not exists public.user_settings (
 alter table public.user_favorites enable row level security;
 alter table public.user_browsing_history enable row level security;
 alter table public.user_downloads enable row level security;
+alter table public.user_profiles enable row level security;
 alter table public.user_settings enable row level security;
 
 drop policy if exists "users read own favorites" on public.user_favorites;
@@ -76,6 +87,31 @@ to authenticated
 using (auth.uid() = user_id)
 with check (auth.uid() = user_id);
 
+drop policy if exists "users read own profile" on public.user_profiles;
+create policy "users read own profile"
+on public.user_profiles for select
+to authenticated
+using (auth.uid() = user_id);
+
+drop policy if exists "users insert own profile" on public.user_profiles;
+create policy "users insert own profile"
+on public.user_profiles for insert
+to authenticated
+with check (auth.uid() = user_id);
+
+drop policy if exists "users update own profile" on public.user_profiles;
+create policy "users update own profile"
+on public.user_profiles for update
+to authenticated
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
+drop policy if exists "users delete own profile" on public.user_profiles;
+create policy "users delete own profile"
+on public.user_profiles for delete
+to authenticated
+using (auth.uid() = user_id);
+
 drop policy if exists "users manage own settings" on public.user_settings;
 create policy "users manage own settings"
 on public.user_settings for all
@@ -86,6 +122,7 @@ with check (auth.uid() = user_id);
 grant select, insert, delete on public.user_favorites to authenticated;
 grant select, insert, update on public.user_browsing_history to authenticated;
 grant select, insert, update, delete on public.user_downloads to authenticated;
+grant select, insert, update, delete on public.user_profiles to authenticated;
 grant select, insert, update, delete on public.user_settings to authenticated;
 
 create index if not exists user_history_user_viewed_idx
