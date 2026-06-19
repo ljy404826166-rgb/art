@@ -87,6 +87,7 @@ function buildSections(artworks, sectionLimit = SECTION_LIMIT) {
           title: tag,
           tag,
           targetTag: tag,
+          moreUrl: `/pages/tag/tag?tag=${encodeURIComponent(tag)}`,
           scrollLeft: 0,
           hasMore: true,
           showMore: true,
@@ -144,6 +145,7 @@ function buildAppendSections(artworks, existingSections, batchIndex) {
       title: tag,
       tag,
       targetTag: tag,
+      moreUrl: `/pages/tag/tag?tag=${encodeURIComponent(tag)}`,
       scrollLeft: 0,
       hasMore: true,
       showMore: true,
@@ -464,7 +466,8 @@ Page({
   },
 
   openTagDetail(event) {
-    const { tag } = event.currentTarget.dataset;
+    const dataset = event.currentTarget.dataset || {};
+    const tag = dataset.tag || dataset.title;
     if (!tag) return;
     wx.navigateTo({
       url: `/pages/tag/tag?tag=${encodeURIComponent(tag)}`,

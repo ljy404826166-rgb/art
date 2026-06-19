@@ -171,9 +171,11 @@
 
 .recommendation-group-head {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: 24rpx;
+  min-width: 0;
+  min-height: 50rpx;
   padding: 0 28rpx;
 }
 
@@ -200,17 +202,20 @@
 
 .section-more {
   display: flex;
-  flex: 0 0 146rpx;
-  width: 146rpx;
-  min-height: 48rpx;
+  flex: 0 0 auto;
+  width: auto;
+  height: 48rpx;
   align-items: center;
   justify-content: flex-end;
   gap: 4rpx;
   padding: 0;
   background: transparent;
   font-weight: 750;
-  position: relative;
   z-index: 2;
+}
+
+.section-more-hover {
+  opacity: 0.62;
 }
 
 .section-more-text {
@@ -225,8 +230,6 @@
   height: 28rpx;
 }
 
-
-
 .search-results-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -238,8 +241,6 @@
 .search-loading-state {
   padding: 12rpx 28rpx 24rpx;
 }
-
-
 
 .load-more {
   padding: 12rpx 28rpx 24rpx;

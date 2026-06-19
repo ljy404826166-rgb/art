@@ -83,6 +83,8 @@
             wx:if="{{item.showMore}}"
             class="section-more"
             data-tag="{{item.targetTag}}"
+            data-title="{{item.title}}"
+            hover-class="section-more-hover"
             bindtap="openTagDetail"
           >
             <text class="section-more-text">查看更多</text>
