@@ -225,21 +225,7 @@
   height: 28rpx;
 }
 
-.recommendation-row {
-  width: 100%;
-  height: 526rpx;
-  white-space: nowrap;
-}
 
-.recommendation-track {
-  display: inline-flex;
-  align-items: flex-start;
-  gap: 28rpx;
-  min-width: 100%;
-  padding: 8rpx 64rpx 24rpx 28rpx;
-  box-sizing: border-box;
-  white-space: nowrap;
-}
 
 .search-results-grid {
   display: grid;
@@ -253,17 +239,7 @@
   padding: 12rpx 28rpx 24rpx;
 }
 
-.recommendation-card-shell {
-  display: block;
-  flex: 0 0 auto;
-  padding-bottom: 0;
-  vertical-align: top;
-  white-space: normal;
-}
 
-.recommendation-card-shell.is-wide {
-  width: auto;
-}
 
 .load-more {
   padding: 12rpx 28rpx 24rpx;

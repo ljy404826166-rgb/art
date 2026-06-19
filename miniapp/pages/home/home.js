@@ -1,10 +1,16 @@
 const {
   fetchRandomArtworks,
+  fetchArtworksByTag,
   searchArtworks: searchCloudArtworks,
   fallbackSearchArtworks,
   fallbackLatestArtworks,
   normalizeError,
 } = require("../../services/artworks");
+const {
+  createPaginatedSection,
+  getArtworkKey,
+  getFreshArtworkBatch,
+} = require("./home-pagination");
 const {
   createHomeSearchState,
 } = require("./home-search");
@@ -27,10 +33,10 @@ function shuffleItems(items) {
   return shuffled;
 }
 
-function withCardClass(items) {
+function withCardClass(items, startIndex = 0) {
   return items.map((item, index) => ({
     ...item,
-    homeCardClass: index % 5 === 1 || index % 5 === 4 ? "is-wide" : "is-compact",
+    homeCardClass: (startIndex + index) % 5 === 1 || (startIndex + index) % 5 === 4 ? "is-wide" : "is-compact",
   }));
 }
 
@@ -44,6 +50,10 @@ function uniqueTags(artworks) {
   return shuffleItems(tags);
 }
 
+function artworkHasTag(item, tag) {
+  return Boolean(tag && (item.tags || item.tag_keys || []).includes(tag));
+}
+
 function buildSections(artworks, sectionLimit = SECTION_LIMIT) {
   const shuffled = withCardClass(shuffleItems(artworks));
   const recommendationItems = shuffled.slice(0, ROW_LIMIT);
@@ -53,14 +63,16 @@ function buildSections(artworks, sectionLimit = SECTION_LIMIT) {
   });
 
   const sections = [
-    {
+    createPaginatedSection({
       key: "recommendation",
       title: "推荐",
       items: recommendationItems,
       isRecommendation: true,
+      scrollLeft: 0,
+      hasMore: true,
       showMore: false,
       targetTag: "",
-    },
+    }, { rowLimit: ROW_LIMIT }),
   ];
 
   uniqueTags(shuffled)
@@ -70,22 +82,20 @@ function buildSections(artworks, sectionLimit = SECTION_LIMIT) {
       const freshItems = candidates.filter((item) => !usedInRecommendation[item._id || item.id]);
       const items = withCardClass((freshItems.length >= 3 ? freshItems : candidates).slice(0, ROW_LIMIT));
       if (items.length) {
-        sections.push({
+        sections.push(createPaginatedSection({
           key: `tag:${tag}`,
           title: tag,
           tag,
           targetTag: tag,
+          scrollLeft: 0,
+          hasMore: true,
           showMore: true,
           items,
-        });
+        }, { rowLimit: ROW_LIMIT }));
       }
     });
 
   return sections;
-}
-
-function getArtworkKey(item) {
-  return item && (item._id || item.id || item.source_id || item.title);
 }
 
 function mergeUniqueArtworks(existing, incoming) {
@@ -129,28 +139,32 @@ function buildAppendSections(artworks, existingSections, batchIndex) {
   const tags = preferredTags.concat(fallbackTags).slice(0, SECTION_APPEND_LIMIT);
   const sections = tags.map((tag, index) => {
     const candidates = shuffled.filter((item) => (item.tags || item.tag_keys || []).includes(tag));
-    return {
+    return createPaginatedSection({
       key: `tag:${tag}:batch:${batchIndex}:${index}`,
       title: tag,
       tag,
       targetTag: tag,
+      scrollLeft: 0,
+      hasMore: true,
       showMore: true,
       items: withCardClass(candidates.slice(0, ROW_LIMIT)),
-    };
+    }, { rowLimit: ROW_LIMIT });
   }).filter((section) => section.items.length);
 
   if (sections.length) return sections;
 
   const items = withCardClass(shuffled.slice(0, ROW_LIMIT));
   return items.length
-    ? [{
+    ? [createPaginatedSection({
       key: `more:${batchIndex}`,
       title: "更多推荐",
       items,
       isRecommendation: true,
+      scrollLeft: 0,
+      hasMore: true,
       showMore: false,
       targetTag: "",
-    }]
+    }, { rowLimit: ROW_LIMIT })]
     : [];
 }
 
@@ -194,6 +208,7 @@ Page({
   },
 
   async loadArtworks(options) {
+    this.sectionScrollLefts = {};
     this.setData({ loading: true, loadingMore: false, sectionLimit: SECTION_LIMIT, loadBatch: 0, error: "" });
     try {
       const artworks = await fetchRandomArtworks({ pageSize: HOME_SAMPLE_SIZE, batchSize: 20 });
@@ -243,6 +258,108 @@ Page({
         error: normalizeError(error),
       });
     }
+  },
+
+  async handleSectionScrollToLower(event) {
+    const dataset = event.currentTarget ? event.currentTarget.dataset || {} : {};
+    const detail = event.detail || {};
+    const sectionIndex = Number(detail.sectionIndex ?? dataset.sectionIndex);
+    const section = (this.data.sections || [])[sectionIndex];
+    if (
+      !Number.isFinite(sectionIndex)
+      || !section
+      || section.loadingMore
+      || section.hasMore === false
+      || this.data.loading
+      || this.data.searchMode
+    ) {
+      return;
+    }
+
+    this.setData({
+      [`sections[${sectionIndex}].loadingMore`]: true,
+    });
+
+    try {
+      const result = section.isRecommendation
+        ? await this.loadRecommendationRowMore(section)
+        : await this.loadTagRowMore(section);
+      this.applySectionAppend(sectionIndex, result);
+    } catch (error) {
+      this.setData({
+        [`sections[${sectionIndex}].loadingMore`]: false,
+        error: normalizeError(error),
+      });
+    }
+  },
+
+  async loadRecommendationRowMore(section) {
+    if (this.data.usingFallback) {
+      return this.getFallbackRowItems(section);
+    }
+
+    const items = await fetchRandomArtworks({ pageSize: ROW_LIMIT * 3, batchSize: 20 });
+    return {
+      items,
+      fetchedCount: items.length,
+      hasMore: items.length > 0,
+    };
+  },
+
+  async loadTagRowMore(section) {
+    const tag = section.tag || section.targetTag;
+    if (!tag) {
+      return { items: [], fetchedCount: 0, hasMore: false };
+    }
+
+    if (this.data.usingFallback) {
+      return this.getFallbackRowItems(section);
+    }
+
+    const items = await fetchArtworksByTag(tag, {
+      pageSize: ROW_LIMIT,
+      skip: Number(section.skip || 0),
+    });
+    return {
+      items,
+      fetchedCount: items.length,
+      hasMore: items.length >= ROW_LIMIT,
+    };
+  },
+
+  getFallbackRowItems(section) {
+    const tag = section.tag || section.targetTag;
+    const source = tag
+      ? (this.data.artworks || []).filter((item) => artworkHasTag(item, tag))
+      : (this.data.artworks || []);
+    const fresh = getFreshArtworkBatch(section.items, source, ROW_LIMIT);
+    const remaining = getFreshArtworkBatch((section.items || []).concat(fresh), source, 1);
+    return {
+      items: fresh,
+      fetchedCount: fresh.length,
+      hasMore: remaining.length > 0,
+    };
+  },
+
+  applySectionAppend(sectionIndex, result) {
+    const section = (this.data.sections || [])[sectionIndex];
+    if (!section) return;
+
+    const incoming = (result && result.items) || [];
+    const fresh = getFreshArtworkBatch(section.items, incoming, ROW_LIMIT);
+    const decoratedFresh = withCardClass(fresh, (section.items || []).length);
+    const items = (section.items || []).concat(decoratedFresh);
+    const fetchedCount = Number((result && result.fetchedCount) || incoming.length || fresh.length || 0);
+    const hasMore = Boolean(result && result.hasMore && fresh.length > 0);
+
+    this.setData({
+      artworks: mergeUniqueArtworks(this.data.artworks, incoming),
+      [`sections[${sectionIndex}].items`]: items,
+      [`sections[${sectionIndex}].skip`]: Number(section.skip || 0) + fetchedCount,
+      [`sections[${sectionIndex}].hasMore`]: hasMore,
+      [`sections[${sectionIndex}].loadingMore`]: false,
+      error: "",
+    });
   },
 
   retryLoad() {

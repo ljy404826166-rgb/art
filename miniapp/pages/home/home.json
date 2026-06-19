@@ -5,6 +5,7 @@
   "usingComponents": {
     "empty-state": "../../components/empty-state/empty-state",
     "error-state": "../../components/error-state/error-state",
-    "loading-more": "../../components/loading-more/loading-more"
+    "loading-more": "../../components/loading-more/loading-more",
+    "horizontal-artwork-row": "../../components/horizontal-artwork-row/horizontal-artwork-row"
   }
 }

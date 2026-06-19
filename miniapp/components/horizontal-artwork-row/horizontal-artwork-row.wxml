@@ -1,0 +1,33 @@
+<movable-area class="artwork-row-area">
+  <movable-view
+    class="artwork-row-mover"
+    direction="horizontal"
+    inertia="{{true}}"
+    out-of-bounds="{{false}}"
+    damping="32"
+    friction="2"
+    x="{{x}}"
+    style="{{moverStyle}}"
+    bindchange="handleMoveChange"
+    bindtouchstart="handleTouchStart"
+    bindtouchend="handleTouchEnd"
+    bindtouchcancel="handleTouchEnd"
+  >
+    <view class="artwork-row-track">
+      <block wx:for="{{items}}" wx:key="id">
+        <view class="artwork-row-item">
+          <artwork-card
+            artwork="{{item}}"
+            variant="row"
+            data-index="{{index}}"
+            bindtapcard="handleTapCard"
+            bindlayoutchange="handleCardLayoutChange"
+          />
+        </view>
+      </block>
+      <view wx:if="{{loadingMore}}" class="artwork-row-status">
+        <text class="artwork-row-status-text">加载中...</text>
+      </view>
+    </view>
+  </movable-view>
+</movable-area>

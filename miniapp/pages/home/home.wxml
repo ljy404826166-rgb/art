@@ -75,7 +75,7 @@
   </view>
 
   <view wx:else class="recommendation-feed">
-    <block wx:for="{{sections}}" wx:key="key">
+    <block wx:for="{{sections}}" wx:key="key" wx:for-index="sectionIndex">
       <view class="recommendation-group">
         <view class="recommendation-group-head">
           <text class="group-title">{{item.title}}</text>
@@ -90,15 +90,14 @@
           </view>
         </view>
 
-        <scroll-view class="recommendation-row" scroll-x="true" enable-flex="true" show-scrollbar="false">
-          <view class="recommendation-track">
-            <block wx:for="{{item.items}}" wx:key="id" wx:for-item="artwork">
-              <view class="recommendation-card-shell {{artwork.homeCardClass}}">
-                <artwork-card artwork="{{artwork}}" variant="row" bindtapcard="openDetail" />
-              </view>
-            </block>
-          </view>
-        </scroll-view>
+        <horizontal-artwork-row
+          items="{{item.items}}"
+          section-index="{{sectionIndex}}"
+          loading-more="{{item.loadingMore}}"
+          data-section-index="{{sectionIndex}}"
+          bindtapcard="openDetail"
+          bindrowtolower="handleSectionScrollToLower"
+        />
       </view>
     </block>
     <loading-more wx:if="{{loadingMore}}" text="继续加载..." />
