@@ -4,18 +4,26 @@
   background: #ffffff;
 }
 
+.home-page button {
+  margin: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+
 .home-page button::after {
   border: 0;
 }
 
 .search-shell {
   display: grid;
-  grid-template-columns: 48rpx minmax(0, 1fr) 72rpx;
+  grid-template-columns: 48rpx minmax(0, 1fr) 96rpx;
   align-items: center;
   gap: 12rpx;
   height: 92rpx;
   margin: 0 28rpx 38rpx;
   border-radius: 999rpx;
+  box-sizing: border-box;
   padding: 0 18rpx 0 30rpx;
   background: #ffffff;
   box-shadow: 0 18rpx 54rpx rgba(25, 25, 25, 0.06);
@@ -49,10 +57,11 @@
 
 .search-action {
   display: flex;
-  width: 72rpx;
+  width: 96rpx;
   height: 64rpx;
   align-items: center;
   justify-content: center;
+  justify-self: end;
   border-radius: 999rpx;
   color: #1f2328;
   font-size: 24rpx;
@@ -61,9 +70,13 @@
   white-space: nowrap;
 }
 
-.clear-action {
-  width: 76rpx;
-  font-size: 23rpx;
+.submit-search-action {
+  width: 96rpx;
+  min-width: 96rpx;
+  padding: 0;
+  color: #1f2328;
+  font-size: 25rpx;
+  text-align: center;
 }
 
 .filter-action {
@@ -234,6 +247,10 @@
   gap: 28rpx;
   align-items: start;
   padding: 0 28rpx;
+}
+
+.search-loading-state {
+  padding: 12rpx 28rpx 24rpx;
 }
 
 .recommendation-card-shell {

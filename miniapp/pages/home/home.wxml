@@ -1,6 +1,6 @@
 <view class="page home-page">
   <view class="search-shell">
-    <view class="search-icon" aria-label="search" bindtap="openSearchPage">
+    <view class="search-icon" aria-label="search">
       <image class="search-glyph" src="/assets/icons/lucide/svg/search.svg" mode="aspectFit" />
     </view>
     <input
@@ -9,10 +9,10 @@
       placeholder="星月夜"
       placeholder-class="search-placeholder"
       confirm-type="search"
-      bindfocus="openSearchPage"
+      bindconfirm="submitSearch"
       bindinput="handleSearchInput"
     />
-    <button wx:if="{{searchQuery}}" class="search-action clear-action" bindtap="clearSearch">清除</button>
+    <button wx:if="{{searchMode}}" class="search-action submit-search-action" bindtap="submitSearch">搜索</button>
     <view wx:else class="search-action filter-action" bindtap="openCategory" aria-label="筛选分类">
       <image class="filter-glyph" src="/assets/icons/lucide/svg/sliders-horizontal.svg" mode="aspectFit" />
     </view>
@@ -53,14 +53,18 @@
     </view>
   </view>
 
-  <view wx:elif="{{searchQuery}}" class="recommendation-feed">
+  <view wx:elif="{{searchMode}}" class="recommendation-feed">
     <view class="recommendation-group">
       <view class="recommendation-group-head">
         <text class="group-title">搜索结果</text>
-        <text class="group-count">{{searchResults.length}}件作品</text>
+        <text class="group-count">{{searchLoading ? '搜索中' : searchResults.length + '件作品'}}</text>
       </view>
 
-      <empty-state wx:if="{{searchResults.length === 0}}" icon="/assets/icons/lucide/svg/search-x.svg" title="没有找到匹配作品" description="换一个画作、艺术家或标签试试。" />
+      <view wx:if="{{searchLoading}}" class="search-loading-state">
+        <loading-more text="正在全库搜索..." />
+      </view>
+
+      <empty-state wx:elif="{{searchResults.length === 0}}" icon="/assets/icons/lucide/svg/search-x.svg" title="没有找到匹配作品" description="换一个画作、艺术家或标签试试。" />
 
       <view wx:else class="search-results-grid">
         <block wx:for="{{searchResults}}" wx:key="id">

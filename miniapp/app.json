@@ -1,7 +1,6 @@
 {
   "pages": [
     "pages/home/home",
-    "pages/search/search",
     "pages/category/category",
     "pages/tag/tag",
     "pages/artists/artists",

@@ -1,13 +1,20 @@
 const {
   fetchRandomArtworks,
+  searchArtworks: searchCloudArtworks,
+  fallbackSearchArtworks,
   fallbackLatestArtworks,
   normalizeError,
 } = require("../../services/artworks");
+const {
+  createHomeSearchState,
+} = require("./home-search");
 
 const SECTION_LIMIT = 8;
 const SECTION_APPEND_LIMIT = 4;
 const ROW_LIMIT = 8;
 const HOME_SAMPLE_SIZE = 120;
+const SEARCH_PAGE_SIZE = 60;
+const SEARCH_DEBOUNCE_MS = 250;
 
 function shuffleItems(items) {
   const shuffled = items.slice();
@@ -75,28 +82,6 @@ function buildSections(artworks, sectionLimit = SECTION_LIMIT) {
     });
 
   return sections;
-}
-
-function searchArtworks(artworks, query) {
-  const value = String(query || "").trim().toLowerCase();
-  if (!value) return [];
-  return withCardClass(
-    artworks.filter((item) => {
-      const content = [
-        item.title,
-        item.titleCn,
-        item.titleEn,
-        item.artist,
-        item.medium,
-        item.dimensions,
-        ...(item.tags || item.tag_keys || []),
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      return content.includes(value);
-    }),
-  );
 }
 
 function getArtworkKey(item) {
@@ -181,7 +166,9 @@ Page({
     artworks: [],
     sections: [],
     searchQuery: "",
+    searchMode: false,
     searchResults: [],
+    searchLoading: false,
     loading: true,
     loadingMore: false,
     sectionLimit: SECTION_LIMIT,
@@ -192,6 +179,10 @@ Page({
 
   onLoad() {
     this.loadArtworks();
+  },
+
+  onUnload() {
+    if (this.searchTimer) clearTimeout(this.searchTimer);
   },
 
   onPullDownRefresh() {
@@ -209,7 +200,7 @@ Page({
       this.setData({
         artworks,
         sections: buildSections(artworks, SECTION_LIMIT),
-        searchResults: searchArtworks(artworks, this.data.searchQuery),
+        ...createHomeSearchState([], this.data.searchQuery, { results: this.data.searchResults }),
         loading: false,
         usingFallback: false,
       });
@@ -218,7 +209,7 @@ Page({
       this.setData({
         artworks: fallback,
         sections: buildSections(fallback, SECTION_LIMIT),
-        searchResults: searchArtworks(fallback, this.data.searchQuery),
+        ...createHomeSearchState([], this.data.searchQuery, { results: this.data.searchResults }),
         loading: false,
         error: normalizeError(error),
         usingFallback: true,
@@ -231,7 +222,7 @@ Page({
   },
 
   async loadMoreArtworks() {
-    if (this.data.loading || this.data.loadingMore || this.data.searchQuery) return;
+    if (this.data.loading || this.data.loadingMore || this.data.searchMode) return;
     this.setData({ loadingMore: true });
     try {
       const nextArtworks = await fetchRandomArtworks({ pageSize: 60, batchSize: 20 });
@@ -260,22 +251,78 @@ Page({
 
   handleSearchInput(event) {
     const searchQuery = event.detail.value || "";
+    const localState = createHomeSearchState([], searchQuery);
     this.setData({
-      searchQuery,
-      searchResults: searchArtworks(this.data.artworks, searchQuery),
+      ...localState,
+      searchLoading: localState.searchMode,
     });
+    this.scheduleCloudSearch(searchQuery);
+  },
+
+  submitSearch() {
+    const searchQuery = String(this.data.searchQuery || "");
+    if (typeof wx !== "undefined" && typeof wx.hideKeyboard === "function") {
+      wx.hideKeyboard();
+    }
+    this.runCloudSearchNow(searchQuery);
+  },
+
+  scheduleCloudSearch(query) {
+    if (this.searchTimer) clearTimeout(this.searchTimer);
+    const searchQuery = String(query || "");
+    const normalizedQuery = searchQuery.trim();
+    this.searchRequestId = (this.searchRequestId || 0) + 1;
+    const requestId = this.searchRequestId;
+    if (!normalizedQuery) {
+      this.setData({ searchLoading: false });
+      return;
+    }
+    this.searchTimer = setTimeout(() => {
+      this.runCloudSearch(normalizedQuery, requestId);
+    }, SEARCH_DEBOUNCE_MS);
+  },
+
+  runCloudSearchNow(query) {
+    if (this.searchTimer) clearTimeout(this.searchTimer);
+    const normalizedQuery = String(query || "").trim();
+    this.searchRequestId = (this.searchRequestId || 0) + 1;
+    const requestId = this.searchRequestId;
+    if (!normalizedQuery) {
+      this.clearSearch();
+      return;
+    }
+    this.setData({ searchLoading: true });
+    this.runCloudSearch(normalizedQuery, requestId);
+  },
+
+  async runCloudSearch(query, requestId) {
+    const normalizedQuery = String(query || "").trim();
+    if (!normalizedQuery) return;
+    try {
+      const results = await searchCloudArtworks(normalizedQuery, { pageSize: SEARCH_PAGE_SIZE });
+      if (requestId !== this.searchRequestId || !this.data.searchMode) return;
+      this.setData({
+        searchResults: results,
+        searchLoading: false,
+      });
+    } catch (error) {
+      if (requestId !== this.searchRequestId || !this.data.searchMode) return;
+      const fallback = fallbackSearchArtworks(normalizedQuery).slice(0, SEARCH_PAGE_SIZE);
+      this.setData({
+        searchResults: fallback,
+        searchLoading: false,
+      });
+    }
   },
 
   clearSearch() {
+    if (this.searchTimer) clearTimeout(this.searchTimer);
+    this.searchRequestId = (this.searchRequestId || 0) + 1;
     this.setData({
       searchQuery: "",
+      searchMode: false,
       searchResults: [],
-    });
-  },
-
-  openSearchPage() {
-    wx.navigateTo({
-      url: "/pages/search/search",
+      searchLoading: false,
     });
   },
 
