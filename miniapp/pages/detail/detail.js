@@ -16,6 +16,7 @@ const {
 } = require("../../services/downloads");
 const {
   isFavoriteArtwork,
+  recordDownloadArtwork,
   recordHistoryArtwork,
   toggleFavoriteArtwork,
 } = require("../../services/local-library");
@@ -208,6 +209,7 @@ Page({
     try {
       const tempFilePath = await downloadFile(downloadUrl);
       await saveImageToAlbum(tempFilePath);
+      recordDownloadArtwork(artwork, "completed");
       wx.hideLoading();
       wx.showToast({
         title: "已保存到相册",
