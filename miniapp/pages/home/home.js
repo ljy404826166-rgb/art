@@ -450,8 +450,10 @@ Page({
     const dataset = event.currentTarget ? event.currentTarget.dataset || {} : {};
     const id = detail.id || dataset.id;
     if (!id) return;
+    const ratio = Number(detail.ratio || dataset.ratio || 0);
+    const ratioParam = ratio > 0 ? `&ratio=${encodeURIComponent(ratio)}` : "";
     wx.navigateTo({
-      url: `/pages/detail/detail?id=${id}`,
+      url: `/pages/detail/detail?id=${encodeURIComponent(id)}${ratioParam}`,
     });
   },
 

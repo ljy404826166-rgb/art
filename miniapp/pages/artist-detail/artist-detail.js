@@ -87,10 +87,12 @@ Page({
   },
 
   openArtwork(event) {
-    const { id } = event.detail || {};
+    const { id, ratio } = event.detail || {};
     if (!id) return;
+    const ratioValue = Number(ratio || 0);
+    const ratioParam = ratioValue > 0 ? `&ratio=${encodeURIComponent(ratioValue)}` : "";
     wx.navigateTo({
-      url: `/pages/detail/detail?id=${id}`,
+      url: `/pages/detail/detail?id=${encodeURIComponent(id)}${ratioParam}`,
     });
   },
 });
