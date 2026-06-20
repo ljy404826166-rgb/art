@@ -2,9 +2,12 @@ const FAVORITE_IDS_KEY = "artArchive:favoriteArtworkIds";
 const FAVORITE_ITEMS_KEY = "artArchive:favoriteArtworkItems";
 const HISTORY_IDS_KEY = "artArchive:historyArtworkIds";
 const HISTORY_ITEMS_KEY = "artArchive:historyArtworkItems";
+const DOWNLOAD_IDS_KEY = "artArchive:downloadArtworkIds";
+const DOWNLOAD_ITEMS_KEY = "artArchive:downloadArtworkItems";
 const FOLLOWED_ARTIST_IDS_KEY = "artArchive:followedArtistIds";
 const FOLLOWED_ARTIST_ITEMS_KEY = "artArchive:followedArtistItems";
 const HISTORY_LIMIT = 80;
+const DOWNLOAD_LIMIT = 80;
 
 function readArray(key) {
   try {
@@ -81,6 +84,18 @@ function compactArtist(artist) {
     artworkCount: artist.artworkCount || 0,
     tags: Array.isArray(artist.tags) ? artist.tags : [],
     followedAt: new Date().toISOString(),
+  };
+}
+
+function compactDownloadArtwork(artwork, status = "completed") {
+  const item = compactArtwork(artwork);
+  if (!item) return null;
+
+  return {
+    ...item,
+    download_url: artwork.download_url || "",
+    status,
+    downloadedAt: new Date().toISOString(),
   };
 }
 
@@ -166,6 +181,32 @@ function clearHistoryArtworks() {
   writeArray(HISTORY_ITEMS_KEY, []);
 }
 
+function getDownloadArtworkIds() {
+  return readArray(DOWNLOAD_IDS_KEY);
+}
+
+function getDownloadArtworks() {
+  return readArray(DOWNLOAD_ITEMS_KEY);
+}
+
+function recordDownloadArtwork(artwork, status) {
+  const item = compactDownloadArtwork(artwork, status);
+  if (!item) return false;
+
+  const id = getArtworkId(item);
+  const ids = getDownloadArtworkIds().filter((value) => value !== id);
+  const items = removeById(getDownloadArtworks(), id, getArtworkId);
+
+  writeArray(DOWNLOAD_IDS_KEY, [id, ...ids].slice(0, DOWNLOAD_LIMIT));
+  writeArray(DOWNLOAD_ITEMS_KEY, [item, ...items].slice(0, DOWNLOAD_LIMIT));
+  return true;
+}
+
+function clearDownloadArtworks() {
+  writeArray(DOWNLOAD_IDS_KEY, []);
+  writeArray(DOWNLOAD_ITEMS_KEY, []);
+}
+
 function getFollowedArtistIds() {
   return readArray(FOLLOWED_ARTIST_IDS_KEY);
 }
@@ -201,6 +242,7 @@ function getLibraryStats() {
   return {
     favorites: getFavoriteArtworkIds().length,
     history: getHistoryArtworkIds().length,
+    downloads: getDownloadArtworkIds().length,
     followedArtists: getFollowedArtistIds().length,
   };
 }
@@ -215,6 +257,9 @@ module.exports = {
   recordHistoryArtwork,
   getHistoryArtworks,
   clearHistoryArtworks,
+  getDownloadArtworks,
+  recordDownloadArtwork,
+  clearDownloadArtworks,
   getFollowedArtistIds,
   getFollowedArtists,
   isFollowedArtist,
