@@ -12,32 +12,20 @@
   </view>
 
   <view wx:if="{{artist}}" class="info-panel">
-    <view class="info-row">
-      <view class="info-label">
-        <image class="info-icon" src="/assets/icons/lucide/svg/map-pin.svg" mode="aspectFit" />
-        <text>国籍</text>
-      </view>
+    <view class="info-card">
+      <text class="info-label">国籍</text>
       <text class="info-value">{{artist.country}}</text>
     </view>
-    <view class="info-row">
-      <view class="info-label">
-        <image class="info-icon" src="/assets/icons/lucide/svg/palette.svg" mode="aspectFit" />
-        <text>流派</text>
-      </view>
+    <view class="info-card">
+      <text class="info-label">流派</text>
       <text class="info-value">{{artist.styles.join('、')}}</text>
     </view>
-    <view class="info-row">
-      <view class="info-label">
-        <image class="info-icon" src="/assets/icons/lucide/svg/book-open.svg" mode="aspectFit" />
-        <text>活跃时期</text>
-      </view>
+    <view class="info-card">
+      <text class="info-label">活跃时期</text>
       <text class="info-value">{{artist.activePeriod}}</text>
     </view>
-    <view class="info-row">
-      <view class="info-label">
-        <image class="info-icon" src="/assets/icons/lucide/svg/image.svg" mode="aspectFit" />
-        <text>代表作品</text>
-      </view>
+    <view class="info-card">
+      <text class="info-label">代表作品</text>
       <text class="info-value">{{artist.representativeWorks.join('、')}}</text>
     </view>
   </view>
