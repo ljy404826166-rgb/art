@@ -5,10 +5,22 @@ const {
 } = require("../../services/artworks");
 const { listArtists } = require("../../services/artists");
 const {
+  computeDetailHeroFrameStyle,
+  resolveDetailMeasureSrc,
+} = require("./detail-image-layout");
+const {
+  downloadFile,
+  isAlbumPermissionError,
+  resolveArtworkDownloadUrl,
+  saveImageToAlbum,
+} = require("../../services/downloads");
+const {
   isFavoriteArtwork,
   recordHistoryArtwork,
   toggleFavoriteArtwork,
 } = require("../../services/local-library");
+
+const detailImageRatioCache = {};
 
 function normalizeText(value) {
   return String(value || "").trim().toLowerCase();
@@ -36,12 +48,18 @@ Page({
     error: "",
     usingFallback: false,
     isFavorite: false,
+    heroFrameStyle: "",
+    downloading: false,
   },
 
   onLoad(options) {
     wx.setNavigationBarTitle({
       title: "详情",
     });
+    const routeRatioStyle = computeDetailHeroFrameStyle(options && options.ratio);
+    if (routeRatioStyle) {
+      this.setData({ heroFrameStyle: routeRatioStyle });
+    }
     this.loadArtwork(options.id || options.source_id || options.supabase_id);
   },
 
@@ -76,6 +94,60 @@ Page({
       usingFallback: Boolean(options.usingFallback),
       isFavorite: isFavoriteArtwork(artworkId),
     });
+
+    this.measureHeroImage(artwork);
+  },
+
+  setHeroImageRatio(ratio) {
+    const heroFrameStyle = computeDetailHeroFrameStyle(ratio);
+    if (!heroFrameStyle || heroFrameStyle === this.data.heroFrameStyle) return;
+    this.setData({ heroFrameStyle });
+  },
+
+  measureHeroImage(artwork) {
+    const src = resolveDetailMeasureSrc(artwork || {});
+    if (!src) return;
+
+    const cachedRatio = detailImageRatioCache[src];
+    if (cachedRatio) {
+      this.setHeroImageRatio(cachedRatio);
+      return;
+    }
+
+    if (typeof wx === "undefined" || !wx.getImageInfo) return;
+    this.pendingHeroMeasureSrc = src;
+    wx.getImageInfo({
+      src,
+      success: (result) => {
+        if (this.pendingHeroMeasureSrc !== src) return;
+        this.pendingHeroMeasureSrc = "";
+
+        const width = Number(result && result.width);
+        const height = Number(result && result.height);
+        if (!width || !height) return;
+
+        const ratio = width / height;
+        detailImageRatioCache[src] = ratio;
+        this.setHeroImageRatio(ratio);
+      },
+      fail: () => {
+        if (this.pendingHeroMeasureSrc === src) {
+          this.pendingHeroMeasureSrc = "";
+        }
+      },
+    });
+  },
+
+  handleHeroImageLoad(event) {
+    const detail = event.detail || {};
+    const width = Number(detail.width || 0);
+    const height = Number(detail.height || 0);
+    if (!width || !height) return;
+
+    if (detail.src) {
+      detailImageRatioCache[detail.src] = width / height;
+    }
+    this.setHeroImageRatio(width / height);
   },
 
   retryLoad() {
@@ -112,5 +184,56 @@ Page({
       title: isFavorite ? "已收藏" : "已取消收藏",
       icon: "none",
     });
+  },
+
+  async downloadArtwork() {
+    const artwork = this.data.artwork;
+    if (!artwork || this.data.downloading) return;
+
+    const downloadUrl = resolveArtworkDownloadUrl(artwork);
+    if (!downloadUrl) {
+      wx.showToast({
+        title: "暂无可下载原图",
+        icon: "none",
+      });
+      return;
+    }
+
+    this.setData({ downloading: true });
+    wx.showLoading({
+      title: "下载中",
+      mask: true,
+    });
+
+    try {
+      const tempFilePath = await downloadFile(downloadUrl);
+      await saveImageToAlbum(tempFilePath);
+      wx.hideLoading();
+      wx.showToast({
+        title: "已保存到相册",
+        icon: "success",
+      });
+    } catch (error) {
+      wx.hideLoading();
+      if (isAlbumPermissionError(error)) {
+        wx.showModal({
+          title: "需要相册权限",
+          content: "请允许保存到相册后重试下载。",
+          confirmText: "去设置",
+          success: (result) => {
+            if (result.confirm && wx.openSetting) {
+              wx.openSetting();
+            }
+          },
+        });
+      } else {
+        wx.showToast({
+          title: "下载失败，请重试",
+          icon: "none",
+        });
+      }
+    } finally {
+      this.setData({ downloading: false });
+    }
   },
 });

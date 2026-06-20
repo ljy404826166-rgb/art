@@ -112,7 +112,7 @@ const fallbackGroups = [
 ];
 
 function normalizeLocation(location) {
-  const value = String(location || "").trim();
+  let value = String(location || "").trim();
   if (!value) return "收藏地暂未收录";
 
   const sourceOnlyLocations = ["artvee", "wikimedia commons"];
@@ -120,6 +120,47 @@ function normalizeLocation(location) {
     return "收藏地暂未收录";
   }
 
+  value = value
+    .replace(/相关语境.*$/i, "")
+    .replace(/[（(]\s*(推测|推断|估计)\s*[）)]/g, "")
+    .replace(/\s+/g, " ")
+    .replace(/[，,、；;：:]\s*$/g, "")
+    .trim();
+
+  if (!value || sourceOnlyLocations.includes(value.toLowerCase())) {
+    return "收藏地暂未收录";
+  }
+
+  return value;
+}
+
+function normalizeYear(value) {
+  const text = String(value || "").trim();
+  if (!text) return "年代暂未收录";
+
+  const match = text.match(/(约|大约|约公元|公元|c\.|ca\.|circa)?\s*(\d{3,4})(?:\s*[–—-]\s*(\d{2,4}))?\s*年?/i);
+  if (!match) return text.split(/[，,；;]/)[0].trim() || "年代暂未收录";
+
+  const prefix = /^(约|大约)$/i.test(match[1] || "") ? "约" : "";
+  const start = match[2];
+  const end = match[3] ? `-${match[3]}` : "";
+  const hasYearSuffix = /年/.test(match[0]);
+  return `${prefix}${start}${end}${hasYearSuffix ? "年" : ""}`;
+}
+
+function normalizeMedium(medium) {
+  let value = String(medium || "").trim();
+  if (!value) return "材质暂未收录";
+
+  value = value
+    .replace(/或其?\s*Artvee\s*图像记录/gi, "")
+    .replace(/Artvee\s*图像记录/gi, "")
+    .replace(/[（(]\s*(推测|推断|估计)\s*[）)]/g, "")
+    .replace(/\s+/g, " ")
+    .replace(/[，,、；;：:]\s*$/g, "")
+    .trim();
+
+  if (!value || /^Artvee$/i.test(value)) return "材质暂未收录";
   return value;
 }
 
@@ -138,9 +179,9 @@ function normalizeArtwork(record) {
     titleCn: title,
     titleEn: item.title_en || "",
     artist: item.artist || "Unknown artist",
-    year: item.year_and_place || "年代暂未收录",
+    year: normalizeYear(item.year_and_place),
     location: normalizeLocation(item.location),
-    medium: item.medium || "材质暂未收录",
+    medium: normalizeMedium(item.medium),
     dimensions: item.dimensions || "尺寸暂未收录",
     description: item.description || "这条作品资料仍在完善。",
     tags,
@@ -149,7 +190,7 @@ function normalizeArtwork(record) {
     display_url: item.display_url || "",
     download_url: item.download_url || "",
     thumbnail_url: item.thumbnail_url || "",
-    imageSrc: item.cloud_file_id || item.display_url || item.download_url || item.thumbnail_url || "",
+    imageSrc: item.cloud_file_id || item.display_url || item.thumbnail_url || "",
     sourceName: sourceName || "来源暂未收录",
     sourceUrl: item.source_url || "",
     createdAt: item.created_at || "",

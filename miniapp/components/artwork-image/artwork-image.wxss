@@ -31,7 +31,6 @@
 
 .artwork-image-shell.detail .artwork-image-node {
   height: auto;
-  min-height: 420rpx;
 }
 
 .artwork-image-node.is-loading {
