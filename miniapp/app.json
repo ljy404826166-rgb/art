@@ -8,6 +8,7 @@
     "pages/artist-detail/artist-detail",
     "pages/favorites/favorites",
     "pages/history/history",
+    "pages/downloads/downloads",
     "pages/followed-artists/followed-artists",
     "pages/profile/profile"
   ],

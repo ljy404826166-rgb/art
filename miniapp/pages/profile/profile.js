@@ -43,7 +43,7 @@ Page({
           { label: "我的收藏", icon: "/assets/icons/lucide/svg/heart.svg", route: "/pages/favorites/favorites" },
           { label: "关注画家", icon: "/assets/icons/lucide/svg/user.svg", route: "/pages/followed-artists/followed-artists" },
           { label: "浏览历史", icon: "/assets/icons/lucide/svg/book-open.svg", route: "/pages/history/history" },
-          { label: "下载管理", icon: "/assets/icons/lucide/svg/download.svg", disabled: true },
+          { label: "下载管理", icon: "/assets/icons/lucide/svg/download.svg", route: "/pages/downloads/downloads" },
           { label: "会员特权", icon: "/assets/icons/lucide/svg/star.svg", disabled: true },
         ],
       },
