@@ -8,6 +8,23 @@ function isAlbumPermissionError(error) {
   return /auth deny|authorize no response|auth denied|permission/i.test(message);
 }
 
+function getDownloadFailureMessage(error) {
+  const message = String((error && (error.errMsg || error.message)) || error || "");
+  if (isAlbumPermissionError(error)) {
+    return "请允许保存到相册后重试";
+  }
+  if (/download-http-\d+/i.test(message)) {
+    return "原图暂时无法下载";
+  }
+  if (/download-empty-file|save-album-unavailable|download-unavailable/i.test(message)) {
+    return "图片文件异常，请稍后重试";
+  }
+  if (/timeout|network|downloadFile:fail/i.test(message)) {
+    return "网络异常，请稍后重试";
+  }
+  return "下载失败，请重试";
+}
+
 function downloadFile(url) {
   return new Promise((resolve, reject) => {
     if (typeof wx === "undefined" || !wx.downloadFile) {
@@ -50,6 +67,7 @@ function saveImageToAlbum(filePath) {
 }
 
 module.exports = {
+  getDownloadFailureMessage,
   resolveArtworkDownloadUrl,
   isAlbumPermissionError,
   downloadFile,

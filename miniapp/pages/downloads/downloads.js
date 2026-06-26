@@ -29,6 +29,10 @@ Page({
         if (!result.confirm) return;
         clearDownloadArtworks();
         this.refreshDownloads();
+        wx.showToast({
+          title: "已清空下载记录",
+          icon: "none",
+        });
       },
     });
   },

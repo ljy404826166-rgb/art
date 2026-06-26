@@ -10,6 +10,7 @@ const {
 } = require("./detail-image-layout");
 const {
   downloadFile,
+  getDownloadFailureMessage,
   isAlbumPermissionError,
   resolveArtworkDownloadUrl,
   saveImageToAlbum,
@@ -230,7 +231,7 @@ Page({
         });
       } else {
         wx.showToast({
-          title: "下载失败，请重试",
+          title: getDownloadFailureMessage(error),
           icon: "none",
         });
       }

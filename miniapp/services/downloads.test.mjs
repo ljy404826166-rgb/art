@@ -11,6 +11,7 @@ function loadCommonJsModule(filename) {
 }
 
 const {
+  getDownloadFailureMessage,
   resolveArtworkDownloadUrl,
   isAlbumPermissionError,
 } = loadCommonJsModule("miniapp/services/downloads.js");
@@ -41,4 +42,23 @@ test("isAlbumPermissionError detects common WeChat save-album auth failures", ()
   assert.equal(isAlbumPermissionError({ errMsg: "saveImageToPhotosAlbum:fail auth deny" }), true);
   assert.equal(isAlbumPermissionError({ errMsg: "saveImageToPhotosAlbum:fail authorize no response" }), true);
   assert.equal(isAlbumPermissionError({ errMsg: "downloadFile:fail timeout" }), false);
+});
+
+test("getDownloadFailureMessage gives specific user-facing messages", () => {
+  assert.equal(
+    getDownloadFailureMessage({ errMsg: "saveImageToPhotosAlbum:fail auth deny" }),
+    "请允许保存到相册后重试"
+  );
+  assert.equal(
+    getDownloadFailureMessage(new Error("download-http-404")),
+    "原图暂时无法下载"
+  );
+  assert.equal(
+    getDownloadFailureMessage(new Error("download-empty-file")),
+    "图片文件异常，请稍后重试"
+  );
+  assert.equal(
+    getDownloadFailureMessage({ errMsg: "downloadFile:fail timeout" }),
+    "网络异常，请稍后重试"
+  );
 });

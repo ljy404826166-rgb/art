@@ -9,8 +9,9 @@
 
   <empty-state
     wx:if="{{artworks.length === 0}}"
-    title="还没有下载记录"
-    description="在作品详情页点击下载并保存到相册后，会记录在这里。"
+    icon="/assets/icons/lucide/svg/download.svg"
+    title="暂无下载记录"
+    description="下载记录仅保存在本机。保存到系统相册后，会在这里显示。"
     show-action="{{false}}"
   />
 
