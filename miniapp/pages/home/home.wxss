@@ -63,6 +63,7 @@
   justify-content: center;
   justify-self: end;
   border-radius: 999rpx;
+  box-sizing: border-box;
   color: #1f2328;
   font-size: 24rpx;
   font-weight: 850;
