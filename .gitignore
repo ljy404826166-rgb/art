@@ -50,6 +50,7 @@ miniapp/project.private.config.json
 !miniapp/data/
 miniapp/data/*.json
 miniapp/data/*.jsonl
+!miniapp/data/artists.candidates.jsonl
 !miniapp/data/*.sample.json
 !miniapp/data/artists.schema.json
 !miniapp/data/.gitkeep
