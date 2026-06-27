@@ -1,7 +1,10 @@
 const { mockArtists, artistFilterGroups } = require("../data/mock-artists");
 
 const REVIEWED_STATUS = "reviewed";
-const CLOUD_ARTISTS_LIMIT = 100;
+const CANDIDATE_STATUS = "candidate";
+const REJECTED_STATUS = "rejected";
+const VISIBLE_REVIEW_STATUSES = new Set([REVIEWED_STATUS, CANDIDATE_STATUS]);
+const CLOUD_ARTISTS_PAGE_SIZE = 20;
 
 function asArray(value) {
   return Array.isArray(value) ? value : [];
@@ -10,21 +13,21 @@ function asArray(value) {
 function normalizeCloudArtist(record) {
   const artist = record || {};
   return {
-    id: artist._id,
-    nameZh: artist.name_zh,
-    nameEn: artist.name_en,
-    lifespan: artist.lifespan_text,
+    id: artist._id || artist.id,
+    nameZh: artist.name_zh || artist.nameZh,
+    nameEn: artist.name_en || artist.nameEn,
+    lifespan: artist.lifespan_text || artist.lifespan,
     region: artist.region,
     country: artist.country,
     styles: asArray(artist.styles),
     periods: asArray(artist.periods),
-    activePeriod: artist.active_period,
-    representativeWorks: asArray(artist.representative_works),
+    activePeriod: artist.active_period || artist.activePeriod,
+    representativeWorks: asArray(artist.representative_works || artist.representativeWorks),
     aliases: asArray(artist.aliases),
-    bio: artist.bio_zh,
+    bio: artist.bio_zh || artist.bio,
     tags: asArray(artist.tags),
-    avatarText: artist.avatar_text,
-    reviewStatus: artist.review_status,
+    avatarText: artist.avatar_text || artist.avatarText,
+    reviewStatus: getReviewStatus(artist),
   };
 }
 
@@ -93,6 +96,37 @@ function filterArtists(options) {
   return filterArtistList(listArtists(), options);
 }
 
+function toPositiveInteger(value, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? Math.floor(number) : fallback;
+}
+
+function createArtistPaginationState(artists, options) {
+  const allArtists = asArray(artists);
+  const initialLimit = toPositiveInteger(options && options.initialLimit, 20);
+  const visibleArtists = allArtists.slice(0, initialLimit);
+  return {
+    artists: visibleArtists,
+    visibleCount: visibleArtists.length,
+    total: allArtists.length,
+    hasMore: visibleArtists.length < allArtists.length,
+  };
+}
+
+function appendArtistPage(currentArtists, allArtists, options) {
+  const current = asArray(currentArtists);
+  const all = asArray(allArtists);
+  const pageSize = toPositiveInteger(options && options.pageSize, 8);
+  const nextArtists = all.slice(current.length, current.length + pageSize);
+  const visibleArtists = current.concat(nextArtists);
+  return {
+    artists: visibleArtists,
+    visibleCount: visibleArtists.length,
+    total: all.length,
+    hasMore: visibleArtists.length < all.length,
+  };
+}
+
 function getArtistById(id) {
   const wanted = String(id || "");
   return listArtists().find((artist) => artist.id === wanted) || null;
@@ -104,32 +138,62 @@ function getWxApi(options) {
   return null;
 }
 
-async function fetchReviewedArtistsFromCloud(options) {
+function allowFallback(options) {
+  return !options || options.allowFallback !== false;
+}
+
+function createArtistErrorResult(error) {
+  return {
+    artists: [],
+    source: "error",
+    error: error && error.message ? error.message : String(error),
+  };
+}
+
+function getReviewStatus(record) {
+  return String(record && (record.review_status || record.reviewStatus) || "").trim();
+}
+
+function isVisibleCloudArtist(record) {
+  const status = getReviewStatus(record);
+  if (!status) return true;
+  return VISIBLE_REVIEW_STATUSES.has(status) && status !== REJECTED_STATUS;
+}
+
+async function fetchVisibleArtistsFromCloud(options) {
   const wxApi = getWxApi(options);
   if (!wxApi || !wxApi.cloud || typeof wxApi.cloud.database !== "function") {
     throw new Error("wx.cloud.database is unavailable");
   }
 
-  const result = await wxApi.cloud
-    .database()
-    .collection("artists")
-    .where({ review_status: REVIEWED_STATUS })
-    .limit(CLOUD_ARTISTS_LIMIT)
-    .get();
-  const rows = asArray(result && result.data);
+  const db = wxApi.cloud.database();
+  const rows = [];
+
+  for (let skip = 0; ; skip += CLOUD_ARTISTS_PAGE_SIZE) {
+    const result = await db
+      .collection("artists")
+      .skip(skip)
+      .limit(CLOUD_ARTISTS_PAGE_SIZE)
+      .get();
+    const batch = asArray(result && result.data);
+    rows.push(...batch);
+    if (batch.length < CLOUD_ARTISTS_PAGE_SIZE) break;
+  }
 
   return rows
-    .filter((record) => record && record.review_status === REVIEWED_STATUS)
+    .filter(isVisibleCloudArtist)
     .map(normalizeArtist);
 }
 
 async function loadArtists(options) {
   try {
-    return {
-      artists: await fetchReviewedArtistsFromCloud(options),
-      source: "cloud",
-    };
+    const artists = await fetchVisibleArtistsFromCloud(options);
+    if (!artists.length) {
+      throw new Error("cloud artists collection returned no visible artists");
+    }
+    return { artists, source: "cloud" };
   } catch (error) {
+    if (!allowFallback(options)) return createArtistErrorResult(error);
     return {
       artists: listArtists(),
       source: "fallback",
@@ -149,12 +213,22 @@ async function loadFilteredArtists(options) {
 async function loadArtistById(id, options) {
   const wanted = String(id || "");
   try {
-    const artists = await fetchReviewedArtistsFromCloud(options);
+    const artists = await fetchVisibleArtistsFromCloud(options);
+    if (!artists.length) {
+      throw new Error("cloud artists collection returned no visible artists");
+    }
     return {
       artist: artists.find((artist) => artist.id === wanted) || null,
       source: "cloud",
     };
   } catch (error) {
+    if (!allowFallback(options)) {
+      return {
+        artist: null,
+        source: "error",
+        error: error && error.message ? error.message : String(error),
+      };
+    }
     return {
       artist: getArtistById(wanted),
       source: "fallback",
@@ -168,6 +242,8 @@ module.exports = {
   normalizeArtist,
   normalizeCloudArtist,
   filterArtistList,
+  createArtistPaginationState,
+  appendArtistPage,
   listArtists,
   filterArtists,
   getArtistById,

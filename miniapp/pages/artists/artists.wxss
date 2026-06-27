@@ -202,3 +202,15 @@
   color: #8b5a3d;
   font-weight: 800;
 }
+
+.artist-more-state {
+  padding: 28rpx 34rpx 0;
+  color: #8a8178;
+  font-size: 24rpx;
+  line-height: 34rpx;
+  text-align: center;
+}
+
+.artist-more-state.is-end {
+  color: #b0aaa4;
+}

@@ -1,10 +1,14 @@
 const {
+  appendArtistPage,
   artistFilterGroups,
+  createArtistPaginationState,
   filterArtistList,
   loadArtists,
 } = require("../../services/artists");
 
 const ALL_TAG = "全部";
+const ARTIST_INITIAL_LIMIT = 20;
+const ARTIST_LOAD_MORE_SIZE = 8;
 
 function createDefaultFilters() {
   return artistFilterGroups.reduce((filters, group) => {
@@ -26,10 +30,14 @@ Page({
     filters: createDefaultFilters(),
     groups: createGroups(createDefaultFilters()),
     allArtists: [],
+    filteredArtists: [],
     artists: [],
     resultCountText: "0位画家",
+    hasMoreArtists: false,
+    loadingMore: false,
     loading: true,
     source: "",
+    error: "",
   },
 
   onLoad() {
@@ -41,15 +49,28 @@ Page({
   },
 
   async loadArtists() {
-    this.setData({ loading: true });
-    const result = await loadArtists();
-    if (result.source === "fallback") {
-      console.warn("Using local artist fallback data");
+    this.setData({ loading: true, error: "" });
+    const result = await loadArtists({ allowFallback: false });
+    if (result.source === "error") {
+      console.warn("Unable to load reviewed cloud artists", result.error);
+      this.setData({
+        allArtists: [],
+        filteredArtists: [],
+        artists: [],
+        resultCountText: "0位画家",
+        hasMoreArtists: false,
+        loadingMore: false,
+        source: result.source,
+        loading: false,
+        error: result.error || "cloud artists unavailable",
+      });
+      return;
     }
     this.setData({
       allArtists: result.artists,
       source: result.source,
       loading: false,
+      error: "",
     });
     this.refreshArtists();
   },
@@ -79,13 +100,33 @@ Page({
   },
 
   refreshArtists() {
-    const artists = filterArtistList(this.data.allArtists, {
+    const filteredArtists = filterArtistList(this.data.allArtists, {
       query: this.data.query,
       filters: this.data.filters,
     });
+    const page = createArtistPaginationState(filteredArtists, {
+      initialLimit: ARTIST_INITIAL_LIMIT,
+    });
     this.setData({
-      artists,
-      resultCountText: `${artists.length}位画家`,
+      filteredArtists,
+      artists: page.artists,
+      resultCountText: `${filteredArtists.length}位画家`,
+      hasMoreArtists: page.hasMore,
+      loadingMore: false,
+    });
+  },
+
+  onReachBottom() {
+    if (this.data.loading || this.data.loadingMore || !this.data.hasMoreArtists) return;
+    this.setData({ loadingMore: true });
+    const page = appendArtistPage(this.data.artists, this.data.filteredArtists, {
+      pageSize: ARTIST_LOAD_MORE_SIZE,
+    });
+    this.setData({
+      artists: page.artists,
+      resultCountText: `${page.total}位画家`,
+      hasMoreArtists: page.hasMore,
+      loadingMore: false,
     });
   },
 
