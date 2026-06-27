@@ -40,10 +40,16 @@
 
   <view class="result-head">
     <text class="section-title">画家结果</text>
-    <text class="result-count">{{resultCountText}}</text>
+    <text class="result-count">{{loading ? '读取中' : resultCountText}}</text>
   </view>
 
-  <view wx:if="{{artists.length === 0}}" class="empty-state">暂无符合条件的画家</view>
+  <skeleton-card wx:if="{{loading}}" variant="grid" count="{{4}}" />
+
+  <empty-state
+    wx:elif="{{artists.length === 0}}"
+    title="暂无符合条件的画家"
+    description="换一个名称、地区、流派或年代试试。"
+  />
 
   <view wx:else class="artist-grid">
     <block wx:for="{{artists}}" wx:key="id">
@@ -53,7 +59,7 @@
           <text class="artist-name">{{item.nameZh}}</text>
           <text class="artist-en">{{item.nameEn}}</text>
           <text class="artist-meta">{{item.country}} · {{item.styles[0]}} · {{item.lifespan}}</text>
-          <text class="artist-count">{{item.artworkCount}}件作品</text>
+          <text wx:if="{{item.artworkCount}}" class="artist-count">{{item.artworkCount}}件作品</text>
         </view>
       </view>
     </block>

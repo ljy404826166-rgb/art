@@ -45,7 +45,6 @@
 
   <view wx:if="{{artist}}" class="works-head">
     <text class="section-title">相关作品</text>
-    <text class="works-count">{{loading ? '读取中' : artworks.length + '件作品'}}</text>
   </view>
 
   <skeleton-card wx:if="{{loading}}" variant="grid" count="{{4}}" />
@@ -57,4 +56,7 @@
       <artwork-card artwork="{{item}}" bindtapcard="openArtwork" />
     </block>
   </view>
+
+  <loading-more wx:if="{{loadingMore}}" text="继续加载..." />
+  <loading-more wx:elif="{{!hasMore && artworks.length}}" text="已显示全部作品" done="{{true}}" />
 </view>

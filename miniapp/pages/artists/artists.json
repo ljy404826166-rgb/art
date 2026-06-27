@@ -1,3 +1,6 @@
 {
-  "usingComponents": {}
+  "usingComponents": {
+    "empty-state": "../../components/empty-state/empty-state",
+    "skeleton-card": "../../components/skeleton-card/skeleton-card"
+  }
 }

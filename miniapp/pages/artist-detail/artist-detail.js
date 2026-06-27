@@ -1,4 +1,4 @@
-const { getArtistById } = require("../../services/artists");
+const { loadArtistById } = require("../../services/artists");
 const {
   fetchArtworksByArtistAliases,
   fallbackArtworksByArtistAliases,
@@ -9,11 +9,21 @@ const {
   toggleFollowedArtist,
 } = require("../../services/local-library");
 
+const ARTIST_WORKS_PAGE_SIZE = 8;
+
+function getArtworkKey(item) {
+  return item && (item._id || item.id || item.supabase_id || item.source_id || item.title);
+}
+
 Page({
   data: {
     artist: null,
+    artistSource: "",
     artworks: [],
+    skip: 0,
+    hasMore: true,
     loading: true,
+    loadingMore: false,
     error: "",
     usingFallback: false,
     isFollowed: false,
@@ -25,12 +35,34 @@ Page({
   },
 
   async loadArtist(id) {
-    const artist = getArtistById(id);
+    this.setData({
+      artist: null,
+      artistSource: "",
+      artworks: [],
+      skip: 0,
+      hasMore: true,
+      loading: true,
+      loadingMore: false,
+      error: "",
+      usingFallback: false,
+      isFollowed: false,
+    });
+
+    const artistResult = await loadArtistById(id);
+    if (artistResult.source === "fallback") {
+      console.warn("Using local artist fallback data");
+    }
+
+    const artist = artistResult.artist;
     if (!artist) {
       this.setData({
         artist: null,
+        artistSource: artistResult.source,
         artworks: [],
+        skip: 0,
+        hasMore: false,
         loading: false,
+        loadingMore: false,
         error: "未找到画家信息",
       });
       return;
@@ -38,25 +70,88 @@ Page({
 
     this.setData({
       artist,
-      artworks: [],
-      loading: true,
-      error: "",
-      usingFallback: false,
+      artistSource: artistResult.source,
       isFollowed: isFollowedArtist(artist.id),
     });
 
+    await this.loadInitialArtworks(artist);
+  },
+
+  async loadInitialArtworks(artist) {
+    const aliases = artist && artist.aliases;
+    if (!aliases || !aliases.length) {
+      this.setData({
+        artworks: [],
+        skip: 0,
+        hasMore: false,
+        loading: false,
+        loadingMore: false,
+      });
+      return;
+    }
+
     try {
-      const artworks = await fetchArtworksByArtistAliases(artist.aliases, { pageSize: 24 });
+      const artworks = await fetchArtworksByArtistAliases(aliases, {
+        pageSize: ARTIST_WORKS_PAGE_SIZE,
+        skip: 0,
+      });
       this.setData({
         artworks,
+        skip: artworks.length,
+        hasMore: artworks.length >= ARTIST_WORKS_PAGE_SIZE,
         loading: false,
       });
     } catch (error) {
+      const fallbackArtworks = fallbackArtworksByArtistAliases(aliases);
       this.setData({
-        artworks: fallbackArtworksByArtistAliases(artist.aliases),
+        artworks: fallbackArtworks,
+        skip: fallbackArtworks.length,
+        hasMore: false,
         loading: false,
+        loadingMore: false,
         error: normalizeError(error),
         usingFallback: true,
+      });
+    }
+  },
+
+  onReachBottom() {
+    this.loadMore();
+  },
+
+  async loadMore() {
+    if (this.data.loading || this.data.loadingMore || !this.data.hasMore || this.data.usingFallback) return;
+    const artist = this.data.artist;
+    if (!artist) return;
+
+    this.setData({ loadingMore: true });
+    try {
+      const nextPage = await fetchArtworksByArtistAliases(artist.aliases, {
+        pageSize: ARTIST_WORKS_PAGE_SIZE,
+        skip: this.data.skip,
+      });
+      const seen = {};
+      this.data.artworks.forEach((item) => {
+        const id = getArtworkKey(item);
+        if (id) seen[id] = true;
+      });
+      const fresh = nextPage.filter((item) => {
+        const id = getArtworkKey(item);
+        if (!id || seen[id]) return false;
+        seen[id] = true;
+        return true;
+      });
+      const artworks = this.data.artworks.concat(fresh);
+      this.setData({
+        artworks,
+        skip: artworks.length,
+        hasMore: fresh.length >= ARTIST_WORKS_PAGE_SIZE,
+        loadingMore: false,
+      });
+    } catch (error) {
+      this.setData({
+        loadingMore: false,
+        error: normalizeError(error),
       });
     }
   },

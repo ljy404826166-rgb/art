@@ -1,8 +1,14 @@
-const { artistFilterGroups, filterArtists } = require("../../services/artists");
+const {
+  artistFilterGroups,
+  filterArtistList,
+  loadArtists,
+} = require("../../services/artists");
+
+const ALL_TAG = "全部";
 
 function createDefaultFilters() {
   return artistFilterGroups.reduce((filters, group) => {
-    filters[group.key] = "全部";
+    filters[group.key] = ALL_TAG;
     return filters;
   }, {});
 }
@@ -10,7 +16,7 @@ function createDefaultFilters() {
 function createGroups(activeFilters) {
   return artistFilterGroups.map((group) => ({
     ...group,
-    activeTag: activeFilters[group.key] || "全部",
+    activeTag: activeFilters[group.key] || ALL_TAG,
   }));
 }
 
@@ -19,16 +25,33 @@ Page({
     query: "",
     filters: createDefaultFilters(),
     groups: createGroups(createDefaultFilters()),
+    allArtists: [],
     artists: [],
     resultCountText: "0位画家",
+    loading: true,
+    source: "",
   },
 
   onLoad() {
-    this.refreshArtists();
+    this.loadArtists();
   },
 
   onShow() {
     wx.setNavigationBarTitle({ title: "画家" });
+  },
+
+  async loadArtists() {
+    this.setData({ loading: true });
+    const result = await loadArtists();
+    if (result.source === "fallback") {
+      console.warn("Using local artist fallback data");
+    }
+    this.setData({
+      allArtists: result.artists,
+      source: result.source,
+      loading: false,
+    });
+    this.refreshArtists();
   },
 
   handleSearchInput(event) {
@@ -56,7 +79,7 @@ Page({
   },
 
   refreshArtists() {
-    const artists = filterArtists({
+    const artists = filterArtistList(this.data.allArtists, {
       query: this.data.query,
       filters: this.data.filters,
     });
