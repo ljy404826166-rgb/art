@@ -250,36 +250,44 @@ async function countArtworksByTag(tag) {
 
 async function fetchArtworksByArtistAliases(aliases, options) {
   const pageSize = (options && options.pageSize) || PAGE_SIZE;
+  const skip = (options && options.skip) || 0;
+  const maxPages = (options && options.maxPages) || 100;
+  const targetCount = skip + pageSize;
   const db = database();
   const names = (Array.isArray(aliases) ? aliases : [aliases]).filter(Boolean);
   const seen = {};
   const artworks = [];
 
   for (const name of names) {
-    if (artworks.length >= pageSize) break;
-    const result = await db
-      .collection("artworks")
-      .where({
-        status: "published",
-        artist: db.RegExp({
-          regexp: escapeRegExp(name),
-          options: "i",
-        }),
-      })
-      .orderBy("created_at", "desc")
-      .limit(pageSize)
-      .get();
-
-    (result.data || []).forEach((record) => {
-      const normalized = normalizeArtwork(record);
-      const id = getArtworkKey(normalized);
-      if (!id || seen[id] || artworks.length >= pageSize) return;
-      seen[id] = true;
-      artworks.push(normalized);
-    });
+    if (artworks.length >= targetCount) break;
+    for (let page = 0; page < maxPages; page += 1) {
+      if (artworks.length >= targetCount) break;
+      const result = await db
+        .collection("artworks")
+        .where({
+          status: "published",
+          artist: db.RegExp({
+            regexp: escapeRegExp(name),
+            options: "i",
+          }),
+        })
+        .orderBy("created_at", "desc")
+        .skip(page * PAGE_SIZE)
+        .limit(PAGE_SIZE)
+        .get();
+      const rows = result.data || [];
+      rows.forEach((record) => {
+        const normalized = normalizeArtwork(record);
+        const id = getArtworkKey(normalized);
+        if (!id || seen[id] || artworks.length >= targetCount) return;
+        seen[id] = true;
+        artworks.push(normalized);
+      });
+      if (rows.length < PAGE_SIZE) break;
+    }
   }
 
-  return artworks;
+  return artworks.slice(skip, targetCount);
 }
 
 function createSearchFieldRegexp(db, keyword) {

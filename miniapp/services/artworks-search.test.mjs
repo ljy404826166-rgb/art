@@ -133,3 +133,28 @@ test("searchArtworks queries candidates by keyword instead of loading the full c
   assert.ok(counters.get > 0);
   assert.equal(counters.count, 0);
 });
+
+test("fetchArtworksByArtistAliases supports deduped pagination across aliases", async () => {
+  const counters = { get: 0, count: 0 };
+  const fakeDb = createFakeDatabase([
+    { _id: "a", status: "published", artist: "Vincent van Gogh" },
+    { _id: "b", status: "published", artist: "Vincent van Gogh" },
+    { _id: "c", status: "published", artist: "Van Gogh" },
+    { _id: "d", status: "published", artist: "Van Gogh" },
+  ], counters);
+  const { fetchArtworksByArtistAliases } = loadCommonJsModule(new URL("./artworks.js", import.meta.url), {
+    wx: { cloud: { database: () => fakeDb } },
+  });
+
+  const firstPage = await fetchArtworksByArtistAliases(["Vincent van Gogh", "Van Gogh"], {
+    pageSize: 2,
+    skip: 0,
+  });
+  const secondPage = await fetchArtworksByArtistAliases(["Vincent van Gogh", "Van Gogh"], {
+    pageSize: 2,
+    skip: 2,
+  });
+
+  assert.equal(JSON.stringify(firstPage.map((item) => item._id)), JSON.stringify(["a", "b"]));
+  assert.equal(JSON.stringify(secondPage.map((item) => item._id)), JSON.stringify(["c", "d"]));
+});
