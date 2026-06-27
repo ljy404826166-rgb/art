@@ -6,7 +6,7 @@ import path from "node:path";
 
 const DEFAULT_INPUT = path.resolve(process.cwd(), "miniapp", "data", "artworks.cloudbase.json");
 const DEFAULT_OUTPUT = path.resolve(process.cwd(), "miniapp", "data", "artists.candidates.jsonl");
-const UNKNOWN_ARTIST_RE = /^(?:未知|暂不明确|unknown|unclear|anonymous|佚名)(?:\s*[（(].*[）)])?$/i;
+const UNKNOWN_ARTIST_RE = /^(?:未知|暂不明确|作者未明确记载|unknown|unclear|anonymous|佚名)(?:\s*[（(].*[）)])?$/i;
 const CJK_RE = /[\u3400-\u9fff]/u;
 const PERIOD_RE = /(?:\d{2,4}年代|\d{1,2}世纪|世纪|文艺复兴|巴洛克|印象派|后印象派|表现主义|新艺术运动|浮世绘)/u;
 
@@ -151,7 +151,8 @@ function normalizeDeathYear(value, birthYear) {
 }
 
 function slugify(value, fallbackSource) {
-  const slug = String(value || "")
+  const normalizedName = String(value || "").replace(/\bde\b/gi, " ");
+  const slug = normalizedName
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
@@ -238,7 +239,6 @@ function candidateFromGroup(group, dateText) {
     parsed.nameZh,
     parsed.nameEn,
     ...topValues(group.rawArtists, 5),
-    surnameAlias(parsed.nameEn),
   ]);
 
   return {
@@ -275,11 +275,6 @@ function candidateFromGroup(group, dateText) {
     reviewed_at: "",
     updated_at: dateText,
   };
-}
-
-function surnameAlias(nameEn) {
-  const parts = compactText(nameEn).split(/\s+/).filter(Boolean);
-  return parts.length > 1 ? parts[parts.length - 1] : "";
 }
 
 function writeJsonLines(filePath, rows) {
