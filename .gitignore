@@ -51,6 +51,7 @@ miniapp/project.private.config.json
 miniapp/data/*.json
 miniapp/data/*.jsonl
 !miniapp/data/*.sample.json
+!miniapp/data/artists.schema.json
 !miniapp/data/.gitkeep
 !miniapp/data/fallback-artworks.js
 !miniapp/data/mock-artists.js
