@@ -1,19 +1,22 @@
 .artwork-row-area {
   width: 100%;
   height: 526rpx;
-  overflow: hidden;
+  overflow: visible;
 }
 
-.artwork-row-mover {
+.artwork-row-scroll {
+  width: 100%;
   height: 526rpx;
+  white-space: nowrap;
 }
 
 .artwork-row-track {
   display: inline-flex;
   align-items: flex-start;
   gap: 28rpx;
+  width: max-content;
   min-width: 100%;
-  padding: 8rpx 64rpx 24rpx 28rpx;
+  padding: 8rpx 64rpx 40rpx 28rpx;
   box-sizing: border-box;
   white-space: nowrap;
 }

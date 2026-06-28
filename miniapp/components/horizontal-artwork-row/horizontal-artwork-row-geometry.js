@@ -6,7 +6,21 @@ const STATUS_WIDTH_RPX = 136;
 
 function computeRowArtworkCardWidth(imageRatio) {
   const ratio = Number(imageRatio || 0.8);
-  return Math.max(1, Math.round(ROW_IMAGE_HEIGHT_RPX * ratio));
+  return computeArtworkCardFrame({
+    ratio,
+    mediaHeight: ROW_IMAGE_HEIGHT_RPX,
+    minWidth: 1,
+  }).width;
+}
+
+function computeArtworkCardFrame(options = {}) {
+  const ratio = Number(options.ratio || 0.8);
+  const mediaHeight = Number(options.mediaHeight || ROW_IMAGE_HEIGHT_RPX);
+  const minWidth = Number(options.minWidth || 1);
+  return {
+    height: mediaHeight,
+    width: Math.max(Math.round(mediaHeight * ratio), minWidth),
+  };
 }
 
 function resolveRowArtworkMeasureSrc(item) {
@@ -43,6 +57,7 @@ function estimateRowMoverWidth(items, measuredWidths = {}, options = {}) {
 module.exports = {
   ROW_IMAGE_HEIGHT_RPX,
   VIEWPORT_WIDTH_RPX,
+  computeArtworkCardFrame,
   computeRowArtworkCardWidth,
   estimateRowMoverWidth,
   getRowArtworkKey,

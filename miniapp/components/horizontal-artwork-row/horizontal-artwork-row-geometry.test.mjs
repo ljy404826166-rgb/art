@@ -11,10 +11,23 @@ function loadCommonJsModule(filename) {
 }
 
 const {
+  computeArtworkCardFrame,
   computeRowArtworkCardWidth,
   estimateRowMoverWidth,
   resolveRowArtworkMeasureSrc,
 } = loadCommonJsModule("miniapp/components/horizontal-artwork-row/horizontal-artwork-row-geometry.js");
+
+test("wide artwork width is not capped by card max width", () => {
+  const frame = computeArtworkCardFrame({ ratio: 2.4, mediaHeight: 260, minWidth: 120 });
+  assert.equal(frame.height, 260);
+  assert.equal(frame.width, 624);
+});
+
+test("narrow artwork respects minimum readable width only", () => {
+  const frame = computeArtworkCardFrame({ ratio: 0.35, mediaHeight: 260, minWidth: 120 });
+  assert.equal(frame.height, 260);
+  assert.equal(frame.width, 120);
+});
 
 test("computeRowArtworkCardWidth keeps fixed image height without min or max width clamps", () => {
   assert.equal(computeRowArtworkCardWidth(2), 700);
