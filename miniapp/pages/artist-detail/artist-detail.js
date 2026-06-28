@@ -73,6 +73,10 @@ Page({
     await this.applyArtistResult(artistResult);
   },
 
+  async loadArtist(id) {
+    return this.loadArtistById(id);
+  },
+
   async loadArtistByText(artistText) {
     this.resetArtistState();
     if (!artistText) {

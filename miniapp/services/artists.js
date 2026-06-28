@@ -215,7 +215,7 @@ async function fetchVisibleArtistsFromCloud(options) {
 
 async function fetchVisibleArtistByIdFromCloud(id, options) {
   const wanted = String(id || "");
-  if (!wanted) return null;
+  if (!wanted) return { artist: null, found: false };
 
   const wxApi = getWxApi(options);
   if (!wxApi || !wxApi.cloud || typeof wxApi.cloud.database !== "function") {
@@ -228,8 +228,9 @@ async function fetchVisibleArtistByIdFromCloud(id, options) {
     .doc(wanted)
     .get();
   const record = result && result.data;
-  if (!record || !isVisibleCloudArtist(record)) return null;
-  return normalizeArtist(record);
+  if (!record) return { artist: null, found: false };
+  if (!isVisibleCloudArtist(record)) return { artist: null, found: true };
+  return { artist: normalizeArtist(record), found: true };
 }
 
 async function loadArtists(options) {
@@ -260,8 +261,14 @@ async function loadFilteredArtists(options) {
 async function loadArtistById(id, options) {
   const wanted = String(id || "");
   try {
-    const artist = await fetchVisibleArtistByIdFromCloud(wanted, options);
-    if (!artist && allowFallback(options)) {
+    const result = await fetchVisibleArtistByIdFromCloud(wanted, options);
+    if (!result.artist && result.found) {
+      return {
+        artist: null,
+        source: "cloud",
+      };
+    }
+    if (!result.artist && allowFallback(options)) {
       return {
         artist: getArtistById(wanted),
         source: "fallback",
@@ -269,7 +276,7 @@ async function loadArtistById(id, options) {
       };
     }
     return {
-      artist,
+      artist: result.artist,
       source: "cloud",
     };
   } catch (error) {

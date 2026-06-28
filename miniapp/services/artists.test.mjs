@@ -247,6 +247,20 @@ test("loadArtistById falls back when cloud returns an empty visible artist set",
   assert.match(result.error, /no visible artists/);
 });
 
+test("loadArtistById does not fall back when a cloud artist exists but is rejected", async () => {
+  const result = await artistsService.loadArtistById("claude-monet", {
+    wxApi: createWxApi([
+      createCloudArtist({
+        _id: "claude-monet",
+        review_status: "rejected",
+      }),
+    ]),
+  });
+
+  assert.equal(result.source, "cloud");
+  assert.equal(result.artist, null);
+});
+
 test("loadArtistById resolves a cloud artist by _id", async () => {
   const result = await artistsService.loadArtistById("vincent-van-gogh", {
     wxApi: createWxApi([
