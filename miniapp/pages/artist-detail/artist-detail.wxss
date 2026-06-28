@@ -157,6 +157,120 @@
   gap: 26rpx;
 }
 
+.artist-detail-skeleton {
+  display: grid;
+  gap: 28rpx;
+}
+
+.skeleton-hero {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+}
+
+.skeleton-portrait,
+.skeleton-line,
+.skeleton-pill,
+.skeleton-bio-line,
+.skeleton-info-card,
+.skeleton-tag,
+.skeleton-section-title,
+.skeleton-work-card {
+  background: linear-gradient(90deg, #f1ede8 0%, #e8e2dc 48%, #f4f1ed 100%);
+}
+
+.skeleton-portrait {
+  width: 168rpx;
+  height: 168rpx;
+  border-radius: 999rpx;
+}
+
+.skeleton-line {
+  height: 24rpx;
+  border-radius: 999rpx;
+}
+
+.skeleton-name {
+  width: 260rpx;
+  height: 42rpx;
+  margin-top: 28rpx;
+}
+
+.skeleton-en {
+  width: 210rpx;
+  margin-top: 18rpx;
+}
+
+.skeleton-life {
+  width: 280rpx;
+  margin-top: 12rpx;
+}
+
+.skeleton-pill {
+  width: 176rpx;
+  height: 58rpx;
+  margin-top: 24rpx;
+  border-radius: 999rpx;
+}
+
+.skeleton-bio-line {
+  width: 100%;
+  height: 28rpx;
+  margin-top: 28rpx;
+  border-radius: 999rpx;
+}
+
+.skeleton-bio-line.is-short {
+  width: 72%;
+  margin-top: 16rpx;
+  justify-self: start;
+}
+
+.skeleton-info-panel {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18rpx;
+}
+
+.skeleton-info-card {
+  min-height: 132rpx;
+  border-radius: 24rpx;
+}
+
+.skeleton-tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14rpx;
+}
+
+.skeleton-tag {
+  width: 112rpx;
+  height: 46rpx;
+  border-radius: 999rpx;
+}
+
+.skeleton-works-head {
+  margin-top: 8rpx;
+}
+
+.skeleton-section-title {
+  width: 168rpx;
+  height: 44rpx;
+  border-radius: 999rpx;
+}
+
+.skeleton-works-grid,
+.works-grid-skeleton {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 26rpx;
+}
+
+.skeleton-work-card {
+  height: 330rpx;
+  border-radius: 24rpx;
+}
+
 .detail-notice {
   margin-top: 26rpx;
 }

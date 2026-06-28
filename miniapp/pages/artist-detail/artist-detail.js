@@ -1,4 +1,7 @@
-const { loadArtistById } = require("../../services/artists");
+const {
+  loadArtistById: loadArtistRecordById,
+  loadArtistByArtworkText,
+} = require("../../services/artists");
 const {
   fetchArtworksByArtistAliases,
   fallbackArtworksByArtistAliases,
@@ -15,6 +18,15 @@ function getArtworkKey(item) {
   return item && (item._id || item.id || item.supabase_id || item.source_id || item.title);
 }
 
+function decodeRouteText(value) {
+  const text = String(value || "");
+  try {
+    return decodeURIComponent(text);
+  } catch (error) {
+    return text;
+  }
+}
+
 Page({
   data: {
     artist: null,
@@ -23,6 +35,7 @@ Page({
     skip: 0,
     hasMore: true,
     loading: true,
+    artworksLoading: false,
     loadingMore: false,
     error: "",
     usingFallback: false,
@@ -31,10 +44,14 @@ Page({
 
   onLoad(options) {
     wx.setNavigationBarTitle({ title: "画家详情" });
-    this.loadArtist(options.id);
+    if (options && options.id) {
+      this.loadArtistById(options.id);
+      return;
+    }
+    this.loadArtistByText(decodeRouteText(options && options.artistText));
   },
 
-  async loadArtist(id) {
+  resetArtistState() {
     this.setData({
       artist: null,
       artistSource: "",
@@ -42,13 +59,36 @@ Page({
       skip: 0,
       hasMore: true,
       loading: true,
+      artworksLoading: false,
       loadingMore: false,
       error: "",
       usingFallback: false,
       isFollowed: false,
     });
+  },
 
-    const artistResult = await loadArtistById(id);
+  async loadArtistById(id) {
+    this.resetArtistState();
+    const artistResult = await loadArtistRecordById(id);
+    await this.applyArtistResult(artistResult);
+  },
+
+  async loadArtistByText(artistText) {
+    this.resetArtistState();
+    if (!artistText) {
+      await this.applyArtistResult({
+        artist: null,
+        source: "error",
+        error: "未找到画家信息",
+      });
+      return;
+    }
+
+    const artistResult = await loadArtistByArtworkText(artistText, { allowFallback: false });
+    await this.applyArtistResult(artistResult);
+  },
+
+  async applyArtistResult(artistResult) {
     if (artistResult.source === "fallback") {
       console.warn("Using local artist fallback data");
     }
@@ -62,6 +102,7 @@ Page({
         skip: 0,
         hasMore: false,
         loading: false,
+        artworksLoading: false,
         loadingMore: false,
         error: "未找到画家信息",
       });
@@ -71,6 +112,8 @@ Page({
     this.setData({
       artist,
       artistSource: artistResult.source,
+      loading: false,
+      artworksLoading: true,
       isFollowed: isFollowedArtist(artist.id),
     });
 
@@ -85,6 +128,7 @@ Page({
         skip: 0,
         hasMore: false,
         loading: false,
+        artworksLoading: false,
         loadingMore: false,
       });
       return;
@@ -100,6 +144,7 @@ Page({
         skip: artworks.length,
         hasMore: artworks.length >= ARTIST_WORKS_PAGE_SIZE,
         loading: false,
+        artworksLoading: false,
       });
     } catch (error) {
       const fallbackArtworks = fallbackArtworksByArtistAliases(aliases);
@@ -108,6 +153,7 @@ Page({
         skip: fallbackArtworks.length,
         hasMore: false,
         loading: false,
+        artworksLoading: false,
         loadingMore: false,
         error: normalizeError(error),
         usingFallback: true,

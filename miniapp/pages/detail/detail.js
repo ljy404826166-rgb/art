@@ -3,7 +3,7 @@ const {
   fallbackArtworkById,
   normalizeError,
 } = require("../../services/artworks");
-const { listArtists } = require("../../services/artists");
+const { loadArtistByArtworkText } = require("../../services/artists");
 const {
   computeDetailHeroFrameStyle,
   resolveDetailMeasureSrc,
@@ -24,24 +24,6 @@ const {
 
 const detailImageRatioCache = {};
 
-function normalizeText(value) {
-  return String(value || "").trim().toLowerCase();
-}
-
-function findArtistByArtworkText(artistText) {
-  const normalizedArtist = normalizeText(artistText);
-  if (!normalizedArtist) return null;
-
-  return listArtists().find((artist) => {
-    const aliases = [
-      artist.nameZh,
-      artist.nameEn,
-      ...(artist.aliases || []),
-    ].map(normalizeText).filter(Boolean);
-    return aliases.some((alias) => normalizedArtist.includes(alias) || alias.includes(normalizedArtist));
-  }) || null;
-}
-
 Page({
   data: {
     artwork: null,
@@ -52,6 +34,8 @@ Page({
     isFavorite: false,
     heroFrameStyle: "",
     downloading: false,
+    resolvedArtistId: "",
+    resolvedArtistText: "",
   },
 
   onLoad(options) {
@@ -98,6 +82,27 @@ Page({
     });
 
     this.measureHeroImage(artwork);
+    this.prefetchArtistFromArtwork(artwork);
+  },
+
+  async prefetchArtistFromArtwork(artwork) {
+    const artistText = artwork && artwork.artist;
+    this.setData({
+      resolvedArtistId: "",
+      resolvedArtistText: artistText || "",
+    });
+    if (!artistText) return;
+
+    const result = await loadArtistByArtworkText(artistText, { allowFallback: false });
+    const currentArtistText = this.data.artwork && this.data.artwork.artist;
+    if (currentArtistText !== artistText) return;
+
+    if (result && result.artist && result.artist.id) {
+      this.setData({
+        resolvedArtistId: result.artist.id,
+        resolvedArtistText: artistText,
+      });
+    }
   },
 
   setHeroImageRatio(ratio) {
@@ -157,16 +162,23 @@ Page({
   },
 
   openArtistFromArtwork() {
-    const artist = findArtistByArtworkText(this.data.artwork && this.data.artwork.artist);
-    if (!artist) {
+    const artistText = this.data.artwork && this.data.artwork.artist;
+    if (!artistText) {
       wx.showToast({
         title: "暂无画家详情",
         icon: "none",
       });
       return;
     }
+
+    const resolvedArtistId = this.data.resolvedArtistText === artistText
+      ? this.data.resolvedArtistId
+      : "";
+    const query = resolvedArtistId
+      ? `id=${encodeURIComponent(resolvedArtistId)}`
+      : `artistText=${encodeURIComponent(artistText)}`;
     wx.navigateTo({
-      url: `/pages/artist-detail/artist-detail?id=${artist.id}`,
+      url: `/pages/artist-detail/artist-detail?${query}`,
     });
   },
 

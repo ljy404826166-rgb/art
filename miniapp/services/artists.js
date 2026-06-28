@@ -51,6 +51,22 @@ function normalizeQuery(value) {
   return String(value || "").trim().toLowerCase();
 }
 
+function normalizeArtistLookupText(value) {
+  return normalizeQuery(value)
+    .replace(/[\s·•・,，.。()（）\[\]【】\-—–_、:：;；'’"“”/\\]+/g, "");
+}
+
+function getArtistLookupTexts(artist) {
+  return [
+    artist && artist.id,
+    artist && artist.nameZh,
+    artist && artist.nameEn,
+    ...asArray(artist && artist.aliases),
+  ]
+    .map(normalizeArtistLookupText)
+    .filter(Boolean);
+}
+
 function getArtistSearchText(artist) {
   return [
     artist.nameZh,
@@ -132,6 +148,18 @@ function getArtistById(id) {
   return listArtists().find((artist) => artist.id === wanted) || null;
 }
 
+function findArtistByArtworkText(artists, artistText) {
+  const normalizedArtist = normalizeArtistLookupText(artistText);
+  if (!normalizedArtist) return null;
+
+  return asArray(artists)
+    .map(normalizeArtist)
+    .find((artist) => {
+      const aliases = getArtistLookupTexts(artist);
+      return aliases.some((alias) => normalizedArtist.includes(alias) || alias.includes(normalizedArtist));
+    }) || null;
+}
+
 function getWxApi(options) {
   if (options && options.wxApi) return options.wxApi;
   if (typeof globalThis !== "undefined" && globalThis.wx) return globalThis.wx;
@@ -185,6 +213,25 @@ async function fetchVisibleArtistsFromCloud(options) {
     .map(normalizeArtist);
 }
 
+async function fetchVisibleArtistByIdFromCloud(id, options) {
+  const wanted = String(id || "");
+  if (!wanted) return null;
+
+  const wxApi = getWxApi(options);
+  if (!wxApi || !wxApi.cloud || typeof wxApi.cloud.database !== "function") {
+    throw new Error("wx.cloud.database is unavailable");
+  }
+
+  const db = wxApi.cloud.database();
+  const result = await db
+    .collection("artists")
+    .doc(wanted)
+    .get();
+  const record = result && result.data;
+  if (!record || !isVisibleCloudArtist(record)) return null;
+  return normalizeArtist(record);
+}
+
 async function loadArtists(options) {
   try {
     const artists = await fetchVisibleArtistsFromCloud(options);
@@ -213,12 +260,16 @@ async function loadFilteredArtists(options) {
 async function loadArtistById(id, options) {
   const wanted = String(id || "");
   try {
-    const artists = await fetchVisibleArtistsFromCloud(options);
-    if (!artists.length) {
-      throw new Error("cloud artists collection returned no visible artists");
+    const artist = await fetchVisibleArtistByIdFromCloud(wanted, options);
+    if (!artist && allowFallback(options)) {
+      return {
+        artist: getArtistById(wanted),
+        source: "fallback",
+        error: "cloud artists collection returned no visible artists",
+      };
     }
     return {
-      artist: artists.find((artist) => artist.id === wanted) || null,
+      artist,
       source: "cloud",
     };
   } catch (error) {
@@ -231,6 +282,32 @@ async function loadArtistById(id, options) {
     }
     return {
       artist: getArtistById(wanted),
+      source: "fallback",
+      error: error && error.message ? error.message : String(error),
+    };
+  }
+}
+
+async function loadArtistByArtworkText(artistText, options) {
+  try {
+    const artists = await fetchVisibleArtistsFromCloud(options);
+    if (!artists.length) {
+      throw new Error("cloud artists collection returned no visible artists");
+    }
+    return {
+      artist: findArtistByArtworkText(artists, artistText),
+      source: "cloud",
+    };
+  } catch (error) {
+    if (!allowFallback(options)) {
+      return {
+        artist: null,
+        source: "error",
+        error: error && error.message ? error.message : String(error),
+      };
+    }
+    return {
+      artist: findArtistByArtworkText(listArtists(), artistText),
       source: "fallback",
       error: error && error.message ? error.message : String(error),
     };
@@ -250,4 +327,5 @@ module.exports = {
   loadArtists,
   loadFilteredArtists,
   loadArtistById,
+  loadArtistByArtworkText,
 };

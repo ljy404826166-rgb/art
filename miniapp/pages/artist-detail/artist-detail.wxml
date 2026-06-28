@@ -47,7 +47,40 @@
     <text class="section-title">相关作品</text>
   </view>
 
-  <skeleton-card wx:if="{{loading}}" variant="grid" count="{{4}}" />
+  <view wx:if="{{loading}}" class="artist-detail-skeleton">
+    <view class="skeleton-hero">
+      <view class="skeleton-portrait"></view>
+      <view class="skeleton-line skeleton-name"></view>
+      <view class="skeleton-line skeleton-en"></view>
+      <view class="skeleton-line skeleton-life"></view>
+      <view class="skeleton-pill"></view>
+      <view class="skeleton-bio-line"></view>
+      <view class="skeleton-bio-line is-short"></view>
+    </view>
+    <view class="skeleton-info-panel">
+      <view class="skeleton-info-card"></view>
+      <view class="skeleton-info-card"></view>
+      <view class="skeleton-info-card"></view>
+      <view class="skeleton-info-card"></view>
+    </view>
+    <view class="skeleton-tag-row">
+      <view class="skeleton-tag"></view>
+      <view class="skeleton-tag"></view>
+      <view class="skeleton-tag"></view>
+    </view>
+    <view class="skeleton-works-head">
+      <view class="skeleton-section-title"></view>
+    </view>
+    <view class="skeleton-works-grid">
+      <view class="skeleton-work-card"></view>
+      <view class="skeleton-work-card"></view>
+    </view>
+  </view>
+
+  <view wx:elif="{{artworksLoading}}" class="works-grid works-grid-skeleton">
+    <view class="skeleton-work-card"></view>
+    <view class="skeleton-work-card"></view>
+  </view>
 
   <empty-state wx:elif="{{artist && artworks.length === 0}}" title="暂未匹配到该画家的作品" description="画家简介仍可继续浏览。" />
 

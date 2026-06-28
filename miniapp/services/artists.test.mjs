@@ -42,6 +42,7 @@ function createCloudArtist(overrides = {}) {
 }
 
 function createWxApi(rows, options = {}) {
+  const counters = options.counters || {};
   return {
     cloud: {
       database() {
@@ -59,6 +60,7 @@ function createWxApi(rows, options = {}) {
                   return {
                     async get() {
                       if (options.reject) throw new Error("cloud unavailable");
+                      counters.listGet = (counters.listGet || 0) + 1;
                       const filteredRows = filter && filter.review_status
                         ? rows.filter((row) => row.review_status === filter.review_status)
                         : rows;
@@ -72,6 +74,15 @@ function createWxApi(rows, options = {}) {
               };
             };
             return {
+              doc(id) {
+                return {
+                  async get() {
+                    if (options.reject) throw new Error("cloud unavailable");
+                    counters.docGet = (counters.docGet || 0) + 1;
+                    return { data: rows.find((row) => row._id === id || row.id === id) || null };
+                  },
+                };
+              },
               where(filter) {
                 return createQuery(filter);
               },
@@ -252,6 +263,43 @@ test("loadArtistById resolves a cloud artist by _id", async () => {
   assert.equal(result.source, "cloud");
   assert.equal(result.artist.id, "vincent-van-gogh");
   assert.equal(result.artist.nameEn, "Vincent van Gogh");
+});
+
+test("loadArtistById uses direct cloud document lookup for known ids", async () => {
+  const counters = {};
+  const result = await artistsService.loadArtistById("vincent-van-gogh", {
+    wxApi: createWxApi([
+      createCloudArtist(),
+      createCloudArtist({
+        _id: "vincent-van-gogh",
+        name_zh: "Vincent van Gogh CN",
+        name_en: "Vincent van Gogh",
+      }),
+    ], { counters }),
+    allowFallback: false,
+  });
+
+  assert.equal(result.source, "cloud");
+  assert.equal(result.artist.id, "vincent-van-gogh");
+  assert.equal(counters.docGet, 1);
+  assert.equal(counters.listGet || 0, 0);
+});
+
+test("loadArtistByArtworkText resolves a cloud artist from artwork artist label", async () => {
+  const result = await artistsService.loadArtistByArtworkText("阿尔丰斯·穆夏 (Alphonse Mucha, 1860-1939)", {
+    wxApi: createWxApi([
+      createCloudArtist({
+        _id: "alphonse-mucha",
+        name_zh: "阿尔丰斯·穆夏",
+        name_en: "Alphonse Mucha",
+        aliases: ["Mucha", "穆夏"],
+      }),
+    ]),
+    allowFallback: false,
+  });
+
+  assert.equal(result.source, "cloud");
+  assert.equal(result.artist.id, "alphonse-mucha");
 });
 
 test("filterArtistList filters by region, style, period, and query", () => {
