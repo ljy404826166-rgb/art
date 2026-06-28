@@ -4,15 +4,25 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 
-function loadCommonJsModule(filePath) {
+function loadCommonJsModule(filePath, overrides = {}) {
   const filename = filePath instanceof URL ? fileURLToPath(filePath) : filePath;
   const source = readFileSync(filename, "utf8");
   const module = { exports: {} };
   const localRequire = (id) => {
+    if (Object.prototype.hasOwnProperty.call(overrides, id)) return overrides[id];
     if (id === "../../services/search-engine") return loadCommonJsModule(new URL("../../services/search-engine.js", import.meta.url));
     return require(id);
   };
-  vm.runInNewContext(source, { module, exports: module.exports, require: localRequire }, { filename });
+  const context = {
+    module,
+    exports: module.exports,
+    require: localRequire,
+    Page: overrides.Page,
+    wx: overrides.wx || {},
+    setTimeout,
+    clearTimeout,
+  };
+  vm.runInNewContext(source, context, { filename });
   return module.exports;
 }
 
@@ -26,6 +36,52 @@ const artworks = [
 
 function assertIds(actualItems, expectedIds) {
   assert.equal(JSON.stringify(Array.from(actualItems).map((item) => item.id)), JSON.stringify(expectedIds));
+}
+
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+  return { promise, resolve, reject };
+}
+
+function loadHomePageWithSearch(searchArtworksMock) {
+  let pageDefinition;
+  const Page = (definition) => {
+    pageDefinition = definition;
+  };
+
+  const homeSearch = loadCommonJsModule(new URL("./home-search.js", import.meta.url));
+  loadCommonJsModule(new URL("./home.js", import.meta.url), {
+    Page,
+    wx: {},
+    "../../services/artworks": {
+      fetchRandomArtworks: async () => [],
+      fetchArtworksByTag: async () => [],
+      searchArtworks: searchArtworksMock,
+      fallbackSearchArtworks: () => [],
+      fallbackLatestArtworks: () => [],
+      normalizeError: (error) => String((error && error.message) || error || ""),
+    },
+    "./home-pagination": {
+      createPaginatedSection: (section) => section,
+      getArtworkKey: (item) => item && (item.id || item._id),
+      getFreshArtworkBatch: (existing, incoming, limit) => (incoming || []).slice(0, limit),
+    },
+    "./home-search": homeSearch,
+  });
+
+  const page = {
+    ...pageDefinition,
+    data: JSON.parse(JSON.stringify(pageDefinition.data)),
+    setData(patch) {
+      Object.assign(this.data, patch);
+    },
+  };
+  return page;
 }
 
 test("createHomeSearchState returns to the home feed when the query is empty", () => {
@@ -49,6 +105,57 @@ test("createHomeSearchState can preserve full-database results supplied by calle
 
   assert.equal(state.searchMode, true);
   assertIds(state.searchResults, ["1"]);
+});
+
+test("home cloud search ignores an older response that resolves after a newer query", async () => {
+  const older = deferred();
+  const newer = deferred();
+  const calls = [];
+  const page = loadHomePageWithSearch((query) => {
+    calls.push(query);
+    return query === "old" ? older.promise : newer.promise;
+  });
+
+  page.data.searchMode = true;
+  page.data.searching = true;
+  page.data.searchTotal = 0;
+  page.searchRequestId = 2;
+  const oldSearch = page.runCloudSearch("old", 1);
+  const newSearch = page.runCloudSearch("new", 2);
+
+  newer.resolve([{ id: "new-result" }]);
+  await newSearch;
+  older.resolve([{ id: "old-result" }]);
+  await oldSearch;
+
+  assert.deepEqual(calls, ["old", "new"]);
+  assertIds(page.data.searchResults, ["new-result"]);
+  assert.equal(page.data.searchTotal, 1);
+  assert.equal(page.data.searching, false);
+});
+
+test("clearSearch restores the original home sections without reloading random artwork", () => {
+  let loadCalls = 0;
+  const page = loadHomePageWithSearch(async () => []);
+  page.loadArtworks = () => {
+    loadCalls += 1;
+  };
+  page.data.searchQuery = "Monet";
+  page.data.searchMode = true;
+  page.data.searchResults = [{ id: "1" }];
+  page.data.searchTotal = 1;
+  page.data.searching = true;
+  page.data.searchError = "previous";
+
+  page.clearSearch();
+
+  assert.equal(page.data.searchQuery, "");
+  assert.equal(page.data.searchMode, false);
+  assert.equal(page.data.searchResults.length, 0);
+  assert.equal(page.data.searchTotal, 0);
+  assert.equal(page.data.searching, false);
+  assert.equal(page.data.searchError, "");
+  assert.equal(loadCalls, 0);
 });
 
 test("searchArtworks tolerates mixed cloud field shapes", () => {

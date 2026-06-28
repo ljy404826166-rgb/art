@@ -184,6 +184,9 @@ Page({
     searchQuery: "",
     searchMode: false,
     searchResults: [],
+    searchTotal: 0,
+    searching: false,
+    searchError: "",
     searchLoading: false,
     loading: true,
     loadingMore: false,
@@ -373,6 +376,9 @@ Page({
     const localState = createHomeSearchState([], searchQuery);
     this.setData({
       ...localState,
+      searchTotal: 0,
+      searching: localState.searchMode,
+      searchError: "",
       searchLoading: localState.searchMode,
     });
     this.scheduleCloudSearch(searchQuery);
@@ -393,7 +399,7 @@ Page({
     this.searchRequestId = (this.searchRequestId || 0) + 1;
     const requestId = this.searchRequestId;
     if (!normalizedQuery) {
-      this.setData({ searchLoading: false });
+      this.setData({ searching: false, searchLoading: false });
       return;
     }
     this.searchTimer = setTimeout(() => {
@@ -410,7 +416,7 @@ Page({
       this.clearSearch();
       return;
     }
-    this.setData({ searchLoading: true });
+    this.setData({ searching: true, searchError: "", searchLoading: true });
     this.runCloudSearch(normalizedQuery, requestId);
   },
 
@@ -422,6 +428,9 @@ Page({
       if (requestId !== this.searchRequestId || !this.data.searchMode) return;
       this.setData({
         searchResults: results,
+        searchTotal: results.length,
+        searching: false,
+        searchError: "",
         searchLoading: false,
       });
     } catch (error) {
@@ -429,6 +438,9 @@ Page({
       const fallback = fallbackSearchArtworks(normalizedQuery).slice(0, SEARCH_PAGE_SIZE);
       this.setData({
         searchResults: fallback,
+        searchTotal: fallback.length,
+        searching: false,
+        searchError: normalizeError(error),
         searchLoading: false,
       });
     }
@@ -441,6 +453,9 @@ Page({
       searchQuery: "",
       searchMode: false,
       searchResults: [],
+      searchTotal: 0,
+      searching: false,
+      searchError: "",
       searchLoading: false,
     });
   },
