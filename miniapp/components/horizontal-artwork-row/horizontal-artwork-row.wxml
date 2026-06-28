@@ -4,6 +4,7 @@
     scroll-x="true"
     enhanced="true"
     show-scrollbar="false"
+    scroll-left="{{scrollLeft}}"
     lower-threshold="120"
     bindscrolltolower="handleRowToLower"
   >

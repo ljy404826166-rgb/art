@@ -1,8 +1,4 @@
 const ROW_IMAGE_HEIGHT_RPX = 350;
-const VIEWPORT_WIDTH_RPX = 750;
-const TRACK_PADDING_RPX = 28 + 64;
-const CARD_GAP_RPX = 28;
-const STATUS_WIDTH_RPX = 136;
 
 function computeRowArtworkCardWidth(imageRatio) {
   const ratio = Number(imageRatio || 0.8);
@@ -29,37 +25,26 @@ function resolveRowArtworkMeasureSrc(item) {
   return item.cloud_file_id || item.thumbnail_url || item.display_url || safeImageSrc || "";
 }
 
-function fallbackCardWidth(item) {
-  if (item && item.homeCardClass === "is-wide") return 476;
-  if (item && item.homeCardClass === "is-compact") return 300;
-  return 360;
-}
-
 function getRowArtworkKey(item, index = 0) {
   return item && (item._id || item.id || item.source_id || item.supabase_id || item.title || `index:${index}`);
 }
 
-function estimateRowMoverWidth(items, measuredWidths = {}, options = {}) {
-  const list = items || [];
-  const cardWidth = list.reduce((total, item, index) => {
-    const key = getRowArtworkKey(item, index);
-    const measured = Number(measuredWidths[key] || 0);
-    return total + (measured > 0 ? measured : fallbackCardWidth(item));
-  }, 0);
-  const gapWidth = Math.max(0, list.length - 1) * CARD_GAP_RPX;
-  const statusWidth = options.loadingMore ? STATUS_WIDTH_RPX + CARD_GAP_RPX : 0;
-  return Math.max(
-    VIEWPORT_WIDTH_RPX,
-    TRACK_PADDING_RPX + cardWidth + gapWidth + statusWidth,
-  );
+function shouldResetRowScroll(previousItems, nextItems) {
+  const previous = previousItems || [];
+  const next = nextItems || [];
+  if (!previous.length) return false;
+  if (next.length < previous.length) return true;
+
+  return previous.some((item, index) => (
+    getRowArtworkKey(item, index) !== getRowArtworkKey(next[index], index)
+  ));
 }
 
 module.exports = {
   ROW_IMAGE_HEIGHT_RPX,
-  VIEWPORT_WIDTH_RPX,
   computeArtworkCardFrame,
   computeRowArtworkCardWidth,
-  estimateRowMoverWidth,
   getRowArtworkKey,
   resolveRowArtworkMeasureSrc,
+  shouldResetRowScroll,
 };

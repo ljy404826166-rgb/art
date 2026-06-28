@@ -13,8 +13,8 @@ function loadCommonJsModule(filename) {
 const {
   computeArtworkCardFrame,
   computeRowArtworkCardWidth,
-  estimateRowMoverWidth,
   resolveRowArtworkMeasureSrc,
+  shouldResetRowScroll,
 } = loadCommonJsModule("miniapp/components/horizontal-artwork-row/horizontal-artwork-row-geometry.js");
 
 test("wide artwork width is not capped by card max width", () => {
@@ -36,19 +36,30 @@ test("computeRowArtworkCardWidth keeps fixed image height without min or max wid
   assert.equal(computeRowArtworkCardWidth(0.36), 126);
 });
 
-test("estimateRowMoverWidth uses measured card widths when available", () => {
-  const items = [
-    { _id: "a", homeCardClass: "is-compact" },
-    { _id: "b", homeCardClass: "is-wide" },
-    { _id: "c", homeCardClass: "is-compact" },
-  ];
-  const measuredWidths = {
-    a: 252,
-    b: 700,
-    c: 360,
-  };
+test("shouldResetRowScroll preserves position for appends", () => {
+  assert.equal(shouldResetRowScroll(
+    [{ _id: "a" }, { _id: "b" }],
+    [{ _id: "a" }, { _id: "b" }, { _id: "c" }],
+  ), false);
+});
 
-  assert.equal(estimateRowMoverWidth(items, measuredWidths), 1460);
+test("shouldResetRowScroll resets position for replaced items", () => {
+  assert.equal(shouldResetRowScroll(
+    [{ _id: "a" }, { _id: "b" }],
+    [{ _id: "x" }, { _id: "y" }],
+  ), true);
+});
+
+test("shouldResetRowScroll resets position for reordered or shortened items", () => {
+  assert.equal(shouldResetRowScroll(
+    [{ _id: "a" }, { _id: "b" }],
+    [{ _id: "b" }, { _id: "a" }],
+  ), true);
+
+  assert.equal(shouldResetRowScroll(
+    [{ _id: "a" }, { _id: "b" }],
+    [{ _id: "a" }],
+  ), true);
 });
 
 test("resolveRowArtworkMeasureSrc only uses display-safe image sources", () => {

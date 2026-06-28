@@ -1,8 +1,17 @@
+const {
+  shouldResetRowScroll,
+} = require("./horizontal-artwork-row-geometry");
+
 Component({
   properties: {
     items: {
       type: Array,
       value: [],
+      observer(items, previousItems) {
+        if (shouldResetRowScroll(previousItems, items)) {
+          this.resetScrollLeft();
+        }
+      },
     },
     sectionIndex: {
       type: Number,
@@ -14,6 +23,10 @@ Component({
     },
   },
 
+  data: {
+    scrollLeft: 0,
+  },
+
   lifetimes: {
     attached() {
       this.lastLowerAt = 0;
@@ -21,6 +34,12 @@ Component({
   },
 
   methods: {
+    resetScrollLeft() {
+      this.setData({ scrollLeft: 1 }, () => {
+        this.setData({ scrollLeft: 0 });
+      });
+    },
+
     handleRowToLower() {
       const now = Date.now();
       if (now - Number(this.lastLowerAt || 0) < 900) return;
