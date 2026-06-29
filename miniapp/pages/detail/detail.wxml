@@ -1,6 +1,6 @@
 <view class="detail-page">
   <view wx:if="{{loading}}" class="detail-skeleton">
-    <view class="detail-skeleton-hero"></view>
+    <view class="detail-skeleton-hero" style="{{heroFrameStyle}}"></view>
     <view class="detail-skeleton-body">
       <view class="detail-skeleton-line eyebrow-line"></view>
       <view class="detail-skeleton-line title-line"></view>

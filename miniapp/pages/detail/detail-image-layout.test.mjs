@@ -29,6 +29,13 @@ test("computeDetailHeroFrameStyle preserves landscape artwork ratio", () => {
   );
 });
 
+test("computeDetailHeroFrameStyle preserves routed artwork ratio", () => {
+  assert.equal(
+    computeDetailHeroFrameStyle(0.72),
+    "height: 964rpx; min-height: 964rpx;",
+  );
+});
+
 test("resolveDetailMeasureSrc does not use download_url for measurement", () => {
   assert.equal(resolveDetailMeasureSrc({
     cloud_file_id: "cloud://display",
