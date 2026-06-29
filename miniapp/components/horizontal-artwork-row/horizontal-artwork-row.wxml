@@ -1,12 +1,17 @@
-<view class="artwork-row-area">
-  <scroll-view
-    class="artwork-row-scroll"
-    scroll-x="true"
-    enhanced="true"
-    show-scrollbar="false"
-    scroll-left="{{scrollLeft}}"
-    lower-threshold="120"
-    bindscrolltolower="handleRowToLower"
+<movable-area class="artwork-row-area">
+  <movable-view
+    class="artwork-row-mover"
+    direction="horizontal"
+    inertia="{{true}}"
+    out-of-bounds="{{false}}"
+    damping="32"
+    friction="2"
+    x="{{x}}"
+    style="{{moverStyle}}"
+    bindchange="handleMoveChange"
+    bindtouchstart="handleTouchStart"
+    bindtouchend="handleTouchEnd"
+    bindtouchcancel="handleTouchEnd"
   >
     <view class="artwork-row-track">
       <block wx:for="{{items}}" wx:key="id">
@@ -16,6 +21,7 @@
             variant="row"
             data-index="{{index}}"
             bindtapcard="handleTapCard"
+            bindlayoutchange="handleCardLayoutChange"
           />
         </view>
       </block>
@@ -23,5 +29,5 @@
         <text class="artwork-row-status-text">加载中...</text>
       </view>
     </view>
-  </scroll-view>
-</view>
+  </movable-view>
+</movable-area>
