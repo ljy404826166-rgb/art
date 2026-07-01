@@ -1,4 +1,5 @@
 {
+  "onReachBottomDistance": 160,
   "usingComponents": {
     "empty-state": "../../components/empty-state/empty-state",
     "error-state": "../../components/error-state/error-state",

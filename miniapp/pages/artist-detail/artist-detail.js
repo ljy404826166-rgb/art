@@ -3,7 +3,8 @@ const {
   loadArtistByArtworkText,
 } = require("../../services/artists");
 const {
-  fetchArtworksByArtistAliases,
+  fetchArtworksByArtist,
+  countArtworksByArtist,
   fallbackArtworksByArtistAliases,
   normalizeError,
 } = require("../../services/artworks");
@@ -32,6 +33,7 @@ Page({
     artist: null,
     artistSource: "",
     artworks: [],
+    artworkTotal: 0,
     skip: 0,
     hasMore: true,
     loading: true,
@@ -56,6 +58,7 @@ Page({
       artist: null,
       artistSource: "",
       artworks: [],
+      artworkTotal: 0,
       skip: 0,
       hasMore: true,
       loading: true,
@@ -103,6 +106,7 @@ Page({
         artist: null,
         artistSource: artistResult.source,
         artworks: [],
+        artworkTotal: 0,
         skip: 0,
         hasMore: false,
         loading: false,
@@ -126,9 +130,10 @@ Page({
 
   async loadInitialArtworks(artist) {
     const aliases = artist && artist.aliases;
-    if (!aliases || !aliases.length) {
+    if (!artist || (!artist.nameZh && !artist.nameEn && (!aliases || !aliases.length))) {
       this.setData({
         artworks: [],
+        artworkTotal: 0,
         skip: 0,
         hasMore: false,
         loading: false,
@@ -139,14 +144,19 @@ Page({
     }
 
     try {
-      const artworks = await fetchArtworksByArtistAliases(aliases, {
-        pageSize: ARTIST_WORKS_PAGE_SIZE,
-        skip: 0,
-      });
+      const [artworkTotal, artworks] = await Promise.all([
+        countArtworksByArtist(artist),
+        fetchArtworksByArtist(artist, {
+          pageSize: ARTIST_WORKS_PAGE_SIZE,
+          skip: 0,
+        }),
+      ]);
+      const total = Math.max(Number(artworkTotal || 0), artworks.length);
       this.setData({
         artworks,
+        artworkTotal: total,
         skip: artworks.length,
-        hasMore: artworks.length >= ARTIST_WORKS_PAGE_SIZE,
+        hasMore: artworks.length < total,
         loading: false,
         artworksLoading: false,
       });
@@ -154,6 +164,7 @@ Page({
       const fallbackArtworks = fallbackArtworksByArtistAliases(aliases);
       this.setData({
         artworks: fallbackArtworks,
+        artworkTotal: fallbackArtworks.length,
         skip: fallbackArtworks.length,
         hasMore: false,
         loading: false,
@@ -176,9 +187,10 @@ Page({
 
     this.setData({ loadingMore: true });
     try {
-      const nextPage = await fetchArtworksByArtistAliases(artist.aliases, {
+      const skip = Number(this.data.skip || 0);
+      const nextPage = await fetchArtworksByArtist(artist, {
         pageSize: ARTIST_WORKS_PAGE_SIZE,
-        skip: this.data.skip,
+        skip,
       });
       const seen = {};
       this.data.artworks.forEach((item) => {
@@ -192,10 +204,12 @@ Page({
         return true;
       });
       const artworks = this.data.artworks.concat(fresh);
+      const nextSkip = skip + nextPage.length;
+      const total = Number(this.data.artworkTotal || 0);
       this.setData({
         artworks,
-        skip: artworks.length,
-        hasMore: fresh.length >= ARTIST_WORKS_PAGE_SIZE,
+        skip: nextSkip,
+        hasMore: nextPage.length > 0 && (!total || artworks.length < total),
         loadingMore: false,
       });
     } catch (error) {
