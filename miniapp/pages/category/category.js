@@ -22,9 +22,24 @@ function makeGroupsView(groups, expandedGroups) {
   });
 }
 
+function normalizeTagInput(tag) {
+  if (!tag || typeof tag === "string") {
+    return {
+      id: "",
+      label: String(tag || ""),
+    };
+  }
+
+  return {
+    id: String(tag.id || tag._id || tag.tag_id || tag.tagId || "").trim(),
+    label: String(tag.label || tag.label_zh || tag.labelZh || tag.name || tag.text || "").trim(),
+  };
+}
+
 Page({
   data: {
     activeTag: "印象派",
+    activeTagId: "",
     groups: fallbackGroups,
     groupsView: makeGroupsView(fallbackGroups, {}),
     expandedGroups: {},
@@ -74,8 +89,12 @@ Page({
   },
 
   async applyFilter(tag) {
+    const tagInfo = normalizeTagInput(tag);
+    const tagQuery = tagInfo.id ? { id: tagInfo.id, label: tagInfo.label } : tagInfo.label;
+
     this.setData({
-      activeTag: tag,
+      activeTag: tagInfo.label,
+      activeTagId: tagInfo.id,
       allArtworks: [],
       filteredArtworks: [],
       totalCount: 0,
@@ -90,8 +109,8 @@ Page({
 
     try {
       const [totalCount, artworks] = await Promise.all([
-        countArtworksByTag(tag),
-        fetchArtworksByTag(tag, { pageSize: PAGE_SIZE, skip: 0 }),
+        countArtworksByTag(tagQuery),
+        fetchArtworksByTag(tagQuery, { pageSize: PAGE_SIZE, skip: 0 }),
       ]);
       this.setData({
         allArtworks: artworks,
@@ -102,8 +121,8 @@ Page({
       });
       this.updateVisibleArtworks();
     } catch (error) {
-      const fallback = fallbackArtworksByTag(tag);
-      const totalCount = fallbackArtworkCountByTag(tag);
+      const fallback = fallbackArtworksByTag(tagInfo.label);
+      const totalCount = fallbackArtworkCountByTag(tagInfo.label);
       this.setData({
         allArtworks: fallback,
         totalCount,
@@ -121,7 +140,10 @@ Page({
     if (this.data.loading || this.data.loadingMore || !this.data.hasMore || this.data.usingFallback) return;
     this.setData({ loadingMore: true });
     try {
-      const nextPage = await fetchArtworksByTag(this.data.activeTag, {
+      const tagQuery = this.data.activeTagId
+        ? { id: this.data.activeTagId, label: this.data.activeTag }
+        : this.data.activeTag;
+      const nextPage = await fetchArtworksByTag(tagQuery, {
         pageSize: PAGE_SIZE,
         skip: this.data.skip,
       });
@@ -149,7 +171,11 @@ Page({
   },
 
   retryLoad() {
-    this.applyFilter(this.data.activeTag);
+    this.applyFilter(
+      this.data.activeTagId
+        ? { id: this.data.activeTagId, label: this.data.activeTag }
+        : this.data.activeTag,
+    );
   },
 
   openDetail(event) {

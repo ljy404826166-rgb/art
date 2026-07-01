@@ -67,3 +67,32 @@ test("tag page appends the next artwork page without replacing existing cards", 
     { pageSize: 20, skip: 2 },
   ]);
 });
+
+test("tag page keeps the visible label while passing normalized tag id to the service", async () => {
+  const calls = [];
+  const page = loadTagPage({
+    countArtworksByTag: async (tag) => {
+      calls.push({ type: "count", tag });
+      return 1;
+    },
+    fetchArtworksByTag: async (tag, options) => {
+      calls.push({ type: "fetch", tag, pageSize: options.pageSize, skip: options.skip });
+      return [{ id: "a1" }];
+    },
+    fallbackArtworksByTag: () => [],
+    fallbackArtworkCountByTag: () => 0,
+    normalizeError: (error) => String(error && error.message ? error.message : error),
+  });
+
+  await page.onLoad({
+    tag: encodeURIComponent("印象派"),
+    tagId: encodeURIComponent("style-impressionism"),
+  });
+
+  assert.equal(page.data.tag, "印象派");
+  assert.equal(page.data.tagId, "style-impressionism");
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [
+    { type: "count", tag: { id: "style-impressionism", label: "印象派" } },
+    { type: "fetch", tag: { id: "style-impressionism", label: "印象派" }, pageSize: 20, skip: 0 },
+  ]);
+});

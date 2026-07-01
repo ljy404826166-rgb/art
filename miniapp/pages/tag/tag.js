@@ -11,6 +11,7 @@ const PAGE_SIZE = 20;
 Page({
   data: {
     tag: "",
+    tagId: "",
     artworks: [],
     totalCount: 0,
     resultCountText: "0件作品",
@@ -24,10 +25,11 @@ Page({
 
   onLoad(options) {
     const tag = decodeURIComponent((options && options.tag) || "");
+    const tagId = decodeURIComponent((options && (options.tagId || options.tag_id)) || "");
     wx.setNavigationBarTitle({ title: "标签" });
-    this.setData({ tag });
+    this.setData({ tag, tagId });
     if (tag) {
-      this.loadTag(tag);
+      return this.loadTag(tag);
     } else {
       this.setData({
         loading: false,
@@ -35,10 +37,19 @@ Page({
         error: "缺少标签参数",
       });
     }
+    return Promise.resolve();
   },
 
   onReachBottom() {
     this.loadMore();
+  },
+
+  getTagQuery() {
+    if (!this.data.tagId) return this.data.tag;
+    return {
+      id: this.data.tagId,
+      label: this.data.tag,
+    };
   },
 
   async loadTag(tag) {
@@ -55,9 +66,10 @@ Page({
     });
 
     try {
+      const tagQuery = this.getTagQuery();
       const [totalCount, artworks] = await Promise.all([
-        countArtworksByTag(tag),
-        fetchArtworksByTag(tag, { pageSize: PAGE_SIZE, skip: 0 }),
+        countArtworksByTag(tagQuery),
+        fetchArtworksByTag(tagQuery, { pageSize: PAGE_SIZE, skip: 0 }),
       ]);
       this.setData({
         artworks,
@@ -87,7 +99,7 @@ Page({
     if (this.data.loading || this.data.loadingMore || !this.data.hasMore || this.data.usingFallback) return;
     this.setData({ loadingMore: true });
     try {
-      const nextPage = await fetchArtworksByTag(this.data.tag, {
+      const nextPage = await fetchArtworksByTag(this.getTagQuery(), {
         pageSize: PAGE_SIZE,
         skip: this.data.skip,
       });

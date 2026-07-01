@@ -217,7 +217,55 @@ async function fetchRandomArtworks(options) {
   return shuffleItems(artworks).slice(0, pageSize);
 }
 
-async function fetchArtworksByTag(tag, options) {
+function getTagId(tag) {
+  if (!tag || typeof tag === "string") return "";
+  return String(tag.id || tag._id || tag.tag_id || tag.tagId || "").trim();
+}
+
+function getTagLabel(tag) {
+  if (typeof tag === "string") return tag;
+  if (!tag) return "";
+  return String(tag.label || tag.label_zh || tag.labelZh || tag.name || tag.text || "").trim();
+}
+
+function createArrayContainsWhereClause(db, field, value) {
+  if (!value || !db.command || typeof db.command.all !== "function") return null;
+  return {
+    status: "published",
+    [field]: db.command.all([value]),
+  };
+}
+
+async function fetchArtworksByTagId(tagId, options) {
+  const pageSize = (options && options.pageSize) || PAGE_SIZE;
+  const skip = (options && options.skip) || 0;
+  const db = database();
+  const whereClause = createArrayContainsWhereClause(db, "tag_ids", String(tagId || "").trim());
+  if (!whereClause) return [];
+
+  const result = await db
+    .collection("artworks")
+    .where(whereClause)
+    .orderBy("created_at", "desc")
+    .skip(skip)
+    .limit(pageSize)
+    .get();
+  return (result.data || []).map(normalizeArtwork);
+}
+
+async function countArtworksByTagId(tagId) {
+  const db = database();
+  const whereClause = createArrayContainsWhereClause(db, "tag_ids", String(tagId || "").trim());
+  if (!whereClause) return 0;
+
+  const result = await db
+    .collection("artworks")
+    .where(whereClause)
+    .count();
+  return Number(result.total || 0);
+}
+
+async function fetchArtworksByTagLabel(tag, options) {
   const pageSize = (options && options.pageSize) || PAGE_SIZE;
   const skip = (options && options.skip) || 0;
   const db = database();
@@ -235,7 +283,7 @@ async function fetchArtworksByTag(tag, options) {
   return (result.data || []).map(normalizeArtwork);
 }
 
-async function countArtworksByTag(tag) {
+async function countArtworksByTagLabel(tag) {
   const db = database();
   const command = db.command;
   const result = await db
@@ -246,6 +294,37 @@ async function countArtworksByTag(tag) {
     })
     .count();
   return Number(result.total || 0);
+}
+
+async function fetchArtworksByTag(tag, options) {
+  const tagId = getTagId(tag);
+  const tagLabel = getTagLabel(tag);
+  const skip = (options && options.skip) || 0;
+
+  if (tagId) {
+    const normalizedRows = await fetchArtworksByTagId(tagId, options);
+    if (normalizedRows.length > 0 || skip > 0 || !tagLabel) {
+      return normalizedRows;
+    }
+  }
+
+  if (!tagLabel) return [];
+  return fetchArtworksByTagLabel(tagLabel, options);
+}
+
+async function countArtworksByTag(tag) {
+  const tagId = getTagId(tag);
+  const tagLabel = getTagLabel(tag);
+
+  if (tagId) {
+    const normalizedCount = await countArtworksByTagId(tagId);
+    if (normalizedCount > 0 || !tagLabel) {
+      return normalizedCount;
+    }
+  }
+
+  if (!tagLabel) return 0;
+  return countArtworksByTagLabel(tagLabel);
 }
 
 async function fetchArtworksByArtistAliases(aliases, options) {
@@ -288,6 +367,170 @@ async function fetchArtworksByArtistAliases(aliases, options) {
   }
 
   return artworks.slice(skip, targetCount);
+}
+
+function asArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function getArtistPrimaryTag(artist) {
+  if (!artist || Array.isArray(artist)) return "";
+  return String(artist.nameZh || artist.name_zh || "").trim();
+}
+
+function getArtistAliases(artist) {
+  if (Array.isArray(artist)) return artist;
+  if (!artist) return [];
+  return [
+    artist.nameZh || artist.name_zh,
+    artist.nameEn || artist.name_en,
+    ...asArray(artist.aliases),
+  ].filter(Boolean);
+}
+
+function getArtistId(artist) {
+  if (!artist || Array.isArray(artist)) return "";
+  return String(artist.id || artist._id || artist.artist_id || artist.artistId || "").trim();
+}
+
+function canQueryArtistByTag(db, artist) {
+  return Boolean(
+    getArtistPrimaryTag(artist)
+    && db.command
+    && typeof db.command.all === "function",
+  );
+}
+
+function getArtistMatchClauses(db, artist) {
+  const clauses = [];
+  const primaryTag = getArtistPrimaryTag(artist);
+  const aliases = [];
+  const seen = {};
+
+  if (canQueryArtistByTag(db, artist)) {
+    clauses.push({
+      status: "published",
+      tag_keys: db.command.all([primaryTag]),
+    });
+  }
+
+  getArtistAliases(artist).forEach((name) => {
+    const value = String(name || "").trim();
+    if (!value || seen[value]) return;
+    seen[value] = true;
+    aliases.push(value);
+  });
+
+  aliases.forEach((name) => {
+    clauses.push({
+      status: "published",
+      artist: db.RegExp({
+        regexp: escapeRegExp(name),
+        options: "i",
+      }),
+    });
+  });
+
+  return clauses;
+}
+
+function createArtistWhereClause(db, artist) {
+  const clauses = getArtistMatchClauses(db, artist);
+  if (!clauses.length) return null;
+  if (clauses.length === 1) return clauses[0];
+  if (db.command && typeof db.command.or === "function") {
+    return db.command.or(clauses);
+  }
+  return clauses[0];
+}
+
+async function fetchArtworksByArtist(artist, options) {
+  const skip = (options && options.skip) || 0;
+  const artistId = getArtistId(artist);
+  const aliases = getArtistAliases(artist);
+
+  if (artistId) {
+    const normalizedRows = await fetchArtworksByArtistId(artistId, options);
+    if (normalizedRows.length > 0 || skip > 0 || !aliases.length) {
+      return normalizedRows;
+    }
+  }
+
+  const pageSize = (options && options.pageSize) || PAGE_SIZE;
+  const db = database();
+  const whereClause = createArtistWhereClause(db, artist);
+
+  if (whereClause) {
+    const result = await db
+      .collection("artworks")
+      .where(whereClause)
+      .orderBy("created_at", "desc")
+      .skip(skip)
+      .limit(pageSize)
+      .get();
+    return (result.data || []).map(normalizeArtwork);
+  }
+
+  return fetchArtworksByArtistAliases(getArtistAliases(artist), options);
+}
+
+async function countArtworksByArtist(artist) {
+  const artistId = getArtistId(artist);
+  const aliases = getArtistAliases(artist);
+
+  if (artistId) {
+    const normalizedCount = await countArtworksByArtistId(artistId);
+    if (normalizedCount > 0 || !aliases.length) {
+      return normalizedCount;
+    }
+  }
+
+  const db = database();
+  const whereClause = createArtistWhereClause(db, artist);
+
+  if (whereClause) {
+    const result = await db
+      .collection("artworks")
+      .where(whereClause)
+      .count();
+    return Number(result.total || 0);
+  }
+
+  const artworks = await fetchArtworksByArtistAliases(getArtistAliases(artist), {
+    pageSize: SEARCH_CORPUS_MAX_ROWS,
+    skip: 0,
+    maxPages: Math.ceil(SEARCH_CORPUS_MAX_ROWS / PAGE_SIZE),
+  });
+  return artworks.length;
+}
+
+async function fetchArtworksByArtistId(artistId, options) {
+  const pageSize = (options && options.pageSize) || PAGE_SIZE;
+  const skip = (options && options.skip) || 0;
+  const db = database();
+  const whereClause = createArrayContainsWhereClause(db, "artist_ids", String(artistId || "").trim());
+  if (!whereClause) return [];
+
+  const result = await db
+    .collection("artworks")
+    .where(whereClause)
+    .orderBy("created_at", "desc")
+    .skip(skip)
+    .limit(pageSize)
+    .get();
+  return (result.data || []).map(normalizeArtwork);
+}
+
+async function countArtworksByArtistId(artistId) {
+  const db = database();
+  const whereClause = createArrayContainsWhereClause(db, "artist_ids", String(artistId || "").trim());
+  if (!whereClause) return 0;
+
+  const result = await db
+    .collection("artworks")
+    .where(whereClause)
+    .count();
+  return Number(result.total || 0);
 }
 
 function createSearchFieldRegexp(db, keyword) {
@@ -372,7 +615,7 @@ async function searchArtworks(query, options) {
   const skip = (options && options.skip) || 0;
   const candidateLimit = Math.max(pageSize + skip, pageSize * 3, PAGE_SIZE * SEARCH_CANDIDATE_PAGE_COUNT);
   const candidates = await fetchSearchCandidates(query, { candidateLimit });
-  return searchIndexedArtworks(candidates, query).slice(skip, skip + pageSize);
+  return searchIndexedArtworks(candidates, query, { limit: pageSize, skip });
 }
 
 async function fetchArtworkById(id) {
@@ -435,9 +678,15 @@ module.exports = {
   fetchLatestArtworks,
   fetchRandomArtworks,
   countPublishedArtworks,
+  fetchArtworksByTagId,
+  countArtworksByTagId,
   fetchArtworksByTag,
   countArtworksByTag,
+  fetchArtworksByArtistId,
+  countArtworksByArtistId,
   fetchArtworksByArtistAliases,
+  fetchArtworksByArtist,
+  countArtworksByArtist,
   fetchSearchCorpus,
   searchArtworks,
   fetchArtworkById,

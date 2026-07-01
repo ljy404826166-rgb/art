@@ -8,12 +8,12 @@ const SEARCH_ALIASES = [
 const SEARCH_FIELD_CONFIG = [
   { keys: ["title", "titleCn", "title_cn"], weight: 180 },
   { keys: ["titleEn", "title_en"], weight: 160 },
-  { keys: ["artist", "artistDisplay", "artist_display"], weight: 110 },
-  { keys: ["tags", "tag_keys", "tags_text"], weight: 70 },
+  { keys: ["artist", "artistDisplay", "artist_display", "artist_ids", "artist_labels"], weight: 110 },
+  { keys: ["description"], weight: 80 },
+  { keys: ["tags", "tag_keys", "tag_ids", "tag_labels", "tags_text"], weight: 55 },
   { keys: ["medium"], weight: 45 },
   { keys: ["year", "year_and_place", "period"], weight: 35 },
   { keys: ["location"], weight: 30 },
-  { keys: ["description"], weight: 20 },
   { keys: ["sourceName", "source_name", "source_url", "image_id"], weight: 8 },
 ];
 
@@ -100,6 +100,7 @@ function searchArtworks(artworks, query, options) {
   if (!queryVariants.length) return [];
 
   const limit = Number((options && options.limit) || 0);
+  const skip = Number((options && options.skip) || 0);
   const scored = [];
   const seen = {};
 
@@ -115,7 +116,7 @@ function searchArtworks(artworks, query, options) {
 
   scored.sort((a, b) => b.score - a.score || a.index - b.index);
   const results = scored.map((entry) => entry.item);
-  return limit > 0 ? results.slice(0, limit) : results;
+  return limit > 0 ? results.slice(skip, skip + limit) : results.slice(skip);
 }
 
 module.exports = {

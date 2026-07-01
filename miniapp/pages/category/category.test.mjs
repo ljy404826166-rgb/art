@@ -4,7 +4,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 
-function loadCategoryPage(artworksService) {
+function loadCategoryPage(artworksService, options = {}) {
   const filename = fileURLToPath(new URL("./category.js", import.meta.url));
   const source = readFileSync(filename, "utf8");
   let page = null;
@@ -32,7 +32,9 @@ function loadCategoryPage(artworksService) {
     },
     Page,
     wx: {
-      getStorageSync() {},
+      getStorageSync() {
+        return options.storedTag;
+      },
       navigateTo() {},
       removeStorageSync() {},
       setNavigationBarTitle() {},
@@ -72,5 +74,33 @@ test("category page appends the next artwork page without replacing existing car
   assert.deepEqual(calls, [
     { pageSize: 20, skip: 0 },
     { pageSize: 20, skip: 2 },
+  ]);
+});
+
+test("category page keeps the visible label while passing normalized tag id to the service", async () => {
+  const calls = [];
+  const page = loadCategoryPage({
+    countArtworksByTag: async (tag) => {
+      calls.push({ type: "count", tag });
+      return 1;
+    },
+    fetchArtworksByTag: async (tag, options) => {
+      calls.push({ type: "fetch", tag, pageSize: options.pageSize, skip: options.skip });
+      return [{ id: "a1" }];
+    },
+    fallbackArtworksByTag: () => [],
+    fallbackArtworkCountByTag: () => 0,
+    normalizeError: (error) => String(error && error.message ? error.message : error),
+  }, {
+    storedTag: { id: "style-impressionism", label: "印象派" },
+  });
+
+  await page.onShow();
+
+  assert.equal(page.data.activeTag, "印象派");
+  assert.equal(page.data.activeTagId, "style-impressionism");
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [
+    { type: "count", tag: { id: "style-impressionism", label: "印象派" } },
+    { type: "fetch", tag: { id: "style-impressionism", label: "印象派" }, pageSize: 20, skip: 0 },
   ]);
 });
