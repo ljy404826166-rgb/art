@@ -60,4 +60,3 @@ Add focused unit coverage for pure home-section pagination helpers where practic
 - Tag row appends only artworks containing that tag.
 - Duplicate artwork IDs are not appended.
 - A row cannot start overlapping duplicate requests.
-
