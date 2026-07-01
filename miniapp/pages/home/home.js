@@ -19,7 +19,7 @@ const SECTION_LIMIT = 8;
 const SECTION_APPEND_LIMIT = 4;
 const ROW_LIMIT = 8;
 const HOME_SAMPLE_SIZE = 120;
-const SEARCH_PAGE_SIZE = 60;
+const SEARCH_PAGE_SIZE = 20;
 const SEARCH_DEBOUNCE_MS = 250;
 
 function shuffleItems(items) {
@@ -188,6 +188,8 @@ Page({
     searching: false,
     searchError: "",
     searchLoading: false,
+    searchLoadingMore: false,
+    searchHasMore: false,
     loading: true,
     loadingMore: false,
     sectionLimit: SECTION_LIMIT,
@@ -209,6 +211,10 @@ Page({
   },
 
   onReachBottom() {
+    if (this.data.searchMode) {
+      this.loadMoreSearchResults();
+      return;
+    }
     this.loadMoreArtworks();
   },
 
@@ -380,6 +386,8 @@ Page({
       searching: localState.searchMode,
       searchError: "",
       searchLoading: localState.searchMode,
+      searchLoadingMore: false,
+      searchHasMore: false,
     });
     this.scheduleCloudSearch(searchQuery);
   },
@@ -399,7 +407,7 @@ Page({
     this.searchRequestId = (this.searchRequestId || 0) + 1;
     const requestId = this.searchRequestId;
     if (!normalizedQuery) {
-      this.setData({ searching: false, searchLoading: false });
+      this.setData({ searching: false, searchLoading: false, searchLoadingMore: false, searchHasMore: false });
       return;
     }
     this.searchTimer = setTimeout(() => {
@@ -416,7 +424,7 @@ Page({
       this.clearSearch();
       return;
     }
-    this.setData({ searching: true, searchError: "", searchLoading: true });
+    this.setData({ searching: true, searchError: "", searchLoading: true, searchLoadingMore: false, searchHasMore: false });
     this.runCloudSearch(normalizedQuery, requestId);
   },
 
@@ -424,7 +432,7 @@ Page({
     const normalizedQuery = String(query || "").trim();
     if (!normalizedQuery) return;
     try {
-      const results = await searchCloudArtworks(normalizedQuery, { pageSize: SEARCH_PAGE_SIZE });
+      const results = await searchCloudArtworks(normalizedQuery, { pageSize: SEARCH_PAGE_SIZE, skip: 0 });
       if (requestId !== this.searchRequestId || !this.data.searchMode) return;
       this.setData({
         searchResults: results,
@@ -432,6 +440,8 @@ Page({
         searching: false,
         searchError: "",
         searchLoading: false,
+        searchLoadingMore: false,
+        searchHasMore: results.length >= SEARCH_PAGE_SIZE,
       });
     } catch (error) {
       if (requestId !== this.searchRequestId || !this.data.searchMode) return;
@@ -442,6 +452,51 @@ Page({
         searching: false,
         searchError: normalizeError(error),
         searchLoading: false,
+        searchLoadingMore: false,
+        searchHasMore: false,
+      });
+    }
+  },
+
+  async loadMoreSearchResults() {
+    const normalizedQuery = String(this.data.searchQuery || "").trim();
+    if (
+      !this.data.searchMode
+      || !normalizedQuery
+      || this.data.searching
+      || this.data.searchLoading
+      || this.data.searchLoadingMore
+      || !this.data.searchHasMore
+    ) {
+      return;
+    }
+
+    const requestId = this.searchRequestId;
+    const skip = (this.data.searchResults || []).length;
+    this.setData({ searchLoadingMore: true, searchError: "" });
+
+    try {
+      const results = await searchCloudArtworks(normalizedQuery, { pageSize: SEARCH_PAGE_SIZE, skip });
+      if (
+        requestId !== this.searchRequestId
+        || !this.data.searchMode
+        || normalizedQuery !== String(this.data.searchQuery || "").trim()
+      ) {
+        return;
+      }
+      const merged = mergeUniqueArtworks(this.data.searchResults, results);
+      this.setData({
+        searchResults: merged,
+        searchTotal: merged.length,
+        searchLoadingMore: false,
+        searchHasMore: results.length >= SEARCH_PAGE_SIZE && merged.length > skip,
+      });
+    } catch (error) {
+      if (requestId !== this.searchRequestId || !this.data.searchMode) return;
+      this.setData({
+        searchLoadingMore: false,
+        searchHasMore: false,
+        searchError: normalizeError(error),
       });
     }
   },
@@ -457,6 +512,8 @@ Page({
       searching: false,
       searchError: "",
       searchLoading: false,
+      searchLoadingMore: false,
+      searchHasMore: false,
     });
   },
 

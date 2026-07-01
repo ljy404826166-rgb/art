@@ -57,7 +57,6 @@
     <view class="recommendation-group">
       <view class="recommendation-group-head">
         <text class="group-title">搜索结果</text>
-        <text class="group-count">{{searchLoading ? '搜索中' : searchResults.length + '件作品'}}</text>
       </view>
 
       <view wx:if="{{searchLoading}}" class="search-loading-state">
@@ -70,6 +69,10 @@
         <block wx:for="{{searchResults}}" wx:key="id">
           <artwork-card artwork="{{item}}" bindtapcard="openDetail" />
         </block>
+      </view>
+
+      <view wx:if="{{searchLoadingMore}}" class="search-loading-state search-loading-more-state">
+        <loading-more text="正在加载更多..." />
       </view>
     </view>
   </view>

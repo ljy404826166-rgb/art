@@ -51,6 +51,10 @@ function createFakeDatabase(rows, counters) {
   function matchesObject(row, clause) {
     return Object.entries(clause).every(([field, expected]) => {
       if (field === "status") return row.status === expected;
+      if (expected && expected.__all) {
+        const value = Array.isArray(row[field]) ? row[field] : [];
+        return expected.__all.every((item) => value.includes(item));
+      }
       if (expected && typeof expected.regexp === "string") {
         return new RegExp(expected.regexp, expected.options || "").test(String(row[field] || ""));
       }
@@ -95,7 +99,8 @@ function createFakeDatabase(rows, counters) {
       },
       async count() {
         counters.count += 1;
-        throw new Error("search should not count the full corpus");
+        const matched = rows.filter((row) => matchesWhere(row, whereClause));
+        return { total: matched.length };
       },
     };
   }
@@ -104,6 +109,9 @@ function createFakeDatabase(rows, counters) {
     command: {
       or(clauses) {
         return { __or: clauses };
+      },
+      all(values) {
+        return { __all: values };
       },
     },
     RegExp(options) {
@@ -157,4 +165,49 @@ test("fetchArtworksByArtistAliases supports deduped pagination across aliases", 
 
   assert.equal(JSON.stringify(firstPage.map((item) => item._id)), JSON.stringify(["a", "b"]));
   assert.equal(JSON.stringify(secondPage.map((item) => item._id)), JSON.stringify(["c", "d"]));
+});
+
+test("fetchArtworksByArtist prefers tag_keys for stable artist matching", async () => {
+  const counters = { get: 0, count: 0 };
+  const fakeDb = createFakeDatabase([
+    { _id: "a", status: "published", artist: "Claude Monet", tag_keys: ["克洛德·莫奈"] },
+    { _id: "b", status: "published", artist: "Other", tag_keys: ["克洛德·莫奈"] },
+    { _id: "c", status: "published", artist: "Other", tag_keys: ["其他画家"] },
+  ], counters);
+  const { fetchArtworksByArtist, countArtworksByArtist } = loadCommonJsModule(new URL("./artworks.js", import.meta.url), {
+    wx: { cloud: { database: () => fakeDb } },
+  });
+  const artist = {
+    nameZh: "克洛德·莫奈",
+    aliases: ["Claude Monet", "Monet", "莫奈"],
+  };
+
+  const firstPage = await fetchArtworksByArtist(artist, { pageSize: 8, skip: 0 });
+  const total = await countArtworksByArtist(artist);
+
+  assert.equal(JSON.stringify(firstPage.map((item) => item._id)), JSON.stringify(["a", "b"]));
+  assert.equal(total, 2);
+});
+
+test("fetchArtworksByArtist combines tag keys and artist aliases", async () => {
+  const counters = { get: 0, count: 0 };
+  const fakeDb = createFakeDatabase([
+    { _id: "tag", status: "published", artist: "Other", tag_keys: ["Claude Monet"] },
+    { _id: "name", status: "published", artist: "Claude Monet", tag_keys: ["Other"] },
+    { _id: "alias", status: "published", artist: "Monet", tag_keys: ["Other"] },
+    { _id: "other", status: "published", artist: "Other", tag_keys: ["Other"] },
+  ], counters);
+  const { fetchArtworksByArtist, countArtworksByArtist } = loadCommonJsModule(new URL("./artworks.js", import.meta.url), {
+    wx: { cloud: { database: () => fakeDb } },
+  });
+  const artist = {
+    nameZh: "Claude Monet",
+    aliases: ["Monet"],
+  };
+
+  const firstPage = await fetchArtworksByArtist(artist, { pageSize: 8, skip: 0 });
+  const total = await countArtworksByArtist(artist);
+
+  assert.equal(JSON.stringify(firstPage.map((item) => item._id)), JSON.stringify(["tag", "name", "alias"]));
+  assert.equal(total, 3);
 });

@@ -38,6 +38,10 @@ function assertIds(actualItems, expectedIds) {
   assert.equal(JSON.stringify(Array.from(actualItems).map((item) => item.id)), JSON.stringify(expectedIds));
 }
 
+function assertJsonEqual(actual, expected) {
+  assert.equal(JSON.stringify(actual), JSON.stringify(expected));
+}
+
 function deferred() {
   let resolve;
   let reject;
@@ -132,6 +136,85 @@ test("home cloud search ignores an older response that resolves after a newer qu
   assertIds(page.data.searchResults, ["new-result"]);
   assert.equal(page.data.searchTotal, 1);
   assert.equal(page.data.searching, false);
+});
+
+test("home cloud search loads the first page only", async () => {
+  const calls = [];
+  const page = loadHomePageWithSearch(async (query, options) => {
+    calls.push({ query, options });
+    return Array.from({ length: 20 }, (_, index) => ({ id: `result-${index + 1}` }));
+  });
+
+  page.data.searchMode = true;
+  page.searchRequestId = 1;
+  await page.runCloudSearch("梵高", 1);
+
+  assert.equal(calls.length, 1);
+  assertJsonEqual(calls[0], { query: "梵高", options: { pageSize: 20, skip: 0 } });
+  assert.equal(page.data.searchResults.length, 20);
+  assert.equal(page.data.searchHasMore, true);
+});
+
+test("home search appends the next page on reach bottom without losing loaded results", async () => {
+  const calls = [];
+  const page = loadHomePageWithSearch(async (query, options) => {
+    calls.push({ query, options });
+    const offset = options && options.skip ? options.skip : 0;
+    return Array.from({ length: 20 }, (_, index) => ({ id: `result-${offset + index + 1}` }));
+  });
+
+  page.data.searchQuery = "梵高";
+  page.data.searchMode = true;
+  page.searchRequestId = 1;
+  await page.runCloudSearch("梵高", 1);
+  await page.loadMoreSearchResults();
+
+  assertJsonEqual(calls, [
+    { query: "梵高", options: { pageSize: 20, skip: 0 } },
+    { query: "梵高", options: { pageSize: 20, skip: 20 } },
+  ]);
+  assert.equal(page.data.searchResults.length, 40);
+  assertIds(page.data.searchResults.slice(0, 2), ["result-1", "result-2"]);
+  assertIds(page.data.searchResults.slice(20, 22), ["result-21", "result-22"]);
+  assert.equal(page.data.searchLoadingMore, false);
+});
+
+test("home reach bottom loads more search results while in search mode", async () => {
+  const calls = [];
+  const page = loadHomePageWithSearch(async (query, options) => {
+    calls.push({ query, options });
+    const offset = options && options.skip ? options.skip : 0;
+    return Array.from({ length: 20 }, (_, index) => ({ id: `result-${offset + index + 1}` }));
+  });
+  let randomLoadCalls = 0;
+  page.loadMoreArtworks = () => {
+    randomLoadCalls += 1;
+  };
+
+  page.data.searchQuery = "梵高";
+  page.data.searchMode = true;
+  page.searchRequestId = 1;
+  await page.runCloudSearch("梵高", 1);
+  const reachBottomResult = page.onReachBottom();
+  if (reachBottomResult && typeof reachBottomResult.then === "function") {
+    await reachBottomResult;
+  } else {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  assert.equal(randomLoadCalls, 0);
+  assertJsonEqual(calls, [
+    { query: "梵高", options: { pageSize: 20, skip: 0 } },
+    { query: "梵高", options: { pageSize: 20, skip: 20 } },
+  ]);
+  assert.equal(page.data.searchResults.length, 40);
+});
+
+test("home page config sets a reach-bottom distance for paged search loading", () => {
+  const config = JSON.parse(readFileSync(new URL("./home.json", import.meta.url), "utf8"));
+
+  assert.equal(typeof config.onReachBottomDistance, "number");
+  assert.ok(config.onReachBottomDistance >= 120);
 });
 
 test("clearSearch restores the original home sections without reloading random artwork", () => {
