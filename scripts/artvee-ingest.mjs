@@ -1,11 +1,16 @@
 #!/usr/bin/env node
 
 import { createClient } from "@supabase/supabase-js";
+import CloudBase from "@cloudbase/manager-node";
 import { createHash } from "node:crypto";
+import { createRequire } from "node:module";
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+
+const require = createRequire(import.meta.url);
+const COS = require("cos-nodejs-sdk-v5");
 
 const ARTVEE_BASE_URL = "https://artvee.com";
 const DEFAULT_OUTPUT_DIR = path.resolve(process.cwd(), "csv");
@@ -32,6 +37,12 @@ const DEFAULT_OPENAI_MODEL = "gpt-5.4-mini";
 const DEFAULT_AI_RETRIES = 2;
 const UNKNOWN_VALUE = "暂不明确";
 const USER_AGENT = "ArtArchiveDataBuilder/0.1";
+const DEFAULT_TENCENT_COS_BUCKET = "masterpiece-1437223579";
+const DEFAULT_TENCENT_COS_REGION = "ap-beijing";
+const DEFAULT_TENCENT_COS_PREFIX = "ppaintings";
+const DEFAULT_TENCENT_COS_DOMAIN = "https://masterpiece-1437223579.cos.ap-beijing.myqcloud.com";
+const DEFAULT_CLOUDBASE_ENV_ID = "cloudbase-d6gvny27ib05e0ede";
+const DEFAULT_CLOUDBASE_COLLECTION = "artworks";
 
 const DEFAULT_FAMOUS_SEEDS = [
   { query: "mona lisa leonardo da vinci", priority: 100 },
@@ -102,6 +113,8 @@ const BOOLEAN_FLAGS = new Set([
   "dry-run",
   "with-ai",
   "db",
+  "cloudbase-db",
+  "cos-upload",
   "supabase-upload",
   "no-openai",
   "no-upload",
@@ -120,6 +133,13 @@ const BOOLEAN_FLAGS = new Set([
 
 const VALUE_FLAGS = new Set([
   "bucket",
+  "evidence-output",
+  "cos-bucket",
+  "cos-region",
+  "cos-prefix",
+  "cos-domain",
+  "cloudbase-env-id",
+  "cloudbase-collection",
   "delay-ms",
   "page-delay-ms",
   "image-delay-ms",
@@ -194,14 +214,30 @@ export function parseArgs(argv) {
     grounding: true,
     dryRun: false,
     useAI: false,
+    aiDisabledRequested: false,
+    directPublishRequested: false,
     upload: false,
+    storageTarget: "none",
     database: false,
+    databaseTarget: "none",
+    legacySupabaseUploadRequested: false,
+    legacyDatabaseRequested: false,
     insertLegacy: true,
     insertNormalized: true,
     saveImages: true,
     skipExisting: true,
     robotsTxt: true,
     help: false,
+    evidenceOutput: "",
+    cosBucket: process.env.TENCENT_COS_BUCKET || DEFAULT_TENCENT_COS_BUCKET,
+    cosRegion: process.env.TENCENT_COS_REGION || DEFAULT_TENCENT_COS_REGION,
+    cosPrefix: process.env.TENCENT_COS_PREFIX || DEFAULT_TENCENT_COS_PREFIX,
+    cosDomain: process.env.TENCENT_COS_DOMAIN || DEFAULT_TENCENT_COS_DOMAIN,
+    cosSecretId: process.env.TENCENT_SECRET_ID || process.env.TENCENT_CLOUD_SECRET_ID || process.env.TENCENTCLOUD_SECRETID || "",
+    cosSecretKey: process.env.TENCENT_SECRET_KEY || process.env.TENCENT_CLOUD_SECRET_KEY || process.env.TENCENTCLOUD_SECRETKEY || "",
+    cosSessionToken: process.env.TENCENT_SESSION_TOKEN || "",
+    cloudbaseEnvId: process.env.CLOUDBASE_ENV_ID || process.env.TCB_ENV_ID || DEFAULT_CLOUDBASE_ENV_ID,
+    cloudbaseCollection: process.env.CLOUDBASE_COLLECTION || DEFAULT_CLOUDBASE_COLLECTION,
   };
 
   if (!command || command === "--help" || command === "-h") {
@@ -221,11 +257,26 @@ export function parseArgs(argv) {
     if (BOOLEAN_FLAGS.has(name)) {
       if (name === "dry-run") options.dryRun = true;
       if (name === "with-ai") options.useAI = true;
-      if (name === "db") options.database = true;
-      if (name === "supabase-upload") options.upload = true;
-      if (name === "no-openai") options.useAI = false;
-      if (name === "no-upload") options.upload = false;
-      if (name === "no-db") options.database = false;
+      if (name === "db") options.legacyDatabaseRequested = true;
+      if (name === "cloudbase-db") {
+        options.directPublishRequested = true;
+      }
+      if (name === "cos-upload") {
+        options.directPublishRequested = true;
+      }
+      if (name === "supabase-upload") options.legacySupabaseUploadRequested = true;
+      if (name === "no-openai") {
+        options.useAI = false;
+        options.aiDisabledRequested = true;
+      }
+      if (name === "no-upload") {
+        options.upload = false;
+        options.storageTarget = "none";
+      }
+      if (name === "no-db") {
+        options.database = false;
+        options.databaseTarget = "none";
+      }
       if (name === "no-legacy") options.insertLegacy = false;
       if (name === "no-normalized") options.insertNormalized = false;
       if (name === "no-grounding") options.grounding = false;
@@ -250,6 +301,13 @@ export function parseArgs(argv) {
     if (inlineValue === undefined) index += 1;
 
     if (name === "bucket") options.bucket = value;
+    if (name === "evidence-output") options.evidenceOutput = path.resolve(value);
+    if (name === "cos-bucket") options.cosBucket = value;
+    if (name === "cos-region") options.cosRegion = value;
+    if (name === "cos-prefix") options.cosPrefix = value;
+    if (name === "cos-domain") options.cosDomain = value;
+    if (name === "cloudbase-env-id") options.cloudbaseEnvId = value;
+    if (name === "cloudbase-collection") options.cloudbaseCollection = value;
     if (name === "ai-retries") options.aiRetries = parsePositiveInteger(value, "--ai-retries");
     if (name === "delay-ms") options.delayMs = parsePositiveInteger(value, "--delay-ms");
     if (name === "page-delay-ms") options.pageDelayMs = parseDelayRange(value, "--page-delay-ms");
@@ -332,11 +390,18 @@ export function parseArgs(argv) {
   if (options.dryRun) {
     options.useAI = false;
     options.upload = false;
+    options.storageTarget = "none";
     options.database = false;
+    options.databaseTarget = "none";
     options.saveImages = false;
+  } else if (options.directPublishRequested) {
+    throw new Error("artvee-ingest now only creates raw evidence files. Use the reviewed publish step after Codex review and human approval.");
   }
 
-  options.database = options.database && (options.insertLegacy || options.insertNormalized);
+  options.cosPrefix = String(options.cosPrefix || "").replace(/^\/+|\/+$/g, "");
+  options.cosDomain = String(options.cosDomain || "").replace(/\/+$/g, "");
+  options.database = options.database && options.databaseTarget === "cloudbase";
+  options.upload = options.upload && options.storageTarget === "cos";
   return options;
 }
 
@@ -626,6 +691,7 @@ export function parseArtworkPage(html, sourceUrl, listing = {}) {
     dimensions,
     description: "",
     tags,
+    pageText: extractPageEvidenceText(html),
     imageUrl: listing.imageUrl || ogImage,
     downloadUrl,
     license,
@@ -633,6 +699,10 @@ export function parseArtworkPage(html, sourceUrl, listing = {}) {
     artveeImageKey: listing.artveeImageKey || "",
     hdDimensions: listing.hdDimensions || "",
   };
+}
+
+function extractPageEvidenceText(html) {
+  return cleanText(stripTags(String(html || ""))).slice(0, 4000);
 }
 
 function extractStandardDownloadUrl(html, sourceUrl) {
@@ -829,6 +899,56 @@ export function buildCsvRow(artwork, number, generatedMetadata) {
     dimensions: knownOrUnknown(generatedMetadata?.dimensions || (isPixelDimensions(artwork.dimensions) ? "" : artwork.dimensions)),
     description: knownOrUnknown(generatedMetadata?.description),
     tags: tagsForCsv(rawTags),
+  };
+}
+
+export function buildRawEvidenceRecord(artwork, csvRow, assetName, imagePath = "") {
+  return {
+    schema_version: 1,
+    review_status: "pending",
+    confidence: "unreviewed",
+    review_notes: "",
+    source: {
+      name: "Artvee",
+      url: artwork.sourceUrl || "",
+      record_id: artwork.sourceRecordId || "",
+    },
+    raw: {
+      title_cn: artwork.titleCn || "",
+      title_en: artwork.titleEn || "",
+      artist: artwork.artist || "",
+      collection: artwork.location || "",
+      year_text: artwork.yearAndPlace || "",
+      file_format: artwork.medium || "",
+      image_pixel_dimensions: artwork.dimensions || "",
+      hd_image_pixel_dimensions: artwork.hdDimensions || "",
+      license: artwork.license || "",
+      tags: uniqueCompact(artwork.tags || []),
+      popularity: artwork.popularity || 0,
+      artvee_image_key: artwork.artveeImageKey || "",
+      page_text_excerpt: artwork.pageText || "",
+    },
+    verified_sources: [],
+    image: {
+      id: csvRow.id || String(assetName || "").replace(/\.[^.]+$/, ""),
+      asset_name: assetName || "",
+      local_path: imagePath || "",
+      preview_url: artwork.imageUrl || "",
+      download_url: artwork.downloadUrl || "",
+      pixel_dimensions: artwork.dimensions || "",
+      file_format: artwork.medium || "",
+    },
+    reviewed_metadata: {
+      title_cn: "",
+      title_en: "",
+      artist: "",
+      location: "",
+      year_and_place: "",
+      medium: "",
+      dimensions: "",
+      description: "",
+      tags: [],
+    },
   };
 }
 
@@ -1747,6 +1867,187 @@ async function upsertLegacyPainting(supabase, csvRow, publicUrl) {
   if (error) throw new Error(`Failed to upsert legacy painting row: ${error.message}`);
 }
 
+export function tencentCosObjectKey(assetName, options = {}) {
+  const prefix = String(options.cosPrefix || "").replace(/^\/+|\/+$/g, "");
+  const name = String(assetName || "").replace(/^\/+/g, "");
+  return prefix ? `${prefix}/${name}` : name;
+}
+
+function encodeCosKey(key) {
+  return String(key || "").split("/").map(encodeURIComponent).join("/");
+}
+
+export function tencentCosPublicUrl(key, options = {}) {
+  const encodedKey = encodeCosKey(key);
+  const domain = String(options.cosDomain || "").replace(/\/+$/g, "");
+  if (domain) return `${domain}/${encodedKey}`;
+  return `https://${options.cosBucket}.cos.${options.cosRegion}.myqcloud.com/${encodedKey}`;
+}
+
+function tencentCosDerivativeUrl(assetName, kind, options = {}) {
+  const baseName = String(assetName || "").replace(/\.[^.]+$/, "");
+  return tencentCosPublicUrl(tencentCosObjectKey(`derivatives/${kind}/${baseName}.webp`, options), options);
+}
+
+export function buildCloudbaseArtworkDocument(artwork, csvRow, publicUrl, assetName, options = {}) {
+  const imageId = String(assetName || csvRow.id || "").replace(/\.[^.]+$/, "");
+  const sourceRecordId = artwork.sourceRecordId || csvRow.source_record_id || csvRow.id || imageId;
+  const tags = uniqueCompact(String(csvRow.tags || "").split(","));
+  const now = new Date().toISOString();
+  return {
+    _id: `artwork_${imageId}`,
+    id: imageId,
+    source_name: "Artvee",
+    source_record_id: sourceRecordId,
+    source_url: artwork.sourceUrl || "",
+    slug: `artvee-${slugFromUrl(artwork.sourceUrl || sourceRecordId)}`,
+    title_cn: csvRow.title_cn || "",
+    title_en: csvRow.title_en || "",
+    title: csvRow.title_cn || csvRow.title_en || "Untitled",
+    artist: csvRow.artist || "Unknown artist",
+    artist_display: csvRow.artist || "Unknown artist",
+    location: csvRow.location || "",
+    year_and_place: csvRow.year_and_place || "",
+    medium: csvRow.medium || "",
+    dimensions: csvRow.dimensions || "",
+    description: csvRow.description || "",
+    license: artwork.license || "Artvee public domain statement; verify before publication.",
+    is_public_domain: String(artwork.license || "").toLowerCase().includes("public domain"),
+    status: options.status || "draft",
+    image_id: imageId,
+    thumbnail_url: tencentCosDerivativeUrl(assetName, "thumb", options),
+    display_url: tencentCosDerivativeUrl(assetName, "display", options),
+    download_url: publicUrl || "",
+    original_url: publicUrl || "",
+    artvee_image_key: artwork.artveeImageKey || "",
+    artvee_image_url: artwork.imageUrl || "",
+    artvee_download_url: artwork.downloadUrl || "",
+    popularity: artwork.popularity || 0,
+    tags,
+    tag_keys: tags,
+    sync_target: "cloudbase",
+    migrated_at: now,
+    synced_at: now,
+    created_at: now,
+    updated_at: now,
+  };
+}
+
+function cosCall(cos, method, params) {
+  return new Promise((resolve, reject) => {
+    cos[method](params, (error, data) => {
+      if (error) reject(error);
+      else resolve(data);
+    });
+  });
+}
+
+async function cosObjectExists(cos, params) {
+  try {
+    await cosCall(cos, "headObject", params);
+    return true;
+  } catch (error) {
+    if (
+      String(error?.statusCode || "") === "403"
+      || String(error?.statusCode || "") === "404"
+      || /forbidden|not found|NoSuchKey|Not Found/i.test(String(error?.message || ""))
+    ) {
+      return false;
+    }
+    throw error;
+  }
+}
+
+function createTencentCosClient(options) {
+  const missing = [];
+  if (!options.cosBucket) missing.push("TENCENT_COS_BUCKET or --cos-bucket");
+  if (!options.cosRegion) missing.push("TENCENT_COS_REGION or --cos-region");
+  if (!options.cosSecretId) missing.push("TENCENT_SECRET_ID");
+  if (!options.cosSecretKey) missing.push("TENCENT_SECRET_KEY");
+  if (missing.length) throw new Error(`Missing Tencent COS config: ${missing.join(", ")}`);
+  return new COS({
+    SecretId: options.cosSecretId,
+    SecretKey: options.cosSecretKey,
+    SecurityToken: options.cosSessionToken || undefined,
+  });
+}
+
+async function uploadImageToTencentCos(cos, options, assetName, image) {
+  const key = tencentCosObjectKey(assetName, options);
+  const baseParams = {
+    Bucket: options.cosBucket,
+    Region: options.cosRegion,
+    Key: key,
+  };
+  if (await cosObjectExists(cos, baseParams)) {
+    return tencentCosPublicUrl(key, options);
+  }
+  await cosCall(cos, "putObject", {
+    ...baseParams,
+    Body: image.buffer,
+    ContentLength: image.buffer.length,
+    ContentType: image.contentType || "image/jpeg",
+    CacheControl: "public, max-age=31536000, immutable",
+  });
+  return tencentCosPublicUrl(key, options);
+}
+
+async function listTencentCosObjects(cos, options) {
+  const objects = [];
+  let marker = "";
+  const prefix = options.cosPrefix ? `${options.cosPrefix}/` : "";
+  while (true) {
+    const data = await cosCall(cos, "getBucket", {
+      Bucket: options.cosBucket,
+      Region: options.cosRegion,
+      Prefix: prefix,
+      Marker: marker,
+      MaxKeys: 1000,
+    });
+    for (const item of data.Contents || []) {
+      objects.push({ name: path.basename(item.Key || ""), key: item.Key || "" });
+    }
+    if (String(data.IsTruncated || "").toLowerCase() !== "true") break;
+    marker = data.NextMarker || data.Contents?.at(-1)?.Key || "";
+    if (!marker) break;
+  }
+  return objects;
+}
+
+async function getNextTencentCosNumber(cos, options) {
+  if (options.start) return options.start;
+  const objects = await listTencentCosObjects(cos, options);
+  const storageMax = extractMaxStorageNumber(objects);
+  const sequenceMax = await readStorageSequenceNumber(options, options.cosBucket);
+  return nextStorageNumberFromMaxes(storageMax, sequenceMax);
+}
+
+function createCloudbaseApp(options) {
+  const missing = [];
+  if (!options.cloudbaseEnvId) missing.push("CLOUDBASE_ENV_ID or --cloudbase-env-id");
+  if (!options.cosSecretId) missing.push("TENCENT_SECRET_ID");
+  if (!options.cosSecretKey) missing.push("TENCENT_SECRET_KEY");
+  if (missing.length) throw new Error(`Missing CloudBase config: ${missing.join(", ")}`);
+  return CloudBase.init({
+    envId: options.cloudbaseEnvId,
+    secretId: options.cosSecretId,
+    secretKey: options.cosSecretKey,
+  });
+}
+
+async function upsertCloudbaseArtwork(database, collection, doc) {
+  return database.runCommands({
+    MgoCommands: [{
+      TableName: collection,
+      CommandType: "UPDATE",
+      Command: JSON.stringify({
+        update: collection,
+        updates: [{ q: { _id: doc._id }, u: { $set: doc }, upsert: true }],
+      }),
+    }],
+  });
+}
+
 async function uploadImage(supabase, bucket, assetName, image) {
   const { error } = await supabase.storage.from(bucket).upload(assetName, image.buffer, {
     contentType: image.contentType || "image/jpeg",
@@ -1807,10 +2108,21 @@ async function writeCsv(outputPath, rows) {
   await writeFile(outputPath, `\uFEFF${toCsv(rows)}`, "utf8");
 }
 
+async function writeJsonl(outputPath, records) {
+  await mkdir(path.dirname(outputPath), { recursive: true });
+  const body = records.map((record) => JSON.stringify(record)).join("\n");
+  await writeFile(outputPath, body ? `${body}\n` : "", "utf8");
+}
+
 function outputPathFor(options) {
   if (options.output) return options.output;
   const label = labelForOptions(options);
   return path.join(options.outputDir, `artvee-${label}-${csvTimestamp()}.csv`);
+}
+
+function evidencePathFor(options, outputPath) {
+  if (options.evidenceOutput) return options.evidenceOutput;
+  return outputPath.replace(/\.csv$/i, ".evidence.jsonl");
 }
 
 function slugLabel(value, fallback) {
@@ -1846,7 +2158,10 @@ function checkpointKeyFor(options) {
   const artists = options.command === "artists" ? `${options.artistsUrl}-${options.artistStart}-${options.perArtist}` : "";
   const artistsPriority = options.command === "artists-priority" ? `${options.artistPriorityList}-${options.artistStart}-${options.perArtist}` : "";
   const famous = options.command === "famous" ? options.famousList : "";
-  const raw = [options.command, keyword, artist, artists, artistsPriority, famous, options.bucket, options.status].filter(Boolean).join("-");
+  const storageScope = options.storageTarget === "cos"
+    ? [options.cosBucket, options.cosPrefix].filter(Boolean).join("-")
+    : options.bucket;
+  const raw = [options.command, keyword, artist, artists, artistsPriority, famous, storageScope, options.status].filter(Boolean).join("-");
   return raw.replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase() || "artvee";
 }
 
@@ -1865,7 +2180,9 @@ function failurePathFor(outputPath) {
 export function buildCheckpointState({
   options,
   outputPath,
+  evidencePath = evidencePathFor(options, outputPath),
   rows,
+  evidenceRows = [],
   processedSourceUrls,
   nextNumber,
   imagesThisRun,
@@ -1877,6 +2194,7 @@ export function buildCheckpointState({
     key: checkpointKeyFor(options),
     status,
     outputPath,
+    evidencePath,
     command: options.command,
     keyword: options.keyword,
     artistUrl: options.artistUrl,
@@ -1890,6 +2208,7 @@ export function buildCheckpointState({
     normalizedStatus: options.status,
     dryRun: options.dryRun,
     rows,
+    evidenceRows,
     processedSourceUrls: [...processedSourceUrls],
     nextNumber,
     imagesThisRun,
@@ -2010,17 +2329,24 @@ async function ingest(options) {
   const checkpoint = await readCheckpoint(options);
   const historicalProcessedSourceUrls = await readProcessedSourceHistory(options);
   const outputPath = checkpoint?.outputPath || outputPathFor(options);
-  const supabase = options.upload || options.database ? createSupabaseAdmin() : null;
-  const sourceId = supabase && options.database && options.insertNormalized ? await ensureArtveeSource(supabase) : "";
-  let nextNumber = checkpoint?.nextNumber || (supabase && options.upload
-    ? await getNextStorageNumber(supabase, options.bucket, options.start, options)
+  const evidencePath = checkpoint?.evidencePath || evidencePathFor(options, outputPath);
+  const cosClient = options.upload && options.storageTarget === "cos" ? createTencentCosClient(options) : null;
+  const cloudbaseApp = options.database && options.databaseTarget === "cloudbase" ? createCloudbaseApp(options) : null;
+  if (cloudbaseApp) await cloudbaseApp.database.createCollectionIfNotExists(options.cloudbaseCollection);
+  let nextNumber = checkpoint?.nextNumber || (cosClient
+    ? await getNextTencentCosNumber(cosClient, options)
     : (options.start || 1));
 
   log(`Output CSV: ${outputPath}`);
-  if (supabase && options.upload) log(`Next storage asset: ${formatAssetName(nextNumber)}`);
+  log(`Evidence JSONL: ${evidencePath}`);
+  if (options.legacySupabaseUploadRequested) log("--supabase-upload is disabled; use --cos-upload for Tencent COS uploads.");
+  if (options.legacyDatabaseRequested) log("--db is disabled; use --cloudbase-db for WeChat Cloud Database writes.");
+  if (cosClient) log(`Next COS asset: ${formatAssetName(nextNumber)}`);
+  if (cloudbaseApp) log(`CloudBase collection: ${options.cloudbaseCollection}`);
   if (checkpoint) log(`Resuming checkpoint with ${checkpoint.rows?.length || 0} CSV rows: ${checkpointPathFor(options)}`);
 
   const rows = Array.isArray(checkpoint?.rows) ? [...checkpoint.rows] : [];
+  const evidenceRows = Array.isArray(checkpoint?.evidenceRows) ? [...checkpoint.evidenceRows] : [];
   const uploadFailures = Array.isArray(checkpoint?.uploadFailures) ? [...checkpoint.uploadFailures] : [];
   const processedSourceUrls = mergeProcessedSourceUrls(historicalProcessedSourceUrls, checkpoint?.processedSourceUrls || []);
   if (historicalProcessedSourceUrls.size > 0 && !checkpoint) {
@@ -2041,15 +2367,6 @@ async function ingest(options) {
     }
 
     try {
-      if (supabase && options.skipExisting && options.insertNormalized) {
-        const existingId = await findExistingArtwork(supabase, listing.url);
-        if (existingId) {
-          log(`Skipping existing artwork: ${listing.url}`);
-          processedSourceUrls.add(listing.url);
-          continue;
-        }
-      }
-
       progress.update(rows.length, `fetching ${rows.length + 1}/${options.count}`);
       log(`Fetching artwork page: ${listing.url}`);
       const html = await fetchText(listing.url, options);
@@ -2061,6 +2378,7 @@ async function ingest(options) {
           options,
           outputPath,
           rows,
+          evidenceRows,
           processedSourceUrls,
           nextNumber,
           imagesThisRun,
@@ -2076,25 +2394,27 @@ async function ingest(options) {
       const generatedMetadata = await generateArtworkMetadata(artwork, options);
       const number = nextNumber;
       const assetName = formatAssetName(number);
-      if (supabase && options.upload) await writeStorageSequenceNumber(options, options.bucket, number);
+      if (cosClient) await writeStorageSequenceNumber(options, options.cosBucket, number);
       let publicUrl = artwork.imageUrl || "";
       let storageUploaded = true;
+      let imagePath = "";
 
       if (options.upload || options.saveImages) {
         progress.update(rows.length, `downloading ${assetName}`);
         const image = await fetchImageBuffer(artwork.downloadUrl, artwork.imageUrl, options);
         if (options.saveImages) {
-          const imagePath = await saveImage(options.outputDir, assetName, image.buffer);
+          imagePath = await saveImage(options.outputDir, assetName, image.buffer);
           log(`Saved image: ${imagePath}`);
         }
-        if (supabase && options.upload) {
-          const uploadResult = await uploadImageWithRetry(supabase, options.bucket, assetName, image, {
+        if (cosClient) {
+          const uploadResult = await uploadImageWithRetry(cosClient, options.cosBucket, assetName, image, {
             maxRetries: options.maxRetries,
+            uploadFn: (client, _bucket, name, imageData) => uploadImageToTencentCos(client, options, name, imageData),
           });
           storageUploaded = uploadResult.uploaded;
           if (uploadResult.uploaded) {
             publicUrl = uploadResult.publicUrl;
-            log(`Uploaded image: ${assetName}`);
+            log(`Uploaded COS image: ${assetName}`);
           } else {
             uploadFailures.push({ assetName, error: uploadResult.error, sourceUrl: artwork.sourceUrl });
           }
@@ -2104,21 +2424,19 @@ async function ingest(options) {
 
       const csvRow = buildCsvRow(artwork, number, generatedMetadata);
       rows.push(csvRow);
+      evidenceRows.push(buildRawEvidenceRecord(artwork, csvRow, assetName, imagePath));
 
-      if (supabase && options.database && (!options.upload || storageUploaded)) {
-        progress.update(rows.length, `writing database ${csvRow.id}`);
-        if (options.insertNormalized) {
-          await upsertNormalizedArtwork(supabase, sourceId, artwork, csvRow, publicUrl, assetName, options.status);
-        }
-        if (options.insertLegacy) {
-          await upsertLegacyPainting(supabase, csvRow, publicUrl);
-        }
-        log(`Upserted database row: ${csvRow.id}`);
-      } else if (supabase && options.database && options.upload && !storageUploaded) {
-        log(`Skipped database row for ${csvRow.id} because Storage upload failed.`);
+      if (cloudbaseApp && options.database && (!options.upload || storageUploaded)) {
+        progress.update(rows.length, `writing CloudBase ${csvRow.id}`);
+        const doc = buildCloudbaseArtworkDocument(artwork, csvRow, publicUrl, assetName, options);
+        await upsertCloudbaseArtwork(cloudbaseApp.database, options.cloudbaseCollection, doc);
+        log(`Upserted CloudBase row: ${doc._id}`);
+      } else if (cloudbaseApp && options.database && options.upload && !storageUploaded) {
+        log(`Skipped CloudBase row for ${csvRow.id} because COS upload failed.`);
       }
 
       await writeCsv(outputPath, rows);
+      await writeJsonl(evidencePath, evidenceRows);
       processedSourceUrls.add(listing.url);
       nextNumber += 1;
       progress.update(rows.length, `saved ${csvRow.id}`);
@@ -2126,6 +2444,7 @@ async function ingest(options) {
         options,
         outputPath,
         rows,
+        evidenceRows,
         processedSourceUrls,
         nextNumber,
         imagesThisRun,
@@ -2144,6 +2463,7 @@ async function ingest(options) {
         options,
         outputPath,
         rows,
+        evidenceRows,
         processedSourceUrls,
         nextNumber,
         imagesThisRun,
@@ -2162,10 +2482,12 @@ async function ingest(options) {
     log(`Storage upload failures: ${uploadFailures.length}. CSV rows were kept for later retry.`);
   }
   await writeCsv(outputPath, rows);
+  await writeJsonl(evidencePath, evidenceRows);
   await writeCheckpoint(options, buildCheckpointState({
     options,
     outputPath,
     rows,
+    evidenceRows,
     processedSourceUrls,
     nextNumber,
     imagesThisRun,
@@ -2352,8 +2674,8 @@ Examples:
   npm run artvee:ingest -- artists-priority 100 --status published
 
 Options:
-  --status draft|published|archived  Normalized artwork status. Default: draft
-  --bucket <name>                    Supabase Storage bucket when --supabase-upload is used. Default: artwork
+  --status draft|published|archived  Artwork status. Default: draft
+  --evidence-output <path>           Raw evidence JSONL path. Default: alongside CSV
   --start <number>                   Override storage numbering start
   --out-dir <path>                   Output folder. Default: ./csv
   --output <path>                    Exact CSV output path
@@ -2383,15 +2705,17 @@ Options:
   --ai-retries <number>              Gemini retry count for 429/503. Default: ${DEFAULT_AI_RETRIES}
   --provider gemini|openai           AI provider. Default: ${DEFAULT_PROVIDER}
   --model <model>                    Model. Default: ${DEFAULT_GEMINI_MODEL}
-  --with-ai                          Generate description/tags and missing fields with an AI model
+  --with-ai                          Legacy optional model metadata generation for local experiments
   --no-grounding                     Disable Gemini Google Search grounding
   --no-openai                        Disable AI metadata generation
-  --db                               Write Supabase paintings/artworks tables after each CSV row. Default: off
-  --supabase-upload                  Upload image files to Supabase Storage. Default: off
-  --no-upload                        Do not upload image files to Supabase Storage
-  --no-db                            Do not write Supabase tables
-  --no-legacy                        Do not write public.paintings
-  --no-normalized                    Do not write normalized artworks/artwork_images
+  --cos-upload                       Disabled in ingest. Use artvee-publish-reviewed after review
+  --cloudbase-db                     Disabled in ingest. Use artvee-publish-reviewed after review
+  --db                               Legacy Supabase flag; disabled. Use --cloudbase-db
+  --supabase-upload                  Legacy Supabase flag; disabled. Use --cos-upload
+  --no-upload                        Do not upload image files
+  --no-db                            Do not write database documents
+  --no-legacy                        Legacy Supabase option; no effect for CloudBase
+  --no-normalized                    Legacy Supabase option; no effect for CloudBase
   --no-save-images                   Do not save local image copies under csv/images
   --dry-run                          Parse pages only; no OpenAI, image download, upload, or DB writes
 `.trim();

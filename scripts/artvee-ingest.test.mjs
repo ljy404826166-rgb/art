@@ -4,8 +4,10 @@ import assert from "node:assert/strict";
 import {
   CSV_COLUMNS,
   buildCsvRow,
+  buildCloudbaseArtworkDocument,
   buildGeminiRequestBody,
   buildGeminiResearchRequestBody,
+  buildRawEvidenceRecord,
   buildListingUrl,
   buildArtistPriorityEntries,
   buildFamousSearchQueries,
@@ -27,6 +29,8 @@ import {
   parseArtworkPage,
   resolveGeminiApiKey,
   shouldPauseBeforeAi,
+  tencentCosObjectKey,
+  tencentCosPublicUrl,
   uploadImageWithRetry,
   toCsv,
 } from "./artvee-ingest.mjs";
@@ -67,12 +71,154 @@ test("parseArgs supports random, search, and popular count commands", () => {
   assert.equal(openai.model, "gpt-5.4-mini");
   assert.equal(openai.useAI, true);
 
-  const writeDb = parseArgs(["search", "monet", "5", "--db"]);
-  assert.equal(writeDb.upload, false);
-  assert.equal(writeDb.database, true);
+  const legacyDb = parseArgs(["search", "monet", "5", "--db"]);
+  assert.equal(legacyDb.upload, false);
+  assert.equal(legacyDb.database, false);
+  assert.equal(legacyDb.legacyDatabaseRequested, true);
 
   const legacySupabaseUpload = parseArgs(["search", "monet", "5", "--supabase-upload"]);
-  assert.equal(legacySupabaseUpload.upload, true);
+  assert.equal(legacySupabaseUpload.upload, false);
+  assert.equal(legacySupabaseUpload.storageTarget, "none");
+  assert.equal(legacySupabaseUpload.legacySupabaseUploadRequested, true);
+});
+
+test("parseArgs rejects direct Tencent COS and CloudBase publishing from ingest", () => {
+  assert.throws(
+    () => parseArgs([
+      "search",
+      "monet",
+      "5",
+      "--cos-upload",
+      "--cloudbase-db",
+      "--cos-bucket",
+      "masterpiece-1437223579",
+      "--cos-region",
+      "ap-beijing",
+      "--cos-prefix",
+      "ppaintings",
+      "--cloudbase-env-id",
+      "cloudbase-d6gvny27ib05e0ede",
+    ]),
+    /reviewed publish step/,
+  );
+
+  const dryRun = parseArgs(["search", "monet", "5", "--cos-upload", "--cloudbase-db", "--dry-run"]);
+  assert.equal(dryRun.upload, false);
+  assert.equal(dryRun.database, false);
+  assert.equal(dryRun.storageTarget, "none");
+  assert.equal(dryRun.databaseTarget, "none");
+  assert.equal(dryRun.useAI, false);
+});
+
+test("parseArgs supports raw evidence output path", () => {
+  const options = parseArgs([
+    "search",
+    "monet",
+    "5",
+    "--evidence-output",
+    "D:\\art\\csv\\review\\monet.evidence.jsonl",
+  ]);
+
+  assert.equal(options.evidenceOutput, "D:\\art\\csv\\review\\monet.evidence.jsonl");
+  assert.equal(options.upload, false);
+  assert.equal(options.database, false);
+});
+
+test("Tencent COS helpers build stable object keys and public URLs", () => {
+  const options = {
+    cosBucket: "masterpiece-1437223579",
+    cosRegion: "ap-beijing",
+    cosPrefix: "ppaintings",
+    cosDomain: "https://masterpiece-1437223579.cos.ap-beijing.myqcloud.com",
+  };
+
+  assert.equal(tencentCosObjectKey("001_standard.jpg", options), "ppaintings/001_standard.jpg");
+  assert.equal(
+    tencentCosPublicUrl("ppaintings/001_standard.jpg", options),
+    "https://masterpiece-1437223579.cos.ap-beijing.myqcloud.com/ppaintings/001_standard.jpg",
+  );
+});
+
+test("CloudBase artwork document uses COS original and derivative URLs", () => {
+  const doc = buildCloudbaseArtworkDocument(
+    {
+      sourceUrl: "https://artvee.com/dl/example/",
+      sourceRecordId: "80705",
+      license: "Public domain",
+      artveeImageKey: "abc",
+      imageUrl: "https://mdl.artvee.com/ft/abc.jpg",
+      downloadUrl: "https://mdl.artvee.com/sdl/abc.jpg",
+      popularity: 10,
+    },
+    {
+      id: "001_standard",
+      title_cn: "示例作品",
+      title_en: "Example Work",
+      artist: "Example Artist",
+      location: "Example Museum",
+      year_and_place: "1900",
+      medium: "Oil on canvas",
+      dimensions: "10 x 20 cm",
+      description: "Description",
+      tags: "TagA,TagB,TagC,TagD",
+    },
+    "https://masterpiece-1437223579.cos.ap-beijing.myqcloud.com/ppaintings/001_standard.jpg",
+    "001_standard.jpg",
+    {
+      status: "published",
+      cosDomain: "https://masterpiece-1437223579.cos.ap-beijing.myqcloud.com",
+      cosPrefix: "ppaintings",
+    },
+  );
+
+  assert.equal(doc._id, "artwork_001_standard");
+  assert.equal(doc.source_record_id, "80705");
+  assert.equal(doc.image_id, "001_standard");
+  assert.equal(doc.thumbnail_url, "https://masterpiece-1437223579.cos.ap-beijing.myqcloud.com/ppaintings/derivatives/thumb/001_standard.webp");
+  assert.equal(doc.display_url, "https://masterpiece-1437223579.cos.ap-beijing.myqcloud.com/ppaintings/derivatives/display/001_standard.webp");
+  assert.equal(doc.download_url, "https://masterpiece-1437223579.cos.ap-beijing.myqcloud.com/ppaintings/001_standard.jpg");
+  assert.deepEqual(doc.tag_keys, ["TagA", "TagB", "TagC", "TagD"]);
+  assert.equal(doc.sync_target, "cloudbase");
+});
+
+test("raw evidence record preserves Artvee facts without pretending they are reviewed metadata", () => {
+  const record = buildRawEvidenceRecord(
+    {
+      sourceUrl: "https://artvee.com/dl/example/",
+      sourceRecordId: "80705",
+      titleEn: "Example Work",
+      artist: "Example Artist",
+      location: "Artvee Collection",
+      yearAndPlace: "1900",
+      medium: "JPG",
+      dimensions: "1200 x 900 px",
+      tags: ["Landscape", "Public domain"],
+      pageText: "Example Work Example Artist Public domain Illustration",
+      imageUrl: "https://example.com/preview.jpg",
+      downloadUrl: "https://example.com/download.jpg",
+      license: "Public domain",
+      popularity: 10,
+      artveeImageKey: "abc",
+      hdDimensions: "2400 x 1800 px",
+    },
+    { id: "001_standard" },
+    "001_standard.jpg",
+    "D:\\art\\csv\\images\\001_standard.jpg",
+  );
+
+  assert.equal(record.schema_version, 1);
+  assert.equal(record.review_status, "pending");
+  assert.equal(record.source.name, "Artvee");
+  assert.equal(record.source.record_id, "80705");
+  assert.equal(record.raw.title_en, "Example Work");
+  assert.equal(record.raw.image_pixel_dimensions, "1200 x 900 px");
+  assert.equal(record.raw.file_format, "JPG");
+  assert.equal(record.raw.page_text_excerpt, "Example Work Example Artist Public domain Illustration");
+  assert.deepEqual(record.verified_sources, []);
+  assert.equal(record.image.asset_name, "001_standard.jpg");
+  assert.equal(record.image.local_path, "D:\\art\\csv\\images\\001_standard.jpg");
+  assert.equal(record.reviewed_metadata.title_cn, "");
+  assert.deepEqual(record.reviewed_metadata.tags, []);
 });
 
 test("parseArgs supports artist page commands", () => {
