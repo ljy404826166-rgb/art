@@ -1,0 +1,83 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://art-archive.local/schemas/artists.schema.json",
+  "title": "Artist",
+  "type": "object",
+  "required": ["_id", "name_zh", "name_en", "aliases", "review_status"],
+  "additionalProperties": true,
+  "properties": {
+    "_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "name_zh": {
+      "type": "string",
+      "minLength": 1
+    },
+    "name_en": {
+      "type": "string",
+      "minLength": 1
+    },
+    "aliases": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "review_status": {
+      "type": "string",
+      "enum": ["candidate", "reviewed", "rejected"]
+    },
+    "authority_ids": {
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          { "type": "string" },
+          {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        ]
+      }
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "title": { "type": "string" },
+          "url": { "type": "string" },
+          "publisher": { "type": "string" },
+          "accessed_at": { "type": "string" }
+        }
+      }
+    },
+    "birth_year": {
+      "type": ["integer", "null"]
+    },
+    "death_year": {
+      "type": ["integer", "null"]
+    },
+    "nationality": {
+      "type": "string"
+    },
+    "styles": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "periods": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "summary": {
+      "type": "string"
+    }
+  }
+}
