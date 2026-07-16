@@ -601,6 +601,102 @@ test("detail blocks original download while offline", async () => {
   assert.equal(toasts[0].title, "当前无网络，无法下载原图");
 });
 
+test("detail keeps a newer live offline state when a pending download probe resolves Wi-Fi", async () => {
+  let listener;
+  let resolveSnapshot;
+  let snapshotCalls = 0;
+  const snapshot = new Promise((resolve) => {
+    resolveSnapshot = resolve;
+  });
+  const { calls, modals, page } = loadDownloadGuardPage({
+    getNetworkSnapshot: async () => {
+      snapshotCalls += 1;
+      if (snapshotCalls === 1) return snapshot;
+      return {
+        isConnected: false,
+        networkType: "none",
+      };
+    },
+    subscribeNetworkStatus(nextListener) {
+      listener = nextListener;
+      return () => {};
+    },
+  }, (options) => {
+    options.success({ confirm: false, cancel: true });
+  });
+  page.onShow();
+
+  const firstDownload = page.downloadArtwork();
+  listener({ isConnected: false, networkType: "none" });
+  resolveSnapshot({ isConnected: true, networkType: "wifi" });
+  await firstDownload;
+
+  assert.deepEqual(page.data.networkState, {
+    isConnected: false,
+    networkType: "none",
+  });
+  assert.equal(modals.length, 0);
+  assert.equal(calls.downloadFile, 0);
+  assert.equal(calls.saveImageToAlbum, 0);
+  assert.equal(calls.recordDownloadArtwork, 0);
+  assert.equal(calls.showLoading, 0);
+  assert.equal(calls.hideLoading, 0);
+  assert.equal(calls.successToast, 0);
+  assert.equal(page.data.downloading, false);
+  assert.equal(page.downloadRequestPending, false);
+
+  await page.downloadArtwork();
+  assert.equal(snapshotCalls, 2);
+});
+
+test("detail keeps a newer live offline state when a pending download probe rejects", async () => {
+  let listener;
+  let rejectSnapshot;
+  let snapshotCalls = 0;
+  const snapshot = new Promise((resolve, reject) => {
+    rejectSnapshot = reject;
+  });
+  const { calls, modals, page } = loadDownloadGuardPage({
+    getNetworkSnapshot: async () => {
+      snapshotCalls += 1;
+      if (snapshotCalls === 1) return snapshot;
+      return {
+        isConnected: false,
+        networkType: "none",
+      };
+    },
+    subscribeNetworkStatus(nextListener) {
+      listener = nextListener;
+      return () => {};
+    },
+  }, (options) => {
+    options.success({ confirm: false, cancel: true });
+  });
+  page.onShow();
+
+  const firstDownload = page.downloadArtwork();
+  listener({ isConnected: false, networkType: "none" });
+  rejectSnapshot(new Error("getNetworkType:fail"));
+  await firstDownload;
+
+  assert.deepEqual(page.data.networkState, {
+    isConnected: false,
+    networkType: "none",
+  });
+  assert.equal(modals.length, 0);
+  assert.equal(calls.downloadFile, 0);
+  assert.equal(calls.saveImageToAlbum, 0);
+  assert.equal(calls.recordDownloadArtwork, 0);
+  assert.equal(calls.showLoading, 0);
+  assert.equal(calls.hideLoading, 0);
+  assert.equal(calls.successToast, 0);
+  assert.equal(page.data.downloading, false);
+  assert.equal(page.downloadRequestPending, false);
+
+  await page.downloadArtwork();
+  assert.equal(snapshotCalls, 2);
+});
+
 test("detail asks before an original download on cellular data", async () => {
   const { calls, modals, page } = loadDownloadGuardPage({
     getNetworkSnapshot: async () => ({

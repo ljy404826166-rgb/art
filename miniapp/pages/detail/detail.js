@@ -331,16 +331,27 @@ Page({
 
     this.downloadRequestPending = true;
     try {
+      const snapshotRevision = this.networkStateRevision || 0;
       let networkState;
       try {
-        networkState = await getNetworkSnapshot();
+        const snapshot = await getNetworkSnapshot();
+        if ((this.networkStateRevision || 0) === snapshotRevision) {
+          networkState = snapshot;
+          this.setData({ networkState });
+        } else {
+          networkState = this.data.networkState;
+        }
       } catch (error) {
-        networkState = {
-          isConnected: true,
-          networkType: "unknown",
-        };
+        if ((this.networkStateRevision || 0) !== snapshotRevision) {
+          networkState = this.data.networkState;
+        } else {
+          networkState = {
+            isConnected: true,
+            networkType: "unknown",
+          };
+          this.setData({ networkState });
+        }
       }
-      this.setData({ networkState });
 
       if (!networkState.isConnected) {
         wx.showToast({
