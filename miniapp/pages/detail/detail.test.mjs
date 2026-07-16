@@ -31,6 +31,14 @@ const serviceDefaults = {
     recordHistoryArtwork: () => {},
     toggleFavoriteArtwork: () => true,
   },
+  networkStatus: {
+    getNetworkSnapshot: async () => ({
+      isConnected: true,
+      networkType: "wifi",
+    }),
+    isCellularNetwork: (type) => ["2g", "3g", "4g", "5g"].includes(type),
+    subscribeNetworkStatus: () => () => {},
+  },
   shareRoutes: {
     buildArtworkShareMessage: (artwork) => ({
       title: artwork ? artwork.titleCn : "fallback",
@@ -51,6 +59,7 @@ function loadDetailPage(overrides = {}, wxOverrides = {}) {
     if (id === "../../services/artwork-preview") return services.artworkPreview;
     if (id === "../../services/downloads") return services.downloads;
     if (id === "../../services/local-library") return services.localLibrary;
+    if (id === "../../services/network-status") return services.networkStatus;
     if (id === "../../services/share-routes") return services.shareRoutes;
     return require(id);
   };
@@ -110,6 +119,211 @@ test("detail preview handler previews the loaded artwork", async () => {
   await page.previewHeroImage();
 
   assert.deepEqual(calls, [page.data.artwork]);
+});
+
+test("detail blocks original download while offline", async () => {
+  let downloadCalls = 0;
+  let downloadRecords = 0;
+  const toasts = [];
+  const page = loadDetailPage({
+    networkStatus: {
+      ...serviceDefaults.networkStatus,
+      getNetworkSnapshot: async () => ({
+        isConnected: false,
+        networkType: "none",
+      }),
+    },
+    downloads: {
+      ...serviceDefaults.downloads,
+      downloadFile: async () => {
+        downloadCalls += 1;
+        return "temp-file";
+      },
+    },
+    localLibrary: {
+      ...serviceDefaults.localLibrary,
+      recordDownloadArtwork: () => {
+        downloadRecords += 1;
+      },
+    },
+  }, {
+    showToast(options) {
+      toasts.push(options);
+    },
+  });
+  page.data.artwork = {
+    id: "artwork",
+    download_url: "https://img.example/original.jpg",
+  };
+
+  await page.downloadArtwork();
+
+  assert.equal(downloadCalls, 0);
+  assert.equal(downloadRecords, 0);
+  assert.equal(page.data.downloading, false);
+  assert.equal(toasts[0].title, "当前无网络，无法下载原图");
+});
+
+test("detail asks before an original download on cellular data", async () => {
+  let downloadCalls = 0;
+  let downloadRecords = 0;
+  const modals = [];
+  const page = loadDetailPage({
+    networkStatus: {
+      ...serviceDefaults.networkStatus,
+      getNetworkSnapshot: async () => ({
+        isConnected: true,
+        networkType: "4g",
+      }),
+    },
+    downloads: {
+      ...serviceDefaults.downloads,
+      downloadFile: async () => {
+        downloadCalls += 1;
+        return "temp-file";
+      },
+    },
+    localLibrary: {
+      ...serviceDefaults.localLibrary,
+      recordDownloadArtwork: () => {
+        downloadRecords += 1;
+      },
+    },
+  }, {
+    showModal(options) {
+      modals.push(options);
+      options.success({ confirm: false, cancel: true });
+    },
+  });
+  page.data.artwork = {
+    id: "artwork",
+    download_url: "https://img.example/original.jpg",
+  };
+
+  await page.downloadArtwork();
+
+  assert.equal(modals[0].title, "使用移动网络下载");
+  assert.equal(downloadCalls, 0);
+  assert.equal(downloadRecords, 0);
+  assert.equal(page.data.downloading, false);
+});
+
+test("detail admits only one download request while the network guard is pending", async () => {
+  let resolveSnapshot;
+  let snapshotCalls = 0;
+  let downloadCalls = 0;
+  const snapshot = new Promise((resolve) => {
+    resolveSnapshot = resolve;
+  });
+  const page = loadDetailPage({
+    networkStatus: {
+      ...serviceDefaults.networkStatus,
+      getNetworkSnapshot: async () => {
+        snapshotCalls += 1;
+        return snapshot;
+      },
+    },
+    downloads: {
+      ...serviceDefaults.downloads,
+      downloadFile: async () => {
+        downloadCalls += 1;
+        return "temp-file";
+      },
+    },
+  });
+  page.data.artwork = {
+    id: "artwork",
+    download_url: "https://img.example/original.jpg",
+  };
+
+  const firstDownload = page.downloadArtwork();
+  const secondDownload = page.downloadArtwork();
+
+  assert.equal(snapshotCalls, 1);
+  resolveSnapshot({ isConnected: true, networkType: "wifi" });
+  await Promise.all([firstDownload, secondDownload]);
+  assert.equal(downloadCalls, 1);
+});
+
+test("detail preserves the completed download flow after the network guard passes", async () => {
+  const calls = [];
+  const page = loadDetailPage({
+    downloads: {
+      ...serviceDefaults.downloads,
+      downloadFile: async (url) => {
+        calls.push(["download", url]);
+        return "temp-file";
+      },
+      saveImageToAlbum: async (path) => {
+        calls.push(["save", path]);
+      },
+    },
+    localLibrary: {
+      ...serviceDefaults.localLibrary,
+      recordDownloadArtwork: (artwork, status) => {
+        calls.push(["record", artwork.id, status]);
+      },
+    },
+  }, {
+    showLoading() {
+      calls.push(["show-loading"]);
+    },
+    hideLoading() {
+      calls.push(["hide-loading"]);
+    },
+  });
+  page.data.artwork = {
+    id: "artwork",
+    download_url: "https://img.example/original.jpg",
+  };
+
+  await page.downloadArtwork();
+
+  assert.deepEqual(calls, [
+    ["show-loading"],
+    ["download", "https://img.example/original.jpg"],
+    ["save", "temp-file"],
+    ["record", "artwork", "completed"],
+    ["hide-loading"],
+  ]);
+  assert.equal(page.data.downloading, false);
+});
+
+test("detail network monitoring keeps one active subscription and cleans up safely", () => {
+  const listeners = [];
+  let subscribeCalls = 0;
+  let unsubscribeCalls = 0;
+  const page = loadDetailPage({
+    networkStatus: {
+      ...serviceDefaults.networkStatus,
+      subscribeNetworkStatus(listener) {
+        subscribeCalls += 1;
+        listeners.push(listener);
+        let active = true;
+        return () => {
+          if (!active) return;
+          active = false;
+          unsubscribeCalls += 1;
+        };
+      },
+    },
+  });
+
+  page.onShow();
+  listeners[0]({ isConnected: false, networkType: "none" });
+  assert.deepEqual(page.data.networkState, {
+    isConnected: false,
+    networkType: "none",
+  });
+
+  page.onShow();
+  assert.equal(subscribeCalls, 2);
+  assert.equal(unsubscribeCalls, 1);
+
+  page.onHide();
+  page.onHide();
+  page.onUnload();
+  assert.equal(unsubscribeCalls, 2);
 });
 
 const previewFailureMessages = [

@@ -1,4 +1,8 @@
 <view class="detail-page">
+  <view wx:if="{{!networkState.isConnected}}" class="network-banner" role="status">
+    当前无网络，已加载内容仍可浏览
+  </view>
+
   <view wx:if="{{loading}}" class="detail-skeleton">
     <view class="detail-skeleton-hero" style="{{heroFrameStyle}}"></view>
     <view class="detail-skeleton-body">
