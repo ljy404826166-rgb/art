@@ -31,6 +31,33 @@ test("buildArtworkShareMessage uses a stable encoded artwork id and thumbnail", 
   });
 });
 
+test("buildArtworkShareMessage skips image URLs that alias trimmed download_url", () => {
+  assert.deepEqual({ ...buildArtworkShareMessage({
+    _id: "artwork/梵高",
+    titleCn: "星月夜",
+    artist: "文森特·梵高",
+    thumbnail_url: " https://img.example/original.jpg ",
+    display_url: " https://img.example/display.webp ",
+    download_url: "https://img.example/original.jpg",
+  }) }, {
+    title: "星月夜 · 文森特·梵高",
+    path: "/pages/detail/detail?id=artwork%2F%E6%A2%B5%E9%AB%98",
+    imageUrl: "https://img.example/display.webp",
+  });
+
+  assert.deepEqual({ ...buildArtworkShareMessage({
+    _id: "artwork/梵高",
+    titleCn: "星月夜",
+    artist: "文森特·梵高",
+    thumbnail_url: " https://img.example/original.jpg ",
+    display_url: "https://img.example/original.jpg",
+    download_url: " https://img.example/original.jpg ",
+  }) }, {
+    title: "星月夜 · 文森特·梵高",
+    path: "/pages/detail/detail?id=artwork%2F%E6%A2%B5%E9%AB%98",
+  });
+});
+
 test("buildArtistShareMessage uses a stable artist id", () => {
   assert.deepEqual({ ...buildArtistShareMessage({
     id: "claude-monet",

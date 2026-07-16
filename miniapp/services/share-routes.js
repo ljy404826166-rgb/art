@@ -12,6 +12,17 @@ function withOptionalImage(message, imageUrl) {
   return safeImageUrl ? { ...message, imageUrl: safeImageUrl } : message;
 }
 
+function resolveArtworkShareImageUrl(artwork) {
+  const downloadUrl = compactText(artwork && artwork.download_url);
+  const candidates = [
+    artwork && artwork.thumbnail_url,
+    artwork && artwork.display_url,
+  ];
+  return candidates
+    .map(compactText)
+    .find((candidate) => candidate && candidate !== downloadUrl) || "";
+}
+
 function buildArtworkShareMessage(artwork) {
   const id = compactText(artwork && (artwork._id || artwork.id || artwork.source_id || artwork.supabase_id));
   if (!id) return { ...HOME_SHARE };
@@ -21,7 +32,7 @@ function buildArtworkShareMessage(artwork) {
   return withOptionalImage({
     title: artist ? `${title} · ${artist}` : `${title} · Art Archive`,
     path: `/pages/detail/detail?id=${encodeURIComponent(id)}`,
-  }, artwork.thumbnail_url || artwork.display_url);
+  }, resolveArtworkShareImageUrl(artwork));
 }
 
 function buildArtistShareMessage(artist) {

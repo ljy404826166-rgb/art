@@ -4,6 +4,17 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 
+function loadCommonJsModule(filename) {
+  const module = { exports: {} };
+  const source = readFileSync(filename, "utf8");
+  vm.runInNewContext(source, { module, exports: module.exports }, { filename });
+  return module.exports;
+}
+
+const shareRoutes = loadCommonJsModule(
+  fileURLToPath(new URL("../../services/share-routes.js", import.meta.url)),
+);
+
 const serviceDefaults = {
   artworks: {
     fetchArtworkById: async () => null,
@@ -159,6 +170,40 @@ test("detail exposes a stable artwork share payload", () => {
   });
 });
 
+test("detail shares its decoded route id before the artwork finishes loading", async () => {
+  const originalId = "artwork/梵高%2Fstudy";
+  const message = shareRoutes.buildArtworkShareMessage({
+    id: originalId,
+    titleCn: "星月夜",
+  });
+  const rawRouteId = message.path.split("id=")[1];
+  const lookupIds = [];
+  let markLookupStarted;
+  const lookupStarted = new Promise((resolve) => {
+    markLookupStarted = resolve;
+  });
+  const page = loadDetailPage({
+    artworks: {
+      ...serviceDefaults.artworks,
+      fetchArtworkById: async (id) => {
+        lookupIds.push(id);
+        markLookupStarted();
+        return new Promise(() => {});
+      },
+    },
+    shareRoutes,
+  });
+
+  page.onLoad({ id: rawRouteId });
+  const loadingShare = page.onShareAppMessage();
+  await lookupStarted;
+
+  assert.equal(page.data.currentId, originalId);
+  assert.deepEqual(lookupIds, [originalId]);
+  assert.equal(loadingShare.path, message.path);
+  assert.notEqual(loadingShare.path, "/pages/home/home");
+});
+
 test("detail preview handler previews the loaded artwork", async () => {
   const calls = [];
   const page = loadDetailPage({
@@ -174,6 +219,159 @@ test("detail preview handler previews the loaded artwork", async () => {
   await page.previewHeroImage();
 
   assert.deepEqual(calls, [page.data.artwork]);
+});
+
+test("detail initial load fast-fails offline without cloud or fallback reads", async () => {
+  let fetchCalls = 0;
+  let fallbackCalls = 0;
+  const page = loadDetailPage({
+    artworks: {
+      ...serviceDefaults.artworks,
+      fetchArtworkById: async () => {
+        fetchCalls += 1;
+        return null;
+      },
+      fallbackArtworkById: () => {
+        fallbackCalls += 1;
+        return null;
+      },
+    },
+    networkStatus: {
+      ...serviceDefaults.networkStatus,
+      getNetworkSnapshot: async () => ({
+        isConnected: false,
+        networkType: "none",
+      }),
+    },
+  });
+
+  await page.loadArtwork("offline-artwork");
+
+  assert.equal(fetchCalls, 0);
+  assert.equal(fallbackCalls, 0);
+  assert.equal(page.data.artwork, null);
+  assert.equal(page.data.loading, false);
+  assert.equal(page.data.usingFallback, false);
+  assert.equal(page.data.error, "当前无网络，请连接网络后重试");
+  assert.deepEqual(page.data.networkState, {
+    isConnected: false,
+    networkType: "none",
+  });
+});
+
+test("detail offline retry preserves loaded content and skips cloud and fallback reads", async () => {
+  let fetchCalls = 0;
+  let fallbackCalls = 0;
+  const existingArtwork = {
+    id: "loaded-artwork",
+    titleCn: "已加载作品",
+  };
+  const page = loadDetailPage({
+    artworks: {
+      ...serviceDefaults.artworks,
+      fetchArtworkById: async () => {
+        fetchCalls += 1;
+        return null;
+      },
+      fallbackArtworkById: () => {
+        fallbackCalls += 1;
+        return null;
+      },
+    },
+    networkStatus: {
+      ...serviceDefaults.networkStatus,
+      getNetworkSnapshot: async () => ({
+        isConnected: false,
+        networkType: "none",
+      }),
+    },
+  });
+  page.data.currentId = existingArtwork.id;
+  page.data.artwork = existingArtwork;
+
+  await page.retryLoad();
+
+  assert.equal(fetchCalls, 0);
+  assert.equal(fallbackCalls, 0);
+  assert.equal(page.data.artwork, existingArtwork);
+  assert.equal(page.data.loading, false);
+  assert.equal(page.data.error, "当前无网络，请连接网络后重试");
+});
+
+test("detail network recovery waits for an explicit retry before loading", async () => {
+  let listener;
+  let snapshotCalls = 0;
+  let fetchCalls = 0;
+  const loadedArtwork = {
+    id: "recoverable-artwork",
+    titleCn: "恢复后的作品",
+  };
+  const page = loadDetailPage({
+    artworks: {
+      ...serviceDefaults.artworks,
+      fetchArtworkById: async () => {
+        fetchCalls += 1;
+        return loadedArtwork;
+      },
+    },
+    networkStatus: {
+      ...serviceDefaults.networkStatus,
+      getNetworkSnapshot: async () => {
+        snapshotCalls += 1;
+        return snapshotCalls === 1
+          ? { isConnected: false, networkType: "none" }
+          : { isConnected: true, networkType: "wifi" };
+      },
+      subscribeNetworkStatus(nextListener) {
+        listener = nextListener;
+        return () => {};
+      },
+    },
+  });
+
+  await page.loadArtwork(loadedArtwork.id);
+  page.onShow();
+  listener({ isConnected: true, networkType: "wifi" });
+  await Promise.resolve();
+
+  assert.equal(fetchCalls, 0);
+  assert.equal(page.data.artwork, null);
+
+  await page.retryLoad();
+
+  assert.equal(fetchCalls, 1);
+  assert.equal(page.data.artwork, loadedArtwork);
+  assert.equal(page.data.error, "");
+});
+
+test("detail continues normal loading when the network probe is unknown or fails", async () => {
+  for (const getNetworkSnapshot of [
+    async () => ({ isConnected: true, networkType: "unknown" }),
+    async () => {
+      throw new Error("getNetworkType:fail");
+    },
+  ]) {
+    let fetchCalls = 0;
+    const page = loadDetailPage({
+      artworks: {
+        ...serviceDefaults.artworks,
+        fetchArtworkById: async (id) => {
+          fetchCalls += 1;
+          return { id, titleCn: "兼容加载" };
+        },
+      },
+      networkStatus: {
+        ...serviceDefaults.networkStatus,
+        getNetworkSnapshot,
+      },
+    });
+
+    await page.loadArtwork("compatible-artwork");
+
+    assert.equal(fetchCalls, 1);
+    assert.equal(page.data.artwork.id, "compatible-artwork");
+    assert.equal(page.data.loading, false);
+  }
 });
 
 test("detail blocks original download while offline", async () => {

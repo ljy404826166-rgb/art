@@ -4,6 +4,17 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 
+function loadCommonJsModule(filename) {
+  const module = { exports: {} };
+  const source = readFileSync(filename, "utf8");
+  vm.runInNewContext(source, { module, exports: module.exports }, { filename });
+  return module.exports;
+}
+
+const shareRoutes = loadCommonJsModule(
+  fileURLToPath(new URL("../../services/share-routes.js", import.meta.url)),
+);
+
 function loadArtistDetailPage(services) {
   const filename = fileURLToPath(new URL("./artist-detail.js", import.meta.url));
   const source = readFileSync(filename, "utf8");
@@ -182,4 +193,33 @@ test("artist detail exposes a stable share payload", () => {
     title: "莫奈",
     path: "/pages/artist-detail/artist-detail?id=monet",
   });
+});
+
+test("artist detail shares its decoded route id before the artist finishes loading", () => {
+  const originalId = "artist/莫奈%2Fstudy";
+  const message = shareRoutes.buildArtistShareMessage({
+    id: originalId,
+    nameZh: "莫奈",
+  });
+  const rawRouteId = message.path.split("id=")[1];
+  const lookupIds = [];
+  const page = loadArtistDetailPage({
+    artists: {
+      loadArtistById: async (id) => {
+        lookupIds.push(id);
+        return new Promise(() => {});
+      },
+    },
+    artworks: {},
+    localLibrary: {},
+    shareRoutes,
+  });
+
+  page.onLoad({ id: rawRouteId });
+  const loadingShare = page.onShareAppMessage();
+
+  assert.equal(page.data.currentId, originalId);
+  assert.deepEqual(lookupIds, [originalId]);
+  assert.equal(loadingShare.path, message.path);
+  assert.notEqual(loadingShare.path, "/pages/home/home");
 });

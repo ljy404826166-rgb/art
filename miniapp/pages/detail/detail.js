@@ -30,6 +30,7 @@ const {
 const { buildArtworkShareMessage } = require("../../services/share-routes");
 
 const detailImageRatioCache = {};
+const OFFLINE_LOAD_MESSAGE = "当前无网络，请连接网络后重试";
 const previewFailureMessages = {
   unsupported: "当前微信版本不支持预览",
   offline: "网络连接异常，请稍后重试",
@@ -40,6 +41,15 @@ const previewFailureMessages = {
 
 function getPreviewFailureMessage(error) {
   return previewFailureMessages[error && error.code] || "图片预览失败";
+}
+
+function decodeRouteText(value) {
+  const text = String(value || "");
+  try {
+    return decodeURIComponent(text);
+  } catch (error) {
+    return text;
+  }
 }
 
 Page({
@@ -68,7 +78,8 @@ Page({
     if (routeRatioStyle) {
       this.setData({ heroFrameStyle: routeRatioStyle });
     }
-    this.loadArtwork(options.id || options.source_id || options.supabase_id);
+    const routeId = options && (options.id || options.source_id || options.supabase_id);
+    this.loadArtwork(decodeRouteText(routeId));
   },
 
   onShow() {
@@ -94,7 +105,10 @@ Page({
   },
 
   onShareAppMessage() {
-    return buildArtworkShareMessage(this.data.artwork);
+    const shareArtwork = this.data.loading && this.data.currentId
+      ? { id: this.data.currentId }
+      : (this.data.artwork || { id: this.data.currentId });
+    return buildArtworkShareMessage(shareArtwork);
   },
 
   async previewHeroImage() {
@@ -115,6 +129,23 @@ Page({
       loading: true,
       error: "",
     });
+    let networkState;
+    try {
+      networkState = await getNetworkSnapshot();
+      this.setData({ networkState });
+    } catch (error) {
+      // Unknown probe failures retain compatibility with the existing cloud load.
+    }
+
+    if (networkState && networkState.isConnected === false) {
+      this.setData({
+        loading: false,
+        error: OFFLINE_LOAD_MESSAGE,
+        usingFallback: false,
+      });
+      return;
+    }
+
     try {
       const artwork = await fetchArtworkById(id);
       this.applyLoadedArtwork(artwork, { usingFallback: false });
@@ -218,7 +249,7 @@ Page({
   },
 
   retryLoad() {
-    this.loadArtwork(this.data.currentId);
+    return this.loadArtwork(this.data.currentId);
   },
 
   openArtistFromArtwork() {

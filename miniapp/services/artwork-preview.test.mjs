@@ -29,49 +29,30 @@ const {
   "./platform-capabilities": platformCapabilities,
 });
 
-test("resolveArtworkPreviewUrl prefers display images and never selects download_url", () => {
+test("resolveArtworkPreviewUrl accepts only a trimmed display_url", () => {
   assert.equal(resolveArtworkPreviewUrl({
-    display_url: "https://img.example/display.webp",
+    display_url: " https://img.example/display.webp ",
     thumbnail_url: "https://img.example/thumb.webp",
     download_url: "https://img.example/original.jpg",
   }), "https://img.example/display.webp");
 
   assert.equal(resolveArtworkPreviewUrl({
-    thumbnail_url: "https://img.example/thumb.webp",
-    download_url: "https://img.example/original.jpg",
-  }), "https://img.example/thumb.webp");
-});
-
-test("resolveArtworkPreviewUrl skips every candidate whose value aliases download_url", () => {
-  const downloadUrl = "https://img.example/original.jpg";
-
-  assert.equal(resolveArtworkPreviewUrl({
-    display_url: downloadUrl,
     cloud_file_id: "cloud://artwork/display.webp",
     thumbnail_url: "https://img.example/thumb.webp",
     imageSrc: "https://img.example/fallback.webp",
-    download_url: downloadUrl,
-  }), "cloud://artwork/display.webp");
+    download_url: "https://img.example/original.jpg",
+  }), "");
+});
+
+test("resolveArtworkPreviewUrl rejects a display_url that aliases trimmed download_url", () => {
+  const downloadUrl = "https://img.example/original.jpg";
 
   assert.equal(resolveArtworkPreviewUrl({
-    cloud_file_id: downloadUrl,
+    display_url: ` ${downloadUrl} `,
+    cloud_file_id: "cloud://artwork/display.webp",
     thumbnail_url: "https://img.example/thumb.webp",
     imageSrc: "https://img.example/fallback.webp",
-    download_url: downloadUrl,
-  }), "https://img.example/thumb.webp");
-
-  assert.equal(resolveArtworkPreviewUrl({
-    thumbnail_url: downloadUrl,
-    imageSrc: "https://img.example/fallback.webp",
-    download_url: downloadUrl,
-  }), "https://img.example/fallback.webp");
-
-  assert.equal(resolveArtworkPreviewUrl({
-    display_url: downloadUrl,
-    cloud_file_id: downloadUrl,
-    thumbnail_url: downloadUrl,
-    imageSrc: downloadUrl,
-    download_url: downloadUrl,
+    download_url: ` ${downloadUrl} `,
   }), "");
 });
 
@@ -97,7 +78,28 @@ test("previewArtwork rejects unsupported and missing-image cases with stable cod
     (error) => error.code === "unsupported",
   );
   await assert.rejects(
-    previewArtwork({}, { canIUse: () => true, previewImage() {} }),
+    previewArtwork({
+      cloud_file_id: "cloud://artwork/display.webp",
+      thumbnail_url: "https://img.example/thumb.webp",
+      imageSrc: "https://img.example/fallback.webp",
+    }, {
+      canIUse: () => true,
+      previewImage(options) {
+        options.fail({ errMsg: "previewImage:fail unexpected fallback" });
+      },
+    }),
+    (error) => error.code === "invalid-data",
+  );
+  await assert.rejects(
+    previewArtwork({
+      display_url: " https://img.example/original.jpg ",
+      download_url: "https://img.example/original.jpg",
+    }, {
+      canIUse: () => true,
+      previewImage(options) {
+        options.fail({ errMsg: "previewImage:fail aliased original" });
+      },
+    }),
     (error) => error.code === "invalid-data",
   );
 });

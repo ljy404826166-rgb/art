@@ -32,6 +32,7 @@ function decodeRouteText(value) {
 Page({
   data: {
     artist: null,
+    currentId: "",
     artistSource: "",
     artworks: [],
     artworkTotal: 0,
@@ -48,19 +49,23 @@ Page({
   onLoad(options) {
     wx.setNavigationBarTitle({ title: "画家详情" });
     if (options && options.id) {
-      this.loadArtistById(options.id);
+      this.loadArtistById(decodeRouteText(options.id));
       return;
     }
     this.loadArtistByText(decodeRouteText(options && options.artistText));
   },
 
   onShareAppMessage() {
-    return buildArtistShareMessage(this.data.artist);
+    const shareArtist = this.data.loading && this.data.currentId
+      ? { id: this.data.currentId }
+      : (this.data.artist || { id: this.data.currentId });
+    return buildArtistShareMessage(shareArtist);
   },
 
   resetArtistState() {
     this.setData({
       artist: null,
+      currentId: "",
       artistSource: "",
       artworks: [],
       artworkTotal: 0,
@@ -77,6 +82,7 @@ Page({
 
   async loadArtistById(id) {
     this.resetArtistState();
+    this.setData({ currentId: String(id || "") });
     const artistResult = await loadArtistRecordById(id);
     await this.applyArtistResult(artistResult);
   },
