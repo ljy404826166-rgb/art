@@ -25,6 +25,17 @@ const {
 const { buildArtworkShareMessage } = require("../../services/share-routes");
 
 const detailImageRatioCache = {};
+const previewFailureMessages = {
+  unsupported: "当前微信版本不支持预览",
+  offline: "网络连接异常，请稍后重试",
+  "permission-denied": "暂无图片预览权限",
+  "remote-failed": "图片预览失败，请稍后重试",
+  "invalid-data": "暂无可预览图片",
+};
+
+function getPreviewFailureMessage(error) {
+  return previewFailureMessages[error && error.code] || "图片预览失败";
+}
 
 Page({
   data: {
@@ -61,9 +72,7 @@ Page({
       await previewArtwork(this.data.artwork);
     } catch (error) {
       wx.showToast({
-        title: error && error.code === "unsupported"
-          ? "当前微信版本不支持预览"
-          : (error && error.message) || "图片预览失败",
+        title: getPreviewFailureMessage(error),
         icon: "none",
       });
     }

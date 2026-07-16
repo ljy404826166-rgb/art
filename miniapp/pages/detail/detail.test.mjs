@@ -111,3 +111,39 @@ test("detail preview handler previews the loaded artwork", async () => {
 
   assert.deepEqual(calls, [page.data.artwork]);
 });
+
+const previewFailureMessages = [
+  ["unsupported", "当前微信版本不支持预览"],
+  ["offline", "网络连接异常，请稍后重试"],
+  ["permission-denied", "暂无图片预览权限"],
+  ["remote-failed", "图片预览失败，请稍后重试"],
+  ["invalid-data", "暂无可预览图片"],
+  ["unknown", "图片预览失败"],
+];
+
+for (const [code, expectedTitle] of previewFailureMessages) {
+  test(`detail preview handler maps ${code} to a localized message`, async () => {
+    const toasts = [];
+    const page = loadDetailPage({
+      artworkPreview: {
+        previewArtwork: async () => {
+          const error = new Error("previewImage:fail native error");
+          error.code = code;
+          throw error;
+        },
+      },
+    }, {
+      showToast(options) {
+        toasts.push(options);
+      },
+    });
+    page.data.artwork = { id: "starry-night", display_url: "https://img.example/display.webp" };
+
+    await page.previewHeroImage();
+
+    assert.equal(toasts.length, 1);
+    assert.equal(toasts[0].title, expectedTitle);
+    assert.equal(toasts[0].icon, "none");
+    assert.notEqual(toasts[0].title, "previewImage:fail native error");
+  });
+}

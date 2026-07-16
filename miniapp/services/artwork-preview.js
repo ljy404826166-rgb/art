@@ -6,10 +6,14 @@ const {
 
 function resolveArtworkPreviewUrl(artwork) {
   if (!artwork) return "";
-  const safeImageSrc = artwork.imageSrc && artwork.imageSrc !== artwork.download_url
-    ? artwork.imageSrc
-    : "";
-  return artwork.display_url || artwork.cloud_file_id || artwork.thumbnail_url || safeImageSrc || "";
+  const downloadUrl = artwork.download_url;
+  const candidates = [
+    artwork.display_url,
+    artwork.cloud_file_id,
+    artwork.thumbnail_url,
+    artwork.imageSrc,
+  ];
+  return candidates.find((candidate) => candidate && candidate !== downloadUrl) || "";
 }
 
 function createPreviewError(code, message) {
