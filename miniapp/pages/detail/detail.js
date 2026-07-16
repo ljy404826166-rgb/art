@@ -8,6 +8,7 @@ const {
   computeDetailHeroFrameStyle,
   resolveDetailMeasureSrc,
 } = require("./detail-image-layout");
+const { previewArtwork } = require("../../services/artwork-preview");
 const {
   downloadFile,
   getDownloadFailureMessage,
@@ -52,6 +53,20 @@ Page({
 
   onShareAppMessage() {
     return buildArtworkShareMessage(this.data.artwork);
+  },
+
+  async previewHeroImage() {
+    if (!this.data.artwork) return;
+    try {
+      await previewArtwork(this.data.artwork);
+    } catch (error) {
+      wx.showToast({
+        title: error && error.code === "unsupported"
+          ? "当前微信版本不支持预览"
+          : (error && error.message) || "图片预览失败",
+        icon: "none",
+      });
+    }
   },
 
   async loadArtwork(id) {

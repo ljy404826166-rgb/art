@@ -15,6 +15,9 @@ const serviceDefaults = {
     computeDetailHeroFrameStyle: () => "",
     resolveDetailMeasureSrc: () => "",
   },
+  artworkPreview: {
+    previewArtwork: async () => ({ url: "display" }),
+  },
   downloads: {
     downloadFile: async () => "temp-file",
     getDownloadFailureMessage: () => "下载失败，请重试",
@@ -45,6 +48,7 @@ function loadDetailPage(overrides = {}, wxOverrides = {}) {
     if (id === "../../services/artworks") return services.artworks;
     if (id === "../../services/artists") return services.artists;
     if (id === "./detail-image-layout") return services.imageLayout;
+    if (id === "../../services/artwork-preview") return services.artworkPreview;
     if (id === "../../services/downloads") return services.downloads;
     if (id === "../../services/local-library") return services.localLibrary;
     if (id === "../../services/share-routes") return services.shareRoutes;
@@ -89,4 +93,21 @@ test("detail exposes a stable artwork share payload", () => {
     title: "星月夜",
     path: "/pages/detail/detail?id=starry-night",
   });
+});
+
+test("detail preview handler previews the loaded artwork", async () => {
+  const calls = [];
+  const page = loadDetailPage({
+    artworkPreview: {
+      previewArtwork: async (artwork) => {
+        calls.push(artwork);
+        return { url: artwork.display_url };
+      },
+    },
+  });
+  page.data.artwork = { id: "starry-night", display_url: "https://img.example/display.webp" };
+
+  await page.previewHeroImage();
+
+  assert.deepEqual(calls, [page.data.artwork]);
 });

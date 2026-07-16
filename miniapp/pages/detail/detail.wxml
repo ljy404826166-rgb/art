@@ -23,7 +23,7 @@
   />
 
   <block wx:if="{{artwork}}">
-    <view class="hero-image-wrap">
+    <view class="hero-image-wrap" bindtap="previewHeroImage" aria-label="全屏预览作品">
       <artwork-image
         artwork="{{artwork}}"
         usage="detail"
