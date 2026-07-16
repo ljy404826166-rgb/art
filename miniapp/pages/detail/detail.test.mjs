@@ -257,13 +257,63 @@ test("detail missing encoded share target stays recoverable without unrelated ar
   assert.equal(page.data.artwork, null);
   assert.equal(page.data.loading, false);
   assert.equal(page.data.usingFallback, false);
-  assert.match(page.data.error, /remote artwork unavailable/);
+  assert.equal(page.data.error, "作品详情加载失败，请稍后重试");
+  assert.doesNotMatch(page.data.error, /remote artwork unavailable/);
   assert.deepEqual(history, []);
   assert.equal(
     page.onShareAppMessage().path,
     `/pages/detail/detail?id=${encodeURIComponent(requestedId)}`,
   );
   assert.notEqual(page.onShareAppMessage().path, "/pages/home/home");
+});
+
+test("detail treats a missing remote record as a localized recoverable error", async () => {
+  const page = loadDetailPage({
+    artworks: {
+      ...serviceDefaults.artworks,
+      fetchArtworkById: async () => null,
+    },
+  });
+
+  await page.loadArtwork("missing-cloud-record");
+
+  assert.equal(page.data.currentId, "missing-cloud-record");
+  assert.equal(page.data.artwork, null);
+  assert.equal(page.data.loading, false);
+  assert.equal(page.data.usingFallback, false);
+  assert.equal(page.data.error, "作品详情加载失败，请稍后重试");
+});
+
+test("detail preserves a known exact fallback without replacing the requested share target", async () => {
+  const requestedId = "artwork_starry_night";
+  const fallbackArtwork = realArtworkFallbackService.fallbackArtworkById(requestedId);
+  const history = [];
+  const page = loadDetailPage({
+    artworks: {
+      ...realArtworkFallbackService,
+      fetchArtworkById: async () => {
+        throw new Error("cloud database unavailable");
+      },
+    },
+    localLibrary: {
+      ...serviceDefaults.localLibrary,
+      recordHistoryArtwork: (artwork) => {
+        history.push(artwork);
+      },
+    },
+    shareRoutes,
+  });
+
+  await page.loadArtwork(requestedId);
+
+  assert.equal(page.data.artwork._id, fallbackArtwork._id);
+  assert.equal(page.data.usingFallback, true);
+  assert.equal(page.data.error, "作品详情加载失败，请稍后重试");
+  assert.deepEqual(history, [fallbackArtwork]);
+  assert.equal(
+    page.onShareAppMessage().path,
+    `/pages/detail/detail?id=${encodeURIComponent(requestedId)}`,
+  );
 });
 
 test("detail preview handler previews the loaded artwork", async () => {

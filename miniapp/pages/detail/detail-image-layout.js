@@ -15,8 +15,17 @@ function computeDetailHeroFrameStyle(imageRatio) {
 
 function resolveDetailMeasureSrc(item) {
   if (!item) return "";
-  const safeImageSrc = item.imageSrc && item.imageSrc !== item.download_url ? item.imageSrc : "";
-  return item.cloud_file_id || item.display_url || item.thumbnail_url || safeImageSrc || "";
+  const imageSrc = String(item.imageSrc || "").trim();
+  const originalSources = [
+    item.download_url,
+    item.original_url,
+  ].map((value) => String(value || "").trim());
+  const safeImageSrc = imageSrc && !originalSources.includes(imageSrc)
+    ? imageSrc
+    : "";
+  return String(item.display_url || "").trim()
+    || String(item.thumbnail_url || "").trim()
+    || safeImageSrc;
 }
 
 module.exports = {

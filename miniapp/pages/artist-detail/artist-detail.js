@@ -33,6 +33,7 @@ Page({
   data: {
     artist: null,
     currentId: "",
+    artistText: "",
     artistSource: "",
     artworks: [],
     artworkTotal: 0,
@@ -66,6 +67,7 @@ Page({
     this.setData({
       artist: null,
       currentId: "",
+      artistText: "",
       artistSource: "",
       artworks: [],
       artworkTotal: 0,
@@ -93,6 +95,7 @@ Page({
 
   async loadArtistByText(artistText) {
     this.resetArtistState();
+    this.setData({ artistText: String(artistText || "") });
     if (!artistText) {
       await this.applyArtistResult({
         artist: null,
@@ -104,6 +107,13 @@ Page({
 
     const artistResult = await loadArtistByArtworkText(artistText, { allowFallback: false });
     await this.applyArtistResult(artistResult);
+  },
+
+  retryLoad() {
+    if (this.data.currentId) {
+      return this.loadArtistById(this.data.currentId);
+    }
+    return this.loadArtistByText(this.data.artistText);
   },
 
   async applyArtistResult(artistResult) {

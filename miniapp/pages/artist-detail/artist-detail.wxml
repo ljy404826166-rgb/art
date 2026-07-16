@@ -38,9 +38,9 @@
 
   <error-state
     wx:if="{{error}}"
-    title="作品读取失败"
+    title="画家读取失败"
     message="{{usingFallback ? '已显示本地备用匹配结果。' : error}}"
-    show-retry="{{false}}"
+    bindretry="retryLoad"
   />
 
   <view wx:if="{{artist}}" class="works-head">

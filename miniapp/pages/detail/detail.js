@@ -1,7 +1,6 @@
 const {
   fetchArtworkById,
   fallbackArtworkById,
-  normalizeError,
 } = require("../../services/artworks");
 const { loadArtistByArtworkText } = require("../../services/artists");
 const {
@@ -31,6 +30,7 @@ const { buildArtworkShareMessage } = require("../../services/share-routes");
 
 const detailImageRatioCache = {};
 const OFFLINE_LOAD_MESSAGE = "当前无网络，请连接网络后重试";
+const DETAIL_LOAD_FAILURE_MESSAGE = "作品详情加载失败，请稍后重试";
 const previewFailureMessages = {
   unsupported: "当前微信版本不支持预览",
   offline: "网络连接异常，请稍后重试",
@@ -148,11 +148,14 @@ Page({
 
     try {
       const artwork = await fetchArtworkById(id);
-      this.applyLoadedArtwork(artwork, { usingFallback: false });
+      this.applyLoadedArtwork(artwork, {
+        error: artwork ? "" : DETAIL_LOAD_FAILURE_MESSAGE,
+        usingFallback: false,
+      });
     } catch (error) {
       const fallbackArtwork = fallbackArtworkById(id);
       this.applyLoadedArtwork(fallbackArtwork, {
-        error: normalizeError(error),
+        error: DETAIL_LOAD_FAILURE_MESSAGE,
         usingFallback: Boolean(fallbackArtwork),
       });
     }

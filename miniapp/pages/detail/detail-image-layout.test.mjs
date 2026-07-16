@@ -36,13 +36,14 @@ test("computeDetailHeroFrameStyle preserves routed artwork ratio", () => {
   );
 });
 
-test("resolveDetailMeasureSrc does not use download_url for measurement", () => {
+test("resolveDetailMeasureSrc prioritizes display URL over cloud and original fields", () => {
   assert.equal(resolveDetailMeasureSrc({
     cloud_file_id: "cloud://display",
     display_url: "display.webp",
     thumbnail_url: "thumb.webp",
     download_url: "original.jpg",
-  }), "cloud://display");
+    original_url: "source-original.jpg",
+  }), "display.webp");
 
   assert.equal(resolveDetailMeasureSrc({
     display_url: "display.webp",
@@ -58,5 +59,10 @@ test("resolveDetailMeasureSrc does not use download_url for measurement", () => 
   assert.equal(resolveDetailMeasureSrc({
     imageSrc: "original.jpg",
     download_url: "original.jpg",
+  }), "");
+
+  assert.equal(resolveDetailMeasureSrc({
+    imageSrc: " source-original.jpg ",
+    original_url: "source-original.jpg",
   }), "");
 });

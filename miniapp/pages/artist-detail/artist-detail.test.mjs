@@ -223,3 +223,89 @@ test("artist detail shares its decoded route id before the artist finishes loadi
   assert.equal(loadingShare.path, message.path);
   assert.notEqual(loadingShare.path, "/pages/home/home");
 });
+
+test("artist detail missing shared id exposes localized retry UI and retries the decoded id", async () => {
+  const wxml = readFileSync(new URL("./artist-detail.wxml", import.meta.url), "utf8");
+  const requestedId = "artist/莫奈/study";
+  const lookupIds = [];
+  const page = loadArtistDetailPage({
+    artists: {
+      loadArtistById: async (id) => {
+        lookupIds.push(id);
+        if (lookupIds.length === 1) {
+          return { artist: null, source: "cloud" };
+        }
+        return {
+          artist: {
+            id,
+            nameZh: "莫奈",
+            aliases: ["Claude Monet"],
+          },
+          source: "cloud",
+        };
+      },
+      loadArtistByArtworkText: async () => ({ artist: null, source: "cloud" }),
+    },
+    artworks: {
+      countArtworksByArtist: async () => 0,
+      fetchArtworksByArtist: async () => [],
+      fallbackArtworksByArtistAliases: () => [],
+      normalizeError: (error) => String(error && error.message ? error.message : error),
+    },
+    localLibrary: {
+      isFollowedArtist: () => false,
+      toggleFollowedArtist: () => true,
+    },
+  });
+
+  page.onLoad({ id: encodeURIComponent(requestedId) });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(page.data.currentId, requestedId);
+  assert.equal(page.data.artist, null);
+  assert.equal(page.data.error, "未找到画家信息");
+  assert.match(wxml, /title="画家读取失败"/);
+  assert.match(wxml, /bindretry="retryLoad"/);
+  assert.doesNotMatch(wxml, /show-retry="\{\{false\}\}"/);
+
+  await page.retryLoad();
+
+  assert.deepEqual(lookupIds, [requestedId, requestedId]);
+  assert.equal(page.data.artist.id, requestedId);
+  assert.equal(page.data.error, "");
+});
+
+test("artist detail retries a decoded artistText route without automatic recovery", async () => {
+  const requestedText = "克洛德·莫奈/Claude Monet";
+  const lookupTexts = [];
+  const page = loadArtistDetailPage({
+    artists: {
+      loadArtistById: async () => ({ artist: null, source: "cloud" }),
+      loadArtistByArtworkText: async (artistText) => {
+        lookupTexts.push(artistText);
+        return { artist: null, source: "cloud" };
+      },
+    },
+    artworks: {
+      countArtworksByArtist: async () => 0,
+      fetchArtworksByArtist: async () => [],
+      fallbackArtworksByArtistAliases: () => [],
+      normalizeError: (error) => String(error && error.message ? error.message : error),
+    },
+    localLibrary: {
+      isFollowedArtist: () => false,
+      toggleFollowedArtist: () => true,
+    },
+  });
+
+  page.onLoad({ artistText: encodeURIComponent(requestedText) });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(lookupTexts, [requestedText]);
+  assert.equal(page.data.artistText, requestedText);
+  assert.equal(page.data.error, "未找到画家信息");
+
+  await page.retryLoad();
+
+  assert.deepEqual(lookupTexts, [requestedText, requestedText]);
+});
