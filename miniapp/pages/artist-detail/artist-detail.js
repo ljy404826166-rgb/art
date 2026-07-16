@@ -12,6 +12,7 @@ const {
   isFollowedArtist,
   toggleFollowedArtist,
 } = require("../../services/local-library");
+const { buildArtistShareMessage } = require("../../services/share-routes");
 
 const ARTIST_WORKS_PAGE_SIZE = 8;
 
@@ -51,6 +52,10 @@ Page({
       return;
     }
     this.loadArtistByText(decodeRouteText(options && options.artistText));
+  },
+
+  onShareAppMessage() {
+    return buildArtistShareMessage(this.data.artist);
   },
 
   resetArtistState() {

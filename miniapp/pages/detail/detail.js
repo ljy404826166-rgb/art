@@ -21,6 +21,7 @@ const {
   recordHistoryArtwork,
   toggleFavoriteArtwork,
 } = require("../../services/local-library");
+const { buildArtworkShareMessage } = require("../../services/share-routes");
 
 const detailImageRatioCache = {};
 
@@ -47,6 +48,10 @@ Page({
       this.setData({ heroFrameStyle: routeRatioStyle });
     }
     this.loadArtwork(options.id || options.source_id || options.supabase_id);
+  },
+
+  onShareAppMessage() {
+    return buildArtworkShareMessage(this.data.artwork);
   },
 
   async loadArtwork(id) {

@@ -12,6 +12,14 @@ function loadArtistDetailPage(services) {
     if (id === "../../services/artists") return services.artists;
     if (id === "../../services/artworks") return services.artworks;
     if (id === "../../services/local-library") return services.localLibrary;
+    if (id === "../../services/share-routes") {
+      return services.shareRoutes || {
+        buildArtistShareMessage: (artist) => ({
+          title: artist ? artist.nameZh : "fallback",
+          path: artist ? `/artist/${artist.id}` : "/",
+        }),
+      };
+    }
     return require(id);
   };
   const Page = (definition) => {
@@ -154,4 +162,24 @@ test("artist detail config sets a reach-bottom distance for related artworks pag
 
   assert.equal(typeof config.onReachBottomDistance, "number");
   assert.ok(config.onReachBottomDistance >= 120);
+});
+
+test("artist detail exposes a stable share payload", () => {
+  const page = loadArtistDetailPage({
+    artists: {},
+    artworks: {},
+    localLibrary: {},
+    shareRoutes: {
+      buildArtistShareMessage: (artist) => ({
+        title: artist.nameZh,
+        path: `/pages/artist-detail/artist-detail?id=${artist.id}`,
+      }),
+    },
+  });
+  page.data.artist = { id: "monet", nameZh: "莫奈" };
+
+  assert.deepEqual(page.onShareAppMessage(), {
+    title: "莫奈",
+    path: "/pages/artist-detail/artist-detail?id=monet",
+  });
 });
