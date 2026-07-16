@@ -45,14 +45,23 @@ function canUseWxCapability(capability, wxApi) {
 }
 
 function normalizePlatformError(error, fallbackCode = "unknown") {
-  if (error && VALID_ERROR_CODES.includes(error.code)) {
+  if (
+    error instanceof Error &&
+    VALID_ERROR_CODES.includes(error.code) &&
+    Object.prototype.hasOwnProperty.call(error, "originalError")
+  ) {
     return error;
   }
 
+  const normalizedFallbackCode = VALID_ERROR_CODES.includes(fallbackCode) ? fallbackCode : "unknown";
   const message = String((error && (error.errMsg || error.message)) || error || "");
   const match = ERROR_PATTERNS.find(([, pattern]) => pattern.test(message));
-  const normalized = new Error(message || "寰俊骞冲彴鑳藉姏璋冪敤澶辫触");
-  normalized.code = match ? match[0] : fallbackCode;
+  const normalized = new Error(message || "微信平台能力调用失败");
+  normalized.code = match
+    ? match[0]
+    : error && VALID_ERROR_CODES.includes(error.code)
+      ? error.code
+      : normalizedFallbackCode;
   normalized.originalError = error;
   return normalized;
 }
