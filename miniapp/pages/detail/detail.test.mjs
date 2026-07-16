@@ -94,6 +94,61 @@ function loadDetailPage(overrides = {}, wxOverrides = {}) {
   return page;
 }
 
+function loadDownloadGuardPage(networkStatus, showModal) {
+  const calls = {
+    downloadFile: 0,
+    saveImageToAlbum: 0,
+    recordDownloadArtwork: 0,
+    showLoading: 0,
+    hideLoading: 0,
+    successToast: 0,
+  };
+  const modals = [];
+  const toasts = [];
+  const page = loadDetailPage({
+    networkStatus: {
+      ...serviceDefaults.networkStatus,
+      ...networkStatus,
+    },
+    downloads: {
+      ...serviceDefaults.downloads,
+      downloadFile: async () => {
+        calls.downloadFile += 1;
+        return "temp-file";
+      },
+      saveImageToAlbum: async () => {
+        calls.saveImageToAlbum += 1;
+      },
+    },
+    localLibrary: {
+      ...serviceDefaults.localLibrary,
+      recordDownloadArtwork: () => {
+        calls.recordDownloadArtwork += 1;
+      },
+    },
+  }, {
+    showLoading() {
+      calls.showLoading += 1;
+    },
+    hideLoading() {
+      calls.hideLoading += 1;
+    },
+    showToast(options) {
+      toasts.push(options);
+      if (options.icon === "success") calls.successToast += 1;
+    },
+    showModal(options) {
+      modals.push(options);
+      showModal(options);
+    },
+  });
+  page.data.artwork = {
+    id: "artwork",
+    download_url: "https://img.example/original.jpg",
+  };
+  return { calls, modals, page, toasts };
+}
+
 test("detail exposes a stable artwork share payload", () => {
   const page = loadDetailPage();
   page.data.artwork = { id: "starry-night", titleCn: "星月夜" };
@@ -122,89 +177,120 @@ test("detail preview handler previews the loaded artwork", async () => {
 });
 
 test("detail blocks original download while offline", async () => {
-  let downloadCalls = 0;
-  let downloadRecords = 0;
-  const toasts = [];
-  const page = loadDetailPage({
-    networkStatus: {
-      ...serviceDefaults.networkStatus,
-      getNetworkSnapshot: async () => ({
-        isConnected: false,
-        networkType: "none",
-      }),
-    },
-    downloads: {
-      ...serviceDefaults.downloads,
-      downloadFile: async () => {
-        downloadCalls += 1;
-        return "temp-file";
-      },
-    },
-    localLibrary: {
-      ...serviceDefaults.localLibrary,
-      recordDownloadArtwork: () => {
-        downloadRecords += 1;
-      },
-    },
-  }, {
-    showToast(options) {
-      toasts.push(options);
-    },
+  const { calls, page, toasts } = loadDownloadGuardPage({
+    getNetworkSnapshot: async () => ({
+      isConnected: false,
+      networkType: "none",
+    }),
+  }, () => {
+    throw new Error("offline download must not show a confirmation");
   });
-  page.data.artwork = {
-    id: "artwork",
-    download_url: "https://img.example/original.jpg",
-  };
 
   await page.downloadArtwork();
 
-  assert.equal(downloadCalls, 0);
-  assert.equal(downloadRecords, 0);
+  assert.equal(calls.downloadFile, 0);
+  assert.equal(calls.saveImageToAlbum, 0);
+  assert.equal(calls.recordDownloadArtwork, 0);
+  assert.equal(calls.showLoading, 0);
+  assert.equal(calls.hideLoading, 0);
+  assert.equal(calls.successToast, 0);
   assert.equal(page.data.downloading, false);
   assert.equal(toasts[0].title, "当前无网络，无法下载原图");
 });
 
 test("detail asks before an original download on cellular data", async () => {
-  let downloadCalls = 0;
-  let downloadRecords = 0;
-  const modals = [];
-  const page = loadDetailPage({
-    networkStatus: {
-      ...serviceDefaults.networkStatus,
-      getNetworkSnapshot: async () => ({
-        isConnected: true,
-        networkType: "4g",
-      }),
-    },
-    downloads: {
-      ...serviceDefaults.downloads,
-      downloadFile: async () => {
-        downloadCalls += 1;
-        return "temp-file";
-      },
-    },
-    localLibrary: {
-      ...serviceDefaults.localLibrary,
-      recordDownloadArtwork: () => {
-        downloadRecords += 1;
-      },
-    },
-  }, {
-    showModal(options) {
-      modals.push(options);
-      options.success({ confirm: false, cancel: true });
-    },
+  const { calls, modals, page } = loadDownloadGuardPage({
+    getNetworkSnapshot: async () => ({
+      isConnected: true,
+      networkType: "4g",
+    }),
+  }, (options) => {
+    options.success({ confirm: false, cancel: true });
   });
-  page.data.artwork = {
-    id: "artwork",
-    download_url: "https://img.example/original.jpg",
+
+  await page.downloadArtwork();
+
+  assert.match(modals[0].content, /继续下载可能消耗流量/);
+  assert.equal(calls.downloadFile, 0);
+  assert.equal(calls.saveImageToAlbum, 0);
+  assert.equal(calls.recordDownloadArtwork, 0);
+  assert.equal(calls.showLoading, 0);
+  assert.equal(calls.hideLoading, 0);
+  assert.equal(calls.successToast, 0);
+  assert.equal(page.data.downloading, false);
+});
+
+test("detail asks before downloading when the network type is unknown", async () => {
+  const { calls, modals, page } = loadDownloadGuardPage({
+    getNetworkSnapshot: async () => ({
+      isConnected: true,
+      networkType: "unknown",
+    }),
+  }, (options) => {
+    options.success({ confirm: false, cancel: true });
+  });
+
+  await page.downloadArtwork();
+
+  assert.equal(modals.length, 1);
+  assert.match(modals[0].content, /继续下载可能消耗流量/);
+  assert.equal(calls.downloadFile, 0);
+  assert.equal(calls.saveImageToAlbum, 0);
+  assert.equal(calls.recordDownloadArtwork, 0);
+  assert.equal(calls.showLoading, 0);
+  assert.equal(calls.hideLoading, 0);
+  assert.equal(calls.successToast, 0);
+  assert.equal(page.data.downloading, false);
+});
+
+test("detail asks before downloading when the network snapshot rejects", async () => {
+  const { calls, modals, page } = loadDownloadGuardPage({
+    getNetworkSnapshot: async () => {
+      throw new Error("getNetworkType:fail");
+    },
+  }, (options) => {
+    options.success({ confirm: false, cancel: true });
+  });
+  page.data.networkState = {
+    isConnected: true,
+    networkType: "wifi",
   };
 
   await page.downloadArtwork();
 
-  assert.equal(modals[0].title, "使用移动网络下载");
-  assert.equal(downloadCalls, 0);
-  assert.equal(downloadRecords, 0);
+  assert.equal(modals.length, 1);
+  assert.match(modals[0].content, /继续下载可能消耗流量/);
+  assert.equal(page.data.networkState.isConnected, true);
+  assert.equal(page.data.networkState.networkType, "unknown");
+  assert.equal(calls.downloadFile, 0);
+  assert.equal(calls.saveImageToAlbum, 0);
+  assert.equal(calls.recordDownloadArtwork, 0);
+  assert.equal(calls.showLoading, 0);
+  assert.equal(calls.hideLoading, 0);
+  assert.equal(calls.successToast, 0);
+  assert.equal(page.data.downloading, false);
+});
+
+test("detail stops without side effects when the download confirmation modal fails", async () => {
+  const { calls, modals, page } = loadDownloadGuardPage({
+    getNetworkSnapshot: async () => ({
+      isConnected: true,
+      networkType: "4g",
+    }),
+  }, (options) => {
+    options.fail(new Error("showModal:fail"));
+  });
+
+  await page.downloadArtwork();
+
+  assert.equal(modals.length, 1);
+  assert.match(modals[0].content, /继续下载可能消耗流量/);
+  assert.equal(calls.downloadFile, 0);
+  assert.equal(calls.saveImageToAlbum, 0);
+  assert.equal(calls.recordDownloadArtwork, 0);
+  assert.equal(calls.showLoading, 0);
+  assert.equal(calls.hideLoading, 0);
+  assert.equal(calls.successToast, 0);
   assert.equal(page.data.downloading, false);
 });
 

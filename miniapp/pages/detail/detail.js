@@ -260,11 +260,11 @@ Page({
     });
   },
 
-  confirmCellularDownload() {
+  confirmDownloadWithTrafficWarning() {
     return new Promise((resolve) => {
       wx.showModal({
-        title: "使用移动网络下载",
-        content: "原图文件可能较大并消耗较多流量，是否继续？",
+        title: "下载流量提醒",
+        content: "网络状态不明或可能正在使用移动网络，继续下载可能消耗流量。是否继续？",
         confirmText: "继续下载",
         success: (result) => resolve(Boolean(result && result.confirm)),
         fail: () => resolve(false),
@@ -291,7 +291,10 @@ Page({
       try {
         networkState = await getNetworkSnapshot();
       } catch (error) {
-        networkState = this.data.networkState;
+        networkState = {
+          isConnected: true,
+          networkType: "unknown",
+        };
       }
       this.setData({ networkState });
 
@@ -303,8 +306,11 @@ Page({
         return;
       }
 
-      if (isCellularNetwork(networkState.networkType)) {
-        const confirmed = await this.confirmCellularDownload();
+      if (
+        isCellularNetwork(networkState.networkType)
+        || networkState.networkType === "unknown"
+      ) {
+        const confirmed = await this.confirmDownloadWithTrafficWarning();
         if (!confirmed) return;
       }
 

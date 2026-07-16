@@ -72,6 +72,15 @@ test("getNetworkSnapshot wraps wx.getNetworkType", async () => {
   });
 });
 
+test("getNetworkSnapshot reports an explicit unknown state when getNetworkType is unavailable", async () => {
+  const state = await getNetworkSnapshot({});
+
+  assert.deepEqual(plain(state), {
+    isConnected: true,
+    networkType: "unknown",
+  });
+});
+
 test("subscribeNetworkStatus forwards changes and unregisters its exact handler", async () => {
   let registered;
   let removed;
