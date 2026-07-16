@@ -153,7 +153,7 @@ Page({
       const fallbackArtwork = fallbackArtworkById(id);
       this.applyLoadedArtwork(fallbackArtwork, {
         error: normalizeError(error),
-        usingFallback: true,
+        usingFallback: Boolean(fallbackArtwork),
       });
     }
   },

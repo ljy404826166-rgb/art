@@ -670,7 +670,7 @@ function fallbackSearchArtworks(query) {
 
 function fallbackArtworkById(id) {
   const item = fallbackById(id);
-  return item ? normalizeArtwork(item) : normalizeArtwork(fallbackArtworks[0]);
+  return item ? normalizeArtwork(item) : null;
 }
 
 module.exports = {

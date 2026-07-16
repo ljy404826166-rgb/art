@@ -15,6 +15,32 @@ const shareRoutes = loadCommonJsModule(
   fileURLToPath(new URL("../../services/share-routes.js", import.meta.url)),
 );
 
+function loadRealArtworkFallbackService() {
+  const fallbackArtworks = loadCommonJsModule(
+    fileURLToPath(new URL("../../data/fallback-artworks.js", import.meta.url)),
+  );
+  const searchEngine = loadCommonJsModule(
+    fileURLToPath(new URL("../../services/search-engine.js", import.meta.url)),
+  );
+  const filename = fileURLToPath(new URL("../../services/artworks.js", import.meta.url));
+  const source = readFileSync(filename, "utf8");
+  const module = { exports: {} };
+  const localRequire = (id) => {
+    if (id === "../data/fallback-artworks") return fallbackArtworks;
+    if (id === "./search-engine") return searchEngine;
+    return require(id);
+  };
+
+  vm.runInNewContext(source, {
+    module,
+    exports: module.exports,
+    require: localRequire,
+  }, { filename });
+  return module.exports;
+}
+
+const realArtworkFallbackService = loadRealArtworkFallbackService();
+
 const serviceDefaults = {
   artworks: {
     fetchArtworkById: async () => null,
@@ -202,6 +228,42 @@ test("detail shares its decoded route id before the artwork finishes loading", a
   assert.deepEqual(lookupIds, [originalId]);
   assert.equal(loadingShare.path, message.path);
   assert.notEqual(loadingShare.path, "/pages/home/home");
+});
+
+test("detail missing encoded share target stays recoverable without unrelated artwork or history", async () => {
+  const requestedId = "missing/梵高/study";
+  const encodedId = encodeURIComponent(requestedId);
+  const history = [];
+  const page = loadDetailPage({
+    artworks: {
+      ...realArtworkFallbackService,
+      fetchArtworkById: async () => {
+        throw new Error("remote artwork unavailable");
+      },
+    },
+    localLibrary: {
+      ...serviceDefaults.localLibrary,
+      recordHistoryArtwork: (artwork) => {
+        history.push(artwork);
+      },
+    },
+    shareRoutes,
+  });
+
+  page.onLoad({ id: encodedId });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(page.data.currentId, requestedId);
+  assert.equal(page.data.artwork, null);
+  assert.equal(page.data.loading, false);
+  assert.equal(page.data.usingFallback, false);
+  assert.match(page.data.error, /remote artwork unavailable/);
+  assert.deepEqual(history, []);
+  assert.equal(
+    page.onShareAppMessage().path,
+    `/pages/detail/detail?id=${encodeURIComponent(requestedId)}`,
+  );
+  assert.notEqual(page.onShareAppMessage().path, "/pages/home/home");
 });
 
 test("detail preview handler previews the loaded artwork", async () => {

@@ -4,11 +4,11 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 
-function loadCommonJsModule(filePath, extraContext = {}) {
+function loadCommonJsModule(filePath, extraContext = {}, fallbackOverride = null) {
   const filename = filePath instanceof URL ? fileURLToPath(filePath) : filePath;
   const source = readFileSync(filename, "utf8");
   const module = { exports: {} };
-  const fallback = {
+  const fallback = fallbackOverride || {
     fallbackArtworks: [],
     fallbackById: () => null,
     normalizeArtwork: (item) => item,
@@ -173,4 +173,45 @@ test("fetchArtworksByTag accepts tag objects and falls back to tag label when ta
 
   assert.deepEqual(page.map((item) => item._id), ["a", "b"]);
   assert.equal(total, 2);
+});
+
+test("fallbackArtworkById returns null when no fallback artwork matches", () => {
+  const fallbackArtwork = {
+    _id: "artwork_known",
+    supabase_id: "known",
+    title_cn: "Known artwork",
+  };
+  const service = loadCommonJsModule(
+    new URL("./artworks.js", import.meta.url),
+    {},
+    {
+      fallbackArtworks: [fallbackArtwork],
+      fallbackById: () => null,
+      normalizeArtwork: (item) => ({ ...item, id: item._id }),
+    },
+  );
+
+  assert.equal(service.fallbackArtworkById("nonexistent"), null);
+});
+
+test("fallbackArtworkById preserves an exact fallback artwork match", () => {
+  const fallbackArtwork = {
+    _id: "artwork_known",
+    supabase_id: "known",
+    title_cn: "Known artwork",
+  };
+  const service = loadCommonJsModule(
+    new URL("./artworks.js", import.meta.url),
+    {},
+    {
+      fallbackArtworks: [fallbackArtwork],
+      fallbackById: (id) => (id === fallbackArtwork._id ? fallbackArtwork : null),
+      normalizeArtwork: (item) => ({ ...item, id: item._id }),
+    },
+  );
+
+  assert.deepEqual(
+    service.fallbackArtworkById(fallbackArtwork._id),
+    { ...fallbackArtwork, id: fallbackArtwork._id },
+  );
 });
