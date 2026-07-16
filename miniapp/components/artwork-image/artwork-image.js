@@ -1,5 +1,5 @@
 const {
-  resolveSafeArtworkImageSrc,
+  resolveArtworkImageCandidates,
 } = require("../../services/artwork-image-sources");
 
 const loadedImageSrcs = {};
@@ -72,16 +72,6 @@ Component({
     },
 
     resolveCandidates(artwork, usage) {
-      const safeImageSrc = resolveSafeArtworkImageSrc(artwork);
-
-      if (usage === "detail") {
-        return this.compactUnique([
-          artwork.display_url,
-          artwork.thumbnail_url,
-          safeImageSrc,
-        ]);
-      }
-
       if (usage === "avatar") {
         return this.compactUnique([
           artwork.avatar_url,
@@ -90,11 +80,7 @@ Component({
         ]);
       }
 
-      return this.compactUnique([
-        artwork.thumbnail_url,
-        artwork.display_url,
-        safeImageSrc,
-      ]);
+      return resolveArtworkImageCandidates(artwork, usage);
     },
 
     resolveMode(usage) {

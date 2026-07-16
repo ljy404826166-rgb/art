@@ -3,17 +3,32 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
 
-function loadCommonJsModule(filename) {
+function loadCommonJsModule(filename, dependencies = {}) {
   const module = { exports: {} };
   const source = readFileSync(filename, "utf8");
-  vm.runInNewContext(source, { module, exports: module.exports }, { filename });
+  const localRequire = (id) => {
+    if (Object.prototype.hasOwnProperty.call(dependencies, id)) {
+      return dependencies[id];
+    }
+    throw new Error(`Unexpected dependency: ${id}`);
+  };
+  vm.runInNewContext(source, {
+    module,
+    exports: module.exports,
+    require: localRequire,
+  }, { filename });
   return module.exports;
 }
 
+const imageSources = loadCommonJsModule(
+  "miniapp/services/artwork-image-sources.js",
+);
 const {
   computeDetailHeroFrameStyle,
   resolveDetailMeasureSrc,
-} = loadCommonJsModule("miniapp/pages/detail/detail-image-layout.js");
+} = loadCommonJsModule("miniapp/pages/detail/detail-image-layout.js", {
+  "../../services/artwork-image-sources": imageSources,
+});
 
 test("computeDetailHeroFrameStyle preserves portrait artwork ratio", () => {
   assert.equal(
@@ -65,4 +80,34 @@ test("resolveDetailMeasureSrc prioritizes display URL over cloud and original fi
     imageSrc: " source-original.jpg ",
     original_url: "source-original.jpg",
   }), "");
+});
+
+test("resolveDetailMeasureSrc skips display aliases of both original fields", () => {
+  for (const originalField of ["download_url", "original_url"]) {
+    const artwork = {
+      display_url: "",
+      thumbnail_url: "safe-thumb.webp",
+      imageSrc: "safe-image.webp",
+      download_url: "download-original.jpg",
+      original_url: "source-original.jpg",
+    };
+    artwork.display_url = ` ${artwork[originalField]} `;
+
+    assert.equal(resolveDetailMeasureSrc(artwork), "safe-thumb.webp");
+  }
+});
+
+test("resolveDetailMeasureSrc skips thumbnail aliases of both original fields", () => {
+  for (const originalField of ["download_url", "original_url"]) {
+    const artwork = {
+      display_url: "",
+      thumbnail_url: "",
+      imageSrc: "safe-image.webp",
+      download_url: "download-original.jpg",
+      original_url: "source-original.jpg",
+    };
+    artwork.thumbnail_url = ` ${artwork[originalField]} `;
+
+    assert.equal(resolveDetailMeasureSrc(artwork), "safe-image.webp");
+  }
 });

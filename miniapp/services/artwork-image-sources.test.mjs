@@ -11,7 +11,10 @@ function loadCommonJsModule(filename) {
   return module.exports;
 }
 
-const { resolveSafeArtworkImageSrc } = loadCommonJsModule(
+const {
+  resolveArtworkImageCandidates,
+  resolveSafeArtworkImageSrc,
+} = loadCommonJsModule(
   fileURLToPath(new URL("./artwork-image-sources.js", import.meta.url)),
 );
 
@@ -31,4 +34,23 @@ test("resolveSafeArtworkImageSrc trims display-safe fallbacks and rejects origin
     imageSrc: " source-original.jpg ",
     original_url: "source-original.jpg",
   }), "");
+});
+
+test("resolveArtworkImageCandidates removes every normal source that aliases an original", () => {
+  const artwork = {
+    thumbnail_url: " original-source.jpg ",
+    display_url: " original-download.jpg ",
+    imageSrc: " safe-image.webp ",
+    download_url: "original-download.jpg",
+    original_url: "original-source.jpg",
+  };
+
+  assert.deepEqual(
+    Array.from(resolveArtworkImageCandidates(artwork, "card")),
+    ["safe-image.webp"],
+  );
+  assert.deepEqual(
+    Array.from(resolveArtworkImageCandidates(artwork, "detail")),
+    ["safe-image.webp"],
+  );
 });

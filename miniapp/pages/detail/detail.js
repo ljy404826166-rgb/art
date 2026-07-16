@@ -85,6 +85,7 @@ Page({
   onShow() {
     this.stopNetworkMonitor();
     this.stopNetworkSubscription = subscribeNetworkStatus((networkState) => {
+      this.networkStateRevision = (this.networkStateRevision || 0) + 1;
       this.setData({ networkState });
     });
   },
@@ -129,12 +130,21 @@ Page({
       loading: true,
       error: "",
     });
+    const snapshotRevision = this.networkStateRevision || 0;
     let networkState;
     try {
-      networkState = await getNetworkSnapshot();
-      this.setData({ networkState });
+      const snapshot = await getNetworkSnapshot();
+      if ((this.networkStateRevision || 0) === snapshotRevision) {
+        networkState = snapshot;
+        this.setData({ networkState });
+      } else {
+        networkState = this.data.networkState;
+      }
     } catch (error) {
-      // Unknown probe failures retain compatibility with the existing cloud load.
+      if ((this.networkStateRevision || 0) !== snapshotRevision) {
+        networkState = this.data.networkState;
+      }
+      // Probe failures without a newer live state retain the existing cloud load.
     }
 
     if (networkState && networkState.isConnected === false) {

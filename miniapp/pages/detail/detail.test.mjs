@@ -456,6 +456,99 @@ test("detail network recovery waits for an explicit retry before loading", async
   assert.equal(page.data.error, "");
 });
 
+test("detail ignores a stale load snapshot after a newer live offline event", async () => {
+  let listener;
+  let resolveSnapshot;
+  let fetchCalls = 0;
+  const existingArtwork = {
+    id: "preserved-artwork",
+    titleCn: "已加载作品",
+  };
+  const snapshot = new Promise((resolve) => {
+    resolveSnapshot = resolve;
+  });
+  const page = loadDetailPage({
+    artworks: {
+      ...serviceDefaults.artworks,
+      fetchArtworkById: async () => {
+        fetchCalls += 1;
+        return {
+          id: "stale-network-result",
+          titleCn: "不应加载",
+        };
+      },
+    },
+    networkStatus: {
+      ...serviceDefaults.networkStatus,
+      getNetworkSnapshot: async () => snapshot,
+      subscribeNetworkStatus(nextListener) {
+        listener = nextListener;
+        return () => {};
+      },
+    },
+  });
+  page.data.artwork = existingArtwork;
+  page.onShow();
+
+  const loadPromise = page.loadArtwork(existingArtwork.id);
+  listener({ isConnected: false, networkType: "none" });
+  await Promise.resolve();
+
+  assert.equal(fetchCalls, 0);
+  resolveSnapshot({ isConnected: true, networkType: "wifi" });
+  await loadPromise;
+
+  assert.equal(fetchCalls, 0);
+  assert.equal(page.data.artwork, existingArtwork);
+  assert.equal(page.data.loading, false);
+  assert.equal(page.data.usingFallback, false);
+  assert.equal(page.data.error, "当前无网络，请连接网络后重试");
+  assert.deepEqual(page.data.networkState, {
+    isConnected: false,
+    networkType: "none",
+  });
+});
+
+test("detail keeps a newer live offline state when the pending load probe rejects", async () => {
+  let listener;
+  let rejectSnapshot;
+  let fetchCalls = 0;
+  const snapshot = new Promise((resolve, reject) => {
+    rejectSnapshot = reject;
+  });
+  const page = loadDetailPage({
+    artworks: {
+      ...serviceDefaults.artworks,
+      fetchArtworkById: async () => {
+        fetchCalls += 1;
+        return null;
+      },
+    },
+    networkStatus: {
+      ...serviceDefaults.networkStatus,
+      getNetworkSnapshot: async () => snapshot,
+      subscribeNetworkStatus(nextListener) {
+        listener = nextListener;
+        return () => {};
+      },
+    },
+  });
+  page.onShow();
+
+  const loadPromise = page.loadArtwork("offline-after-probe-failure");
+  listener({ isConnected: false, networkType: "none" });
+  rejectSnapshot(new Error("getNetworkType:fail"));
+  await loadPromise;
+
+  assert.equal(fetchCalls, 0);
+  assert.equal(page.data.loading, false);
+  assert.equal(page.data.error, "当前无网络，请连接网络后重试");
+  assert.deepEqual(page.data.networkState, {
+    isConnected: false,
+    networkType: "none",
+  });
+});
+
 test("detail continues normal loading when the network probe is unknown or fails", async () => {
   for (const getNetworkSnapshot of [
     async () => ({ isConnected: true, networkType: "unknown" }),

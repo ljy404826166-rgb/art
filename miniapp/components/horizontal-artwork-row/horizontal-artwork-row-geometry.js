@@ -1,3 +1,7 @@
+const {
+  resolveArtworkImageCandidates,
+} = require("../../services/artwork-image-sources");
+
 const ROW_IMAGE_HEIGHT_RPX = 350;
 const VIEWPORT_WIDTH_RPX = 750;
 const TRACK_PADDING_RPX = 28 + 64;
@@ -10,9 +14,7 @@ function computeRowArtworkCardWidth(imageRatio) {
 }
 
 function resolveRowArtworkMeasureSrc(item) {
-  if (!item) return "";
-  const safeImageSrc = item.imageSrc && item.imageSrc !== item.download_url ? item.imageSrc : "";
-  return item.cloud_file_id || item.thumbnail_url || item.display_url || safeImageSrc || "";
+  return resolveArtworkImageCandidates(item, "card")[0] || "";
 }
 
 function fallbackCardWidth(item) {

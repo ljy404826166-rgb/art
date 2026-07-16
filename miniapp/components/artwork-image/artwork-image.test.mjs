@@ -76,6 +76,62 @@ test("artwork-image detail rendering prioritizes display URL and never uses orig
   }, "detail"), []);
 });
 
+test("artwork-image card rendering rejects thumbnail and display aliases of both original fields", () => {
+  for (const [sourceField, originalField] of [
+    ["thumbnail_url", "download_url"],
+    ["thumbnail_url", "original_url"],
+    ["display_url", "download_url"],
+    ["display_url", "original_url"],
+  ]) {
+    const artwork = {
+      thumbnail_url: "safe-thumb.webp",
+      display_url: "safe-display.webp",
+      imageSrc: "safe-image.webp",
+      download_url: "download-original.jpg",
+      original_url: "source-original.jpg",
+    };
+    artwork[sourceField] = ` ${artwork[originalField]} `;
+
+    const expected = [
+      artwork.thumbnail_url.trim(),
+      artwork.display_url.trim(),
+      artwork.imageSrc,
+    ].filter((value) => (
+      value !== artwork.download_url
+      && value !== artwork.original_url
+    ));
+    assert.deepEqual(resolveCandidates(artwork, "card"), expected);
+  }
+});
+
+test("artwork-image detail rendering rejects display and thumbnail aliases of both original fields", () => {
+  for (const [sourceField, originalField] of [
+    ["display_url", "download_url"],
+    ["display_url", "original_url"],
+    ["thumbnail_url", "download_url"],
+    ["thumbnail_url", "original_url"],
+  ]) {
+    const artwork = {
+      display_url: "safe-display.webp",
+      thumbnail_url: "safe-thumb.webp",
+      imageSrc: "safe-image.webp",
+      download_url: "download-original.jpg",
+      original_url: "source-original.jpg",
+    };
+    artwork[sourceField] = ` ${artwork[originalField]} `;
+
+    const expected = [
+      artwork.display_url.trim(),
+      artwork.thumbnail_url.trim(),
+      artwork.imageSrc,
+    ].filter((value) => (
+      value !== artwork.download_url
+      && value !== artwork.original_url
+    ));
+    assert.deepEqual(resolveCandidates(artwork, "detail"), expected);
+  }
+});
+
 test("artwork-image display component does not inspect original-image fields", () => {
   const source = readFileSync(
     fileURLToPath(new URL("./artwork-image.js", import.meta.url)),
