@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：设计已确认，待书面复核
+- 状态：设计及 `classification_ids` 查询修订均已确认
 - 日期：2026-07-19
 - 目标平台：微信原生小程序
 - 实施范围：分类数据治理、云数据库派生数据、分类页查询与交互
@@ -203,24 +203,20 @@ flowchart LR
     "subject-seascape",
     "period-1880s"
   ],
-  "category_filter_keys": [
-    "style:style-impressionism",
-    "subject:subject-seascape",
-    "decade:period-1880s",
-    "style:style-impressionism|subject:subject-seascape",
-    "style:style-impressionism|decade:period-1880s",
-    "subject:subject-seascape|decade:period-1880s",
-    "style:style-impressionism|subject:subject-seascape|decade:period-1880s"
+  "classification_ids": [
+    "style-impressionism",
+    "subject-seascape",
+    "period-1880s"
   ],
   "classification_version": "classification-v1",
-  "filter_key_schema_version": 1,
+  "classification_schema_version": 1,
   "classified_at": "2026-07-19T00:00:00.000Z"
 }
 ```
 
 这些字段不是新的事实来源，可以从 `artwork_tag_links` 重建。分类脚本不得修改标题、作者、日期、媒介、描述或原始 `tags`。
 
-`tag_ids` 收录该作品全部已审核术语，包括暂不在前台展示的媒介、技法、时期、形式、系列、权利和地区；`style_ids`、`subject_ids`、`decade_ids` 是三个前台维度的子集。`category_filter_keys` 只由这三个前台子集生成。
+`tag_ids` 收录该作品全部已审核术语，包括暂不在前台展示的媒介、技法、时期、形式、系列、权利和地区；`style_ids`、`subject_ids`、`decade_ids` 是三个前台维度的子集。`classification_ids` 按 `style -> subject -> decade` 的固定顺序合并这三个子集并去重，只用于前台分类查询，最多包含 8 项。
 
 ### 7.4 `category_catalog`
 
@@ -236,12 +232,14 @@ flowchart LR
   "artwork_count": 42,
   "sort_order": 100,
   "display_enabled": true,
-  "publish_status": "active",
+  "publish_status": "ready",
   "generated_at": "2026-07-19T00:00:00.000Z"
 }
 ```
 
 计数只包含 `status=published` 且关系已审核的作品。流派和题材按人工维护的 `sort_order` 排序；年代按十年倒序排列。`artwork_count=0` 的术语不在首版页面展示。
+
+分类目录通过单例文档 `category_catalog_state/active` 发布，其 `active_catalog_version` 指向当前目录版本。新目录先以 `ready` 状态完整写入并审计，最后只更新这一条指针；回滚时将指针切回上一版本，避免逐条切换目录状态造成多个版本同时激活。
 
 ## 8. 分类生成与审核规则
 
@@ -322,55 +320,40 @@ flowchart LR
 
 ## 9. 查询索引设计
 
-### 9.1 `category_filter_keys`
+### 9.1 `classification_ids`
 
-由于页面每个类别最多选择一个标签，跨类别使用 AND，系统为每幅作品预计算所有有效的单项、两项和三项组合键。键的类别顺序固定为：
+页面每个类别最多选择一个标签，跨类别使用 AND。小程序按 `style -> subject -> decade` 的固定顺序取得 0—3 个已选术语 ID。无筛选时只查询已发布作品；有筛选时使用 CloudBase 数组“包含全部元素”操作符：
 
-```text
-style -> subject -> decade
+```javascript
+const selectedIds = [filters.style, filters.subject, filters.decade].filter(Boolean);
+const where = selectedIds.length
+  ? { status: "published", classification_ids: db.command.all(selectedIds) }
+  : { status: "published" };
 ```
 
-示例：
+`classification_ids` 只包含已审核的流派、题材和 decade，不直接复用还包含媒介、技法、时代、形式、系列、权利和地区的 `tag_ids`。按每幅作品最多 2 个流派、4 个题材、2 个年代计算，该数组最多 8 项，不生成组合字符串。
 
-```text
-style:style-impressionism|subject:subject-seascape|decade:period-1880s
-```
-
-查询时将当前选择规范化为一个键，再查询：
-
-```text
-status = published
-AND category_filter_keys 包含目标键
-```
-
-这样避免在小程序端组合多个数组条件，也不需要运行时跨集合聚合。
-
-组合数量有明确上限。按每幅作品最多 2 个流派、4 个题材、2 个年代计算，最多生成：
-
-- 单项键：8 个；
-- 两项键：20 个；
-- 三项键：16 个；
-- 总计：44 个。
-
-超过分类数量上限的作品必须先解决冲突，不能通过截断关系来强行生成键。
+生成与发布门禁必须验证：数组固定顺序、无重复、只引用已审核术语、与三个子数组精确一致、UTF-8 保守计算值不超过 900 字节。CloudBase 官方索引字段上限为 1024 字节，900 字节是为编码和存储差异保留余量的项目门禁；超限时阻止发布，不截断分类。
 
 ### 9.2 索引与分页
 
-实施阶段应根据当前云数据库能力建立与以下条件匹配的索引：
+实施阶段应在开发或体验环境建立并验证以下索引：
 
-- `status + category_filter_keys + 稳定排序字段`；
-- 无筛选时的 `status + 稳定排序字段`；
-- `category_catalog` 的 `catalog_version + publish_status + group + sort_order`。
+- `artworks`: `status asc + classification_ids asc + created_at desc + _id desc`；
+- `artworks`: `status asc + created_at desc + _id desc`；
+- `category_catalog`: `catalog_version asc + publish_status asc + group asc + sort_order asc + _id asc`。
 
 结果每页 20 条。排序必须包含稳定唯一键作为最终排序条件，确保触底加载无重复、无漏项。总数通过与结果查询相同的条件执行计数，不使用标签目录中的单项计数估算多条件结果。
+
+体验环境必须以真实 SDK 验证无筛选、单条件、双条件、三条件的 `get()` 和 `count()`，并验证 `created_at desc + _id desc` 分页。若目标 CloudBase 环境无法稳定支持该数组复合索引，不退回作品文档内的组合键数组；兜底方案是独立的 `artwork_category_filter_index` 物化集合，每个组合保存为一条文档，并对标量 `filter_key + created_at + artwork_id` 建立索引。是否启用兜底方案由体验环境门禁结果决定。
 
 ## 10. 小程序分类页设计
 
 ### 10.1 目录加载
 
-页面启动时读取当前激活版本的 `category_catalog`，只展示：
+页面启动时先读取 `category_catalog_state/active`，再读取其 `active_catalog_version` 对应的 `category_catalog`，只展示：
 
-- `publish_status=active`；
+- `publish_status=ready`；
 - `display_enabled=true`；
 - `artwork_count>0`；
 - 对应术语仍为 `reviewed`。
@@ -409,7 +392,7 @@ AND category_filter_keys 包含目标键
 1. 对生产云数据库执行只读审计并导出快照；
 2. 从 `tags`、标题、描述和创作时间生成候选；
 3. 建立并人工审核受控词表、别名和术语类型；
-4. dry-run 生成关系、年代、筛选键、目录、冲突报告和日期队列；
+4. dry-run 生成关系、年代、`classification_ids`、目录、冲突报告和日期队列；
 5. 人工审核统计报告和抽样结果；
 6. 分批写入 `vocab_terms`、`artwork_tag_links` 和作品派生字段；
 7. 生成并核对 `category_catalog`；
@@ -421,19 +404,19 @@ AND category_filter_keys 包含目标键
 每个批次记录：
 
 - `classification_version`；
-- `filter_key_schema_version`；
+- `classification_schema_version`；
 - `source_batch`；
 - 脚本版本和执行时间；
 - 新增、更新、跳过、冲突数量；
 - 写入前值和写入后值；
 - 分类目录版本。
 
-分类目录采用版本化发布。同一时刻只能有一个 `active` 版本。若数据或页面出现严重问题，可切回上一目录版本并依据回滚 manifest 恢复派生字段；原始十字段不参与回滚，因为从未被修改。
+分类目录采用版本化发布，`category_catalog_state/active` 单例指针决定唯一活动版本。若数据或页面出现严重问题，可将指针切回上一目录版本并依据回滚 manifest 恢复派生字段；原始十字段不参与回滚，因为从未被修改。
 
 ### 11.3 分阶段上线
 
 1. 先写入和审计词表、关系及派生字段，旧分类页保持不变；
-2. 在开发和体验环境验证新版查询；
+2. 在开发和体验环境验证数组索引、无筛选及单/双/三条件查询；
 3. 数据与查询门禁通过后启用新版分类页；
 4. 保留上一分类目录版本和页面切换能力，直至观察期结束；
 5. 后续新增作品继续执行“候选—审核—派生—审计—发布”流程。
@@ -449,9 +432,9 @@ AND category_filter_keys 包含目标键
 - 关系引用不存在或已拒绝的作品/术语；
 - 作品分类数量超过上限；
 - decade 没有可追溯日期证据；
-- 筛选键不符合固定顺序或包含未审核关系；
+- `classification_ids` 顺序、去重、审核引用、子数组投影或 900 字节门禁不符合要求；
 - 目录计数与同条件查询不一致；
-- 同时存在多个激活目录版本；
+- 活动目录指针缺失、指向未就绪目录或不具备唯一性；
 - 分页抽样出现重复或漏项；
 - dry-run 与 apply 影响范围不一致。
 
@@ -465,7 +448,7 @@ AND category_filter_keys 包含目标键
 - 标签类型拦截；
 - decade 单年、同十年范围、相邻十年范围、宽范围、世纪和未知日期；
 - 分类数量上限；
-- 筛选键组合、顺序、去重和 44 键上限；
+- `classification_ids` 固定顺序、去重、8 项上限、900 字节门禁和 reviewed-only 投影；
 - 目录生成与计数核对；
 - dry-run、apply、幂等重跑和回滚 manifest。
 
@@ -503,8 +486,8 @@ AND category_filter_keys 包含目标键
 | 为追求覆盖率强行推断 | 数据失真 | 允许空分类，候选与发布分离 |
 | 画家风格被直接继承 | 作品误归类 | 只生成候选，人工审核 |
 | 宽泛时间被伪造成 decade | 年代筛选不可信 | 确定性解析和日期补全队列 |
-| 运行时多条件查询复杂 | 性能不稳定 | 预计算规范化组合键 |
-| 组合键膨胀 | 文档体积增加 | 分类数量上限，单幅最多 44 键 |
+| 数组复合索引在目标环境表现不符合预期 | 查询失败或性能不稳定 | 体验环境真实验证；失败时使用独立物化索引集合 |
+| 被索引数组字段过大 | 建索引或写入失败 | `classification_ids` 最多 8 项并设置 900 字节发布门禁 |
 | 目录和作品字段版本错配 | 标签计数或结果错误 | 目录版本、schema 版本和发布门禁 |
 | 批量写库污染生产数据 | 大范围错误 | 默认 dry-run、快照、manifest、分批 apply 和回滚 |
 | 目录请求失败 | 页面不可用 | 同版本缓存、错误状态和重试，不使用假标签 |
@@ -515,7 +498,7 @@ AND category_filter_keys 包含目标键
 
 1. 受控词表和审核产物格式；
 2. 标签与日期候选生成；
-3. 关系、派生字段、筛选键和目录生成；
+3. 关系、派生字段、`classification_ids` 和目录生成；
 4. 云数据库 dry-run/apply/审计/回滚；
 5. 分类服务与分类页改造；
 6. 自动化测试、开发者工具和真机验收清单。
@@ -533,6 +516,8 @@ AND category_filter_keys 包含目标键
 ## 16. 参考
 
 - 微信云开发聚合查询：https://docs.cloudbase.net/database/aggregate
+- 微信云开发数据库操作符：https://docs.cloudbase.net/en/api-reference/webv3-next/database
+- 微信云开发索引管理：https://docs.cloudbase.net/database/data-index
 - OpenRefine：https://github.com/OpenRefine/OpenRefine
 - Label Studio：https://github.com/HumanSignal/label-studio
 - Skosmos：https://github.com/NatLibFi/Skosmos
