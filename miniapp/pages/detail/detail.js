@@ -1,13 +1,13 @@
 const {
   fetchArtworkById,
   fallbackArtworkById,
-  normalizeError,
 } = require("../../services/artworks");
 const { loadArtistByArtworkText } = require("../../services/artists");
 const {
   computeDetailHeroFrameStyle,
   resolveDetailMeasureSrc,
 } = require("./detail-image-layout");
+const { previewArtwork } = require("../../services/artwork-preview");
 const {
   downloadFile,
   getDownloadFailureMessage,
@@ -21,8 +21,36 @@ const {
   recordHistoryArtwork,
   toggleFavoriteArtwork,
 } = require("../../services/local-library");
+const {
+  getNetworkSnapshot,
+  isCellularNetwork,
+  subscribeNetworkStatus,
+} = require("../../services/network-status");
+const { buildArtworkShareMessage } = require("../../services/share-routes");
 
 const detailImageRatioCache = {};
+const OFFLINE_LOAD_MESSAGE = "当前无网络，请连接网络后重试";
+const DETAIL_LOAD_FAILURE_MESSAGE = "作品详情加载失败，请稍后重试";
+const previewFailureMessages = {
+  unsupported: "当前微信版本不支持预览",
+  offline: "网络连接异常，请稍后重试",
+  "permission-denied": "暂无图片预览权限",
+  "remote-failed": "图片预览失败，请稍后重试",
+  "invalid-data": "暂无可预览图片",
+};
+
+function getPreviewFailureMessage(error) {
+  return previewFailureMessages[error && error.code] || "图片预览失败";
+}
+
+function decodeRouteText(value) {
+  const text = String(value || "");
+  try {
+    return decodeURIComponent(text);
+  } catch (error) {
+    return text;
+  }
+}
 
 Page({
   data: {
@@ -34,6 +62,10 @@ Page({
     isFavorite: false,
     heroFrameStyle: "",
     downloading: false,
+    networkState: {
+      isConnected: true,
+      networkType: "unknown",
+    },
     resolvedArtistId: "",
     resolvedArtistText: "",
   },
@@ -46,7 +78,50 @@ Page({
     if (routeRatioStyle) {
       this.setData({ heroFrameStyle: routeRatioStyle });
     }
-    this.loadArtwork(options.id || options.source_id || options.supabase_id);
+    const routeId = options && (options.id || options.source_id || options.supabase_id);
+    this.loadArtwork(decodeRouteText(routeId));
+  },
+
+  onShow() {
+    this.stopNetworkMonitor();
+    this.stopNetworkSubscription = subscribeNetworkStatus((networkState) => {
+      this.networkStateRevision = (this.networkStateRevision || 0) + 1;
+      this.setData({ networkState });
+    });
+  },
+
+  onHide() {
+    this.stopNetworkMonitor();
+  },
+
+  onUnload() {
+    this.stopNetworkMonitor();
+  },
+
+  stopNetworkMonitor() {
+    if (typeof this.stopNetworkSubscription === "function") {
+      this.stopNetworkSubscription();
+      this.stopNetworkSubscription = null;
+    }
+  },
+
+  onShareAppMessage() {
+    const shareArtwork = this.data.loading && this.data.currentId
+      ? { id: this.data.currentId }
+      : (this.data.artwork || { id: this.data.currentId });
+    return buildArtworkShareMessage(shareArtwork);
+  },
+
+  async previewHeroImage() {
+    if (!this.data.artwork) return;
+    try {
+      await previewArtwork(this.data.artwork);
+    } catch (error) {
+      wx.showToast({
+        title: getPreviewFailureMessage(error),
+        icon: "none",
+      });
+    }
   },
 
   async loadArtwork(id) {
@@ -55,14 +130,43 @@ Page({
       loading: true,
       error: "",
     });
+    const snapshotRevision = this.networkStateRevision || 0;
+    let networkState;
+    try {
+      const snapshot = await getNetworkSnapshot();
+      if ((this.networkStateRevision || 0) === snapshotRevision) {
+        networkState = snapshot;
+        this.setData({ networkState });
+      } else {
+        networkState = this.data.networkState;
+      }
+    } catch (error) {
+      if ((this.networkStateRevision || 0) !== snapshotRevision) {
+        networkState = this.data.networkState;
+      }
+      // Probe failures without a newer live state retain the existing cloud load.
+    }
+
+    if (networkState && networkState.isConnected === false) {
+      this.setData({
+        loading: false,
+        error: OFFLINE_LOAD_MESSAGE,
+        usingFallback: false,
+      });
+      return;
+    }
+
     try {
       const artwork = await fetchArtworkById(id);
-      this.applyLoadedArtwork(artwork, { usingFallback: false });
+      this.applyLoadedArtwork(artwork, {
+        error: artwork ? "" : DETAIL_LOAD_FAILURE_MESSAGE,
+        usingFallback: false,
+      });
     } catch (error) {
       const fallbackArtwork = fallbackArtworkById(id);
       this.applyLoadedArtwork(fallbackArtwork, {
-        error: normalizeError(error),
-        usingFallback: true,
+        error: DETAIL_LOAD_FAILURE_MESSAGE,
+        usingFallback: Boolean(fallbackArtwork),
       });
     }
   },
@@ -158,7 +262,7 @@ Page({
   },
 
   retryLoad() {
-    this.loadArtwork(this.data.currentId);
+    return this.loadArtwork(this.data.currentId);
   },
 
   openArtistFromArtwork() {
@@ -200,9 +304,21 @@ Page({
     });
   },
 
+  confirmDownloadWithTrafficWarning() {
+    return new Promise((resolve) => {
+      wx.showModal({
+        title: "下载流量提醒",
+        content: "网络状态不明或可能正在使用移动网络，继续下载可能消耗流量。是否继续？",
+        confirmText: "继续下载",
+        success: (result) => resolve(Boolean(result && result.confirm)),
+        fail: () => resolve(false),
+      });
+    });
+  },
+
   async downloadArtwork() {
     const artwork = this.data.artwork;
-    if (!artwork || this.data.downloading) return;
+    if (!artwork || this.data.downloading || this.downloadRequestPending) return;
 
     const downloadUrl = resolveArtworkDownloadUrl(artwork);
     if (!downloadUrl) {
@@ -213,42 +329,85 @@ Page({
       return;
     }
 
-    this.setData({ downloading: true });
-    wx.showLoading({
-      title: "下载中",
-      mask: true,
-    });
-
+    this.downloadRequestPending = true;
     try {
-      const tempFilePath = await downloadFile(downloadUrl);
-      await saveImageToAlbum(tempFilePath);
-      recordDownloadArtwork(artwork, "completed");
-      wx.hideLoading();
-      wx.showToast({
-        title: "已保存到相册",
-        icon: "success",
-      });
-    } catch (error) {
-      wx.hideLoading();
-      if (isAlbumPermissionError(error)) {
-        wx.showModal({
-          title: "需要相册权限",
-          content: "请允许保存到相册后重试下载。",
-          confirmText: "去设置",
-          success: (result) => {
-            if (result.confirm && wx.openSetting) {
-              wx.openSetting();
-            }
-          },
-        });
-      } else {
+      const snapshotRevision = this.networkStateRevision || 0;
+      let networkState;
+      try {
+        const snapshot = await getNetworkSnapshot();
+        if ((this.networkStateRevision || 0) === snapshotRevision) {
+          networkState = snapshot;
+          this.setData({ networkState });
+        } else {
+          networkState = this.data.networkState;
+        }
+      } catch (error) {
+        if ((this.networkStateRevision || 0) !== snapshotRevision) {
+          networkState = this.data.networkState;
+        } else {
+          networkState = {
+            isConnected: true,
+            networkType: "unknown",
+          };
+          this.setData({ networkState });
+        }
+      }
+
+      if (!networkState.isConnected) {
         wx.showToast({
-          title: getDownloadFailureMessage(error),
+          title: "当前无网络，无法下载原图",
           icon: "none",
         });
+        return;
+      }
+
+      if (
+        isCellularNetwork(networkState.networkType)
+        || networkState.networkType === "unknown"
+      ) {
+        const confirmed = await this.confirmDownloadWithTrafficWarning();
+        if (!confirmed) return;
+      }
+
+      this.setData({ downloading: true });
+      wx.showLoading({
+        title: "下载中",
+        mask: true,
+      });
+
+      try {
+        const tempFilePath = await downloadFile(downloadUrl);
+        await saveImageToAlbum(tempFilePath);
+        recordDownloadArtwork(artwork, "completed");
+        wx.hideLoading();
+        wx.showToast({
+          title: "已保存到相册",
+          icon: "success",
+        });
+      } catch (error) {
+        wx.hideLoading();
+        if (isAlbumPermissionError(error)) {
+          wx.showModal({
+            title: "需要相册权限",
+            content: "请允许保存到相册后重试下载。",
+            confirmText: "去设置",
+            success: (result) => {
+              if (result.confirm && wx.openSetting) {
+                wx.openSetting();
+              }
+            },
+          });
+        } else {
+          wx.showToast({
+            title: getDownloadFailureMessage(error),
+            icon: "none",
+          });
+        }
+      } finally {
+        this.setData({ downloading: false });
       }
     } finally {
-      this.setData({ downloading: false });
+      this.downloadRequestPending = false;
     }
   },
 });

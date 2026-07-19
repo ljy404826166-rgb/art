@@ -12,6 +12,7 @@ const {
   isFollowedArtist,
   toggleFollowedArtist,
 } = require("../../services/local-library");
+const { buildArtistShareMessage } = require("../../services/share-routes");
 
 const ARTIST_WORKS_PAGE_SIZE = 8;
 
@@ -31,6 +32,8 @@ function decodeRouteText(value) {
 Page({
   data: {
     artist: null,
+    currentId: "",
+    artistText: "",
     artistSource: "",
     artworks: [],
     artworkTotal: 0,
@@ -47,15 +50,24 @@ Page({
   onLoad(options) {
     wx.setNavigationBarTitle({ title: "画家详情" });
     if (options && options.id) {
-      this.loadArtistById(options.id);
+      this.loadArtistById(decodeRouteText(options.id));
       return;
     }
     this.loadArtistByText(decodeRouteText(options && options.artistText));
   },
 
+  onShareAppMessage() {
+    const shareArtist = this.data.loading && this.data.currentId
+      ? { id: this.data.currentId }
+      : (this.data.artist || { id: this.data.currentId });
+    return buildArtistShareMessage(shareArtist);
+  },
+
   resetArtistState() {
     this.setData({
       artist: null,
+      currentId: "",
+      artistText: "",
       artistSource: "",
       artworks: [],
       artworkTotal: 0,
@@ -72,6 +84,7 @@ Page({
 
   async loadArtistById(id) {
     this.resetArtistState();
+    this.setData({ currentId: String(id || "") });
     const artistResult = await loadArtistRecordById(id);
     await this.applyArtistResult(artistResult);
   },
@@ -82,6 +95,7 @@ Page({
 
   async loadArtistByText(artistText) {
     this.resetArtistState();
+    this.setData({ artistText: String(artistText || "") });
     if (!artistText) {
       await this.applyArtistResult({
         artist: null,
@@ -93,6 +107,13 @@ Page({
 
     const artistResult = await loadArtistByArtworkText(artistText, { allowFallback: false });
     await this.applyArtistResult(artistResult);
+  },
+
+  retryLoad() {
+    if (this.data.currentId) {
+      return this.loadArtistById(this.data.currentId);
+    }
+    return this.loadArtistByText(this.data.artistText);
   },
 
   async applyArtistResult(artistResult) {

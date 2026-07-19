@@ -1,3 +1,7 @@
+const {
+  resolveArtworkImageCandidates,
+} = require("../../services/artwork-image-sources");
+
 const DETAIL_HERO_WIDTH_RPX = 694;
 
 function normalizeRatio(value) {
@@ -14,9 +18,7 @@ function computeDetailHeroFrameStyle(imageRatio) {
 }
 
 function resolveDetailMeasureSrc(item) {
-  if (!item) return "";
-  const safeImageSrc = item.imageSrc && item.imageSrc !== item.download_url ? item.imageSrc : "";
-  return item.cloud_file_id || item.display_url || item.thumbnail_url || safeImageSrc || "";
+  return resolveArtworkImageCandidates(item, "detail")[0] || "";
 }
 
 module.exports = {

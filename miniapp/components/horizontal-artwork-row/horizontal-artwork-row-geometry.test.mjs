@@ -3,18 +3,36 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
 
-function loadCommonJsModule(filename) {
+function loadCommonJsModule(filename, dependencies = {}) {
   const module = { exports: {} };
   const source = readFileSync(filename, "utf8");
-  vm.runInNewContext(source, { module, exports: module.exports }, { filename });
+  const localRequire = (id) => {
+    if (Object.prototype.hasOwnProperty.call(dependencies, id)) {
+      return dependencies[id];
+    }
+    throw new Error(`Unexpected dependency: ${id}`);
+  };
+  vm.runInNewContext(source, {
+    module,
+    exports: module.exports,
+    require: localRequire,
+  }, { filename });
   return module.exports;
 }
 
+const imageSources = loadCommonJsModule(
+  "miniapp/services/artwork-image-sources.js",
+);
 const {
   computeRowArtworkCardWidth,
   estimateRowMoverWidth,
   resolveRowArtworkMeasureSrc,
-} = loadCommonJsModule("miniapp/components/horizontal-artwork-row/horizontal-artwork-row-geometry.js");
+} = loadCommonJsModule(
+  "miniapp/components/horizontal-artwork-row/horizontal-artwork-row-geometry.js",
+  {
+    "../../services/artwork-image-sources": imageSources,
+  },
+);
 
 test("computeRowArtworkCardWidth keeps fixed image height without min or max width clamps", () => {
   assert.equal(computeRowArtworkCardWidth(2), 700);
@@ -44,7 +62,7 @@ test("resolveRowArtworkMeasureSrc only uses display-safe image sources", () => {
     thumbnail_url: "thumb.webp",
     display_url: "display.webp",
     download_url: "original.jpg",
-  }), "cloud://artwork-thumb");
+  }), "thumb.webp");
 
   assert.equal(resolveRowArtworkMeasureSrc({
     thumbnail_url: "thumb.webp",
@@ -60,4 +78,24 @@ test("resolveRowArtworkMeasureSrc only uses display-safe image sources", () => {
   assert.equal(resolveRowArtworkMeasureSrc({
     download_url: "original.jpg",
   }), "");
+});
+
+test("resolveRowArtworkMeasureSrc skips thumbnail and display aliases of both original fields", () => {
+  for (const [sourceField, originalField, expected] of [
+    ["thumbnail_url", "download_url", "safe-display.webp"],
+    ["thumbnail_url", "original_url", "safe-display.webp"],
+    ["display_url", "download_url", "safe-image.webp"],
+    ["display_url", "original_url", "safe-image.webp"],
+  ]) {
+    const artwork = {
+      thumbnail_url: sourceField === "display_url" ? "" : "safe-thumb.webp",
+      display_url: "safe-display.webp",
+      imageSrc: "safe-image.webp",
+      download_url: "download-original.jpg",
+      original_url: "source-original.jpg",
+    };
+    artwork[sourceField] = ` ${artwork[originalField]} `;
+
+    assert.equal(resolveRowArtworkMeasureSrc(artwork), expected);
+  }
 });

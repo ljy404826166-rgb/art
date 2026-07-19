@@ -61,6 +61,7 @@ project.private.config.json
 
 .idea/
 .codex/
+.worktrees/
 
 *.log
 *.tmp

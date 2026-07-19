@@ -4,6 +4,17 @@
   background: #faf9f7;
 }
 
+.network-banner {
+  margin: 16rpx 28rpx 0;
+  padding: 16rpx 20rpx;
+  border: 1rpx solid #eadfce;
+  border-radius: 12rpx;
+  color: #6f5438;
+  background: #fff8ee;
+  font-size: 24rpx;
+  line-height: 1.45;
+}
+
 .detail-loading,
 .detail-error {
   margin: 32rpx;

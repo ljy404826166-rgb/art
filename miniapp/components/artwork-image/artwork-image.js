@@ -1,3 +1,7 @@
+const {
+  resolveArtworkImageCandidates,
+} = require("../../services/artwork-image-sources");
+
 const loadedImageSrcs = {};
 
 Component({
@@ -58,23 +62,16 @@ Component({
   methods: {
     compactUnique(values) {
       const seen = {};
-      return values.filter((value) => {
-        if (!value || seen[value]) return false;
-        seen[value] = true;
-        return true;
-      });
+      return values.reduce((result, value) => {
+        const text = String(value || "").trim();
+        if (!text || seen[text]) return result;
+        seen[text] = true;
+        result.push(text);
+        return result;
+      }, []);
     },
 
     resolveCandidates(artwork, usage) {
-      if (usage === "detail") {
-        return this.compactUnique([
-          artwork.cloud_file_id,
-          artwork.display_url,
-          artwork.thumbnail_url,
-          artwork.imageSrc,
-        ]);
-      }
-
       if (usage === "avatar") {
         return this.compactUnique([
           artwork.avatar_url,
@@ -83,12 +80,7 @@ Component({
         ]);
       }
 
-      return this.compactUnique([
-        artwork.cloud_file_id,
-        artwork.thumbnail_url,
-        artwork.display_url,
-        artwork.imageSrc,
-      ]);
+      return resolveArtworkImageCandidates(artwork, usage);
     },
 
     resolveMode(usage) {
