@@ -22,6 +22,8 @@ function createCatalogWx({
   pointer = { _id: "active", active_catalog_version: "classification-v1" },
   rows = [],
   rejectCloud = false,
+  rejectPointer = rejectCloud,
+  rejectCatalog = rejectCloud,
   initialCache,
 } = {}) {
   const storage = new Map();
@@ -47,7 +49,7 @@ function createCatalogWx({
                   return {
                     async get() {
                       counters.pointerGets += 1;
-                      if (rejectCloud) throw new Error("cloud unavailable");
+                      if (rejectPointer) throw new Error("cloud unavailable");
                       return { data: pointer };
                     },
                   };
@@ -72,7 +74,7 @@ function createCatalogWx({
                   },
                   async get() {
                     counters.catalogGets += 1;
-                    if (rejectCloud) throw new Error("cloud unavailable");
+                    if (rejectCatalog) throw new Error("cloud unavailable");
                     const matched = rows.filter((row) => Object.entries(clause)
                       .every(([field, value]) => row[field] === value));
                     return { data: matched.slice(skip, skip + limit) };
@@ -187,12 +189,11 @@ test("loadCategoryCatalog follows the active pointer, normalizes rows, sorts gro
   }]);
   assert.equal(counters.cacheWrites.length, 1);
   assert.equal(counters.cacheWrites[0].key, CACHE_KEY);
+  const cached = storage.get(CACHE_KEY);
+  assert.equal(cached.catalogVersion, result.catalogVersion);
   assert.deepEqual(
-    JSON.parse(JSON.stringify(storage.get(CACHE_KEY))),
-    JSON.parse(JSON.stringify({
-      catalogVersion: result.catalogVersion,
-      groups: result.groups,
-    })),
+    JSON.parse(JSON.stringify(cached.groups[0].tags[0])),
+    { id: "style-a", label: "流派 A", count: 3, sortOrder: 10 },
   );
 });
 
@@ -214,6 +215,109 @@ test("loadCategoryCatalog returns only structurally valid cached catalog when cl
     JSON.parse(JSON.stringify(cloudResult.groups)),
   );
   assert.equal(offline.counters.cacheWrites.length, 0);
+});
+
+test("loadCategoryCatalog rejects invalid active v2 rows instead of serving cached v1", async () => {
+  const healthy = createCatalogWx({ rows: validRows() });
+  const healthyService = loadCategoriesService(healthy.wxApi).service;
+  await healthyService.loadCategoryCatalog();
+  const cachedV1 = healthy.storage.get(CACHE_KEY);
+
+  const brokenV2 = createCatalogWx({
+    pointer: { _id: "active", active_catalog_version: "classification-v2" },
+    rows: [],
+    initialCache: cachedV1,
+  });
+  const service = loadCategoriesService(brokenV2.wxApi).service;
+
+  await assert.rejects(
+    () => service.loadCategoryCatalog(),
+    /Category catalog group is empty: style/,
+  );
+  assert.equal(brokenV2.counters.pointerGets, 1);
+  assert.equal(brokenV2.counters.catalogGets, 1);
+  assert.equal(brokenV2.counters.cacheWrites.length, 0);
+});
+
+test("catalog read failure uses cache only when it matches the resolved active version", async () => {
+  const healthy = createCatalogWx({ rows: validRows() });
+  const healthyService = loadCategoriesService(healthy.wxApi).service;
+  await healthyService.loadCategoryCatalog();
+  const cachedV1 = healthy.storage.get(CACHE_KEY);
+
+  const sameVersion = createCatalogWx({
+    rejectCatalog: true,
+    initialCache: cachedV1,
+  });
+  const sameVersionResult = await loadCategoriesService(sameVersion.wxApi)
+    .service
+    .loadCategoryCatalog();
+  assert.equal(sameVersionResult.catalogVersion, "classification-v1");
+  assert.equal(sameVersionResult.source, "cache");
+  assert.equal(sameVersionResult.stale, true);
+
+  const newerVersion = createCatalogWx({
+    pointer: { _id: "active", active_catalog_version: "classification-v2" },
+    rejectCatalog: true,
+    initialCache: cachedV1,
+  });
+  await assert.rejects(
+    () => loadCategoriesService(newerVersion.wxApi).service.loadCategoryCatalog(),
+    /cloud unavailable/,
+  );
+});
+
+test("cache fallback rebuilds a freshly sorted canonical public catalog", async () => {
+  const healthy = createCatalogWx({ rows: validRows() });
+  await loadCategoriesService(healthy.wxApi).service.loadCategoryCatalog();
+  const cached = JSON.parse(JSON.stringify(healthy.storage.get(CACHE_KEY)));
+  cached.groups[0].tags.reverse();
+  cached.groups[2].tags.reverse();
+
+  const offline = createCatalogWx({ rejectCloud: true, initialCache: cached });
+  const result = await loadCategoriesService(offline.wxApi).service.loadCategoryCatalog();
+
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(result.groups[0].tags.map((tag) => tag.id))),
+    ["style-a", "style-b"],
+  );
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(result.groups[2].tags.map((tag) => tag.label))),
+    ["1900s", "1890s"],
+  );
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(Object.keys(result.groups[0].tags[0]).sort())),
+    ["count", "id", "label"],
+  );
+  assert.notEqual(result.groups, cached.groups);
+});
+
+test("cache fallback rejects coerced counts and whitespace-padded identity fields", async () => {
+  const healthy = createCatalogWx({ rows: validRows() });
+  await loadCategoriesService(healthy.wxApi).service.loadCategoryCatalog();
+  const cached = healthy.storage.get(CACHE_KEY);
+
+  const stringCountCache = JSON.parse(JSON.stringify(cached));
+  stringCountCache.groups[0].tags[0].count = "3";
+  const stringCountWx = createCatalogWx({
+    rejectCloud: true,
+    initialCache: stringCountCache,
+  }).wxApi;
+  await assert.rejects(
+    () => loadCategoriesService(stringCountWx).service.loadCategoryCatalog(),
+    /cloud unavailable/,
+  );
+
+  const paddedIdCache = JSON.parse(JSON.stringify(cached));
+  paddedIdCache.groups[0].tags[0].id = ` ${paddedIdCache.groups[0].tags[0].id} `;
+  const paddedIdWx = createCatalogWx({
+    rejectCloud: true,
+    initialCache: paddedIdCache,
+  }).wxApi;
+  await assert.rejects(
+    () => loadCategoriesService(paddedIdWx).service.loadCategoryCatalog(),
+    /cloud unavailable/,
+  );
 });
 
 test("loadCategoryCatalog reads every catalog page when the version has more than 20 rows", async () => {
