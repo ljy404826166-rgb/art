@@ -1,20 +1,43 @@
 const {
-  fetchArtworksByTag,
-  countArtworksByTag,
-  fallbackArtworksByTag,
-  fallbackArtworkCountByTag,
+  fetchArtworksByCategoryFilters,
+  countArtworksByCategoryFilters,
   normalizeError,
 } = require("../../services/artworks");
-const { fallbackGroups } = require("../../data/fallback-artworks");
+const { loadCategoryCatalog } = require("../../services/categories");
 
 const PAGE_SIZE = 20;
+const STORED_TAG_KEY = "artArchive:selectedCategoryTag";
+const FILTER_GROUPS = ["style", "subject", "decade"];
 
-function makeGroupsView(groups, expandedGroups) {
-  return groups.map((group) => {
-    const tags = group.tags || [];
-    const expanded = Boolean(expandedGroups[group.name]);
+function emptyFilters() {
+  return {
+    style: "",
+    subject: "",
+    decade: "",
+  };
+}
+
+function cleanFilters(filters) {
+  return FILTER_GROUPS.reduce((result, group) => {
+    result[group] = String((filters && filters[group]) || "").trim();
+    return result;
+  }, {});
+}
+
+function hasActiveFilters(filters) {
+  return FILTER_GROUPS.some((group) => Boolean(filters[group]));
+}
+
+function makeGroupsView(groups, expandedGroups, selectedFilters) {
+  return (groups || []).map((group) => {
+    const tags = (group.tags || []).map((tag) => ({
+      ...tag,
+      selected: selectedFilters[group.key] === tag.id,
+    }));
+    const expanded = Boolean(expandedGroups[group.key]);
     return {
       ...group,
+      tags,
       expanded,
       visibleTags: expanded ? tags : tags.slice(0, 8),
       canExpand: tags.length > 8,
@@ -22,164 +45,294 @@ function makeGroupsView(groups, expandedGroups) {
   });
 }
 
-function normalizeTagInput(tag) {
-  if (!tag || typeof tag === "string") {
-    return {
-      id: "",
-      label: String(tag || ""),
-    };
-  }
+function findStoredFilter(groups, storedTag) {
+  const storedId = (
+    storedTag
+    && typeof storedTag === "object"
+    && String(storedTag.id || storedTag._id || storedTag.tag_id || storedTag.tagId || "").trim()
+  );
+  const storedLabel = typeof storedTag === "string"
+    ? storedTag.trim()
+    : String(
+      (storedTag && (
+        storedTag.label
+        || storedTag.label_zh
+        || storedTag.labelZh
+        || storedTag.name
+        || storedTag.text
+      )) || "",
+    ).trim();
 
-  return {
-    id: String(tag.id || tag._id || tag.tag_id || tag.tagId || "").trim(),
-    label: String(tag.label || tag.label_zh || tag.labelZh || tag.name || tag.text || "").trim(),
-  };
+  for (const group of groups || []) {
+    const tag = (group.tags || []).find((candidate) => (
+      storedId ? candidate.id === storedId : storedLabel && candidate.label === storedLabel
+    ));
+    if (tag) return { group: group.key, tagId: tag.id };
+  }
+  return null;
+}
+
+function artworkKey(artwork) {
+  if (!artwork || typeof artwork !== "object") return "";
+  return String(artwork.id || artwork._id || artwork.source_id || "").trim();
+}
+
+function appendUniqueArtworks(existing, incoming) {
+  const result = [];
+  const seen = new Set();
+  [...(existing || []), ...(incoming || [])].forEach((artwork) => {
+    const key = artworkKey(artwork);
+    if (key) {
+      if (seen.has(key)) return;
+      seen.add(key);
+    }
+    result.push(artwork);
+  });
+  return result;
 }
 
 Page({
   data: {
-    activeTag: "印象派",
-    activeTagId: "",
-    groups: fallbackGroups,
-    groupsView: makeGroupsView(fallbackGroups, {}),
+    selectedFilters: emptyFilters(),
+    hasActiveFilters: false,
+    groups: [],
+    groupsView: [],
     expandedGroups: {},
-    allArtworks: [],
-    filteredArtworks: [],
+    catalogVersion: "",
+    catalogSource: "",
+    catalogStale: false,
+    catalogLoading: true,
+    catalogError: "",
+    artworks: [],
     totalCount: 0,
     resultCountText: "0件作品",
     skip: 0,
-    hasMore: true,
+    hasMore: false,
     loading: true,
     loadingMore: false,
-    error: "",
-    usingFallback: false,
+    resultError: "",
   },
 
-  onShow() {
+  resultsRequestSerial: 0,
+  catalogRequestSerial: 0,
+
+  async onShow() {
     wx.setNavigationBarTitle({ title: "分类" });
-    const storedTag = wx.getStorageSync("artArchive:selectedCategoryTag");
-    if (storedTag && storedTag !== this.data.activeTag) {
-      wx.removeStorageSync("artArchive:selectedCategoryTag");
-      this.applyFilter(storedTag);
-      return;
-    }
-    if (!this.data.allArtworks.length) this.applyFilter(this.data.activeTag);
+    await this.loadCatalog();
+    return this.loadResults();
   },
 
   onReachBottom() {
-    this.loadMore();
+    return this.loadMore();
   },
 
-  selectTag(event) {
-    const { tag } = event.currentTarget.dataset;
-    if (!tag || tag === this.data.activeTag) return;
-    this.applyFilter(tag);
-  },
-
-  toggleGroup(event) {
-    const { group } = event.currentTarget.dataset;
-    const expandedGroups = {
-      ...this.data.expandedGroups,
-      [group]: !this.data.expandedGroups[group],
-    };
+  async loadCatalog() {
+    const requestSerial = ++this.catalogRequestSerial;
     this.setData({
-      expandedGroups,
-      groupsView: makeGroupsView(this.data.groups, expandedGroups),
+      catalogLoading: true,
+      catalogError: "",
     });
+
+    try {
+      const catalog = await loadCategoryCatalog();
+      if (requestSerial !== this.catalogRequestSerial) return;
+
+      const groups = catalog.groups || [];
+      const previousFilters = cleanFilters(this.data.selectedFilters);
+      let selectedFilters = cleanFilters(previousFilters);
+      FILTER_GROUPS.forEach((groupKey) => {
+        const group = groups.find((candidate) => candidate.key === groupKey);
+        const selectionExists = group && (group.tags || [])
+          .some((tag) => tag.id === selectedFilters[groupKey]);
+        if (!selectionExists) selectedFilters[groupKey] = "";
+      });
+
+      const storedTag = wx.getStorageSync(STORED_TAG_KEY);
+      if (storedTag) {
+        const storedFilter = findStoredFilter(groups, storedTag);
+        selectedFilters = emptyFilters();
+        if (storedFilter) {
+          selectedFilters[storedFilter.group] = storedFilter.tagId;
+        }
+        wx.removeStorageSync(STORED_TAG_KEY);
+      }
+
+      this.setData({
+        groups,
+        groupsView: makeGroupsView(groups, this.data.expandedGroups, selectedFilters),
+        selectedFilters,
+        hasActiveFilters: hasActiveFilters(selectedFilters),
+        catalogVersion: String(catalog.catalogVersion || ""),
+        catalogSource: String(catalog.source || ""),
+        catalogStale: Boolean(catalog.stale),
+        catalogLoading: false,
+        catalogError: "",
+      });
+      return {
+        filtersChanged: FILTER_GROUPS.some(
+          (groupKey) => previousFilters[groupKey] !== selectedFilters[groupKey],
+        ),
+      };
+    } catch (error) {
+      if (requestSerial !== this.catalogRequestSerial) return;
+      this.setData({
+        catalogLoading: false,
+        catalogError: normalizeError(error),
+      });
+      return { filtersChanged: false };
+    }
   },
 
-  async applyFilter(tag) {
-    const tagInfo = normalizeTagInput(tag);
-    const tagQuery = tagInfo.id ? { id: tagInfo.id, label: tagInfo.label } : tagInfo.label;
+  async retryCatalog() {
+    const result = await this.loadCatalog();
+    if (result && result.filtersChanged) return this.loadResults();
+  },
 
+  async selectTag(event) {
+    const dataset = (event && event.currentTarget && event.currentTarget.dataset) || {};
+    const groupKey = String(dataset.group || "").trim();
+    const tagId = String(dataset.tagId || "").trim();
+    const group = this.data.groups.find((candidate) => candidate.key === groupKey);
+    if (
+      !FILTER_GROUPS.includes(groupKey)
+      || !tagId
+      || !group
+      || !(group.tags || []).some((tag) => tag.id === tagId)
+    ) return;
+
+    const selectedFilters = cleanFilters(this.data.selectedFilters);
+    selectedFilters[groupKey] = selectedFilters[groupKey] === tagId ? "" : tagId;
+    return this.applyFilters(selectedFilters);
+  },
+
+  async clearFilters() {
+    if (!hasActiveFilters(this.data.selectedFilters)) return;
+    return this.applyFilters(emptyFilters());
+  },
+
+  async applyFilters(filters) {
+    const selectedFilters = cleanFilters(filters || this.data.selectedFilters);
     this.setData({
-      activeTag: tagInfo.label,
-      activeTagId: tagInfo.id,
-      allArtworks: [],
-      filteredArtworks: [],
+      selectedFilters,
+      hasActiveFilters: hasActiveFilters(selectedFilters),
+      groupsView: makeGroupsView(
+        this.data.groups,
+        this.data.expandedGroups,
+        selectedFilters,
+      ),
+    });
+    return this.loadResults();
+  },
+
+  async loadResults() {
+    const requestSerial = ++this.resultsRequestSerial;
+    const filters = cleanFilters(this.data.selectedFilters);
+    this.setData({
+      artworks: [],
       totalCount: 0,
       resultCountText: "读取中",
       skip: 0,
-      hasMore: true,
+      hasMore: false,
       loading: true,
       loadingMore: false,
-      error: "",
-      usingFallback: false,
+      resultError: "",
     });
 
     try {
-      const [totalCount, artworks] = await Promise.all([
-        countArtworksByTag(tagQuery),
-        fetchArtworksByTag(tagQuery, { pageSize: PAGE_SIZE, skip: 0 }),
+      const [totalCountValue, firstPageValue] = await Promise.all([
+        countArtworksByCategoryFilters(filters),
+        fetchArtworksByCategoryFilters(filters, { pageSize: PAGE_SIZE, skip: 0 }),
       ]);
+      if (requestSerial !== this.resultsRequestSerial) return;
+
+      const totalCount = Math.max(0, Number(totalCountValue || 0));
+      const firstPage = Array.isArray(firstPageValue) ? firstPageValue : [];
+      const artworks = appendUniqueArtworks([], firstPage);
+      const skip = firstPage.length;
       this.setData({
-        allArtworks: artworks,
+        artworks,
         totalCount,
-        skip: artworks.length,
-        hasMore: artworks.length < totalCount,
+        resultCountText: `${totalCount}件作品`,
+        skip,
+        hasMore: skip < totalCount && firstPage.length > 0,
         loading: false,
+        loadingMore: false,
+        resultError: "",
       });
-      this.updateVisibleArtworks();
     } catch (error) {
-      const fallback = fallbackArtworksByTag(tagInfo.label);
-      const totalCount = fallbackArtworkCountByTag(tagInfo.label);
+      if (requestSerial !== this.resultsRequestSerial) return;
       this.setData({
-        allArtworks: fallback,
-        totalCount,
-        skip: fallback.length,
-        hasMore: false,
         loading: false,
-        error: normalizeError(error),
-        usingFallback: true,
+        loadingMore: false,
+        hasMore: false,
+        resultCountText: "读取失败",
+        resultError: normalizeError(error),
       });
-      this.updateVisibleArtworks();
     }
+  },
+
+  async retryResults() {
+    return this.loadResults();
   },
 
   async loadMore() {
-    if (this.data.loading || this.data.loadingMore || !this.data.hasMore || this.data.usingFallback) return;
-    this.setData({ loadingMore: true });
+    if (this.data.loading || this.data.loadingMore || !this.data.hasMore) return;
+
+    const requestSerial = this.resultsRequestSerial;
+    const filters = cleanFilters(this.data.selectedFilters);
+    const currentSkip = this.data.skip;
+    this.setData({
+      loadingMore: true,
+      resultError: "",
+    });
+
     try {
-      const tagQuery = this.data.activeTagId
-        ? { id: this.data.activeTagId, label: this.data.activeTag }
-        : this.data.activeTag;
-      const nextPage = await fetchArtworksByTag(tagQuery, {
+      const nextPageValue = await fetchArtworksByCategoryFilters(filters, {
         pageSize: PAGE_SIZE,
-        skip: this.data.skip,
+        skip: currentSkip,
       });
-      const allArtworks = this.data.allArtworks.concat(nextPage);
+      if (requestSerial !== this.resultsRequestSerial) return;
+
+      const nextPage = Array.isArray(nextPageValue) ? nextPageValue : [];
+      const artworks = appendUniqueArtworks(this.data.artworks, nextPage);
+      const skip = currentSkip + nextPage.length;
       this.setData({
-        allArtworks,
-        skip: allArtworks.length,
-        hasMore: allArtworks.length < this.data.totalCount && nextPage.length > 0,
+        artworks,
+        skip,
+        hasMore: skip < this.data.totalCount && nextPage.length > 0,
         loadingMore: false,
+        resultError: "",
       });
-      this.updateVisibleArtworks();
     } catch (error) {
+      if (requestSerial !== this.resultsRequestSerial) return;
       this.setData({
         loadingMore: false,
-        error: normalizeError(error),
+        resultError: normalizeError(error),
       });
     }
   },
 
-  updateVisibleArtworks() {
+  toggleGroup(event) {
+    const groupKey = String(
+      (event && event.currentTarget && event.currentTarget.dataset.group) || "",
+    ).trim();
+    if (!groupKey) return;
+    const expandedGroups = {
+      ...this.data.expandedGroups,
+      [groupKey]: !this.data.expandedGroups[groupKey],
+    };
     this.setData({
-      filteredArtworks: this.data.allArtworks,
-      resultCountText: `${this.data.totalCount}件作品`,
+      expandedGroups,
+      groupsView: makeGroupsView(
+        this.data.groups,
+        expandedGroups,
+        this.data.selectedFilters,
+      ),
     });
   },
 
-  retryLoad() {
-    this.applyFilter(
-      this.data.activeTagId
-        ? { id: this.data.activeTagId, label: this.data.activeTag }
-        : this.data.activeTag,
-    );
-  },
-
   openDetail(event) {
-    const { id, ratio } = event.detail || {};
+    const { id, ratio } = (event && event.detail) || {};
     if (!id) return;
     const ratioValue = Number(ratio || 0);
     const ratioParam = ratioValue > 0 ? `&ratio=${encodeURIComponent(ratioValue)}` : "";
