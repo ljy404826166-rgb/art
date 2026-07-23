@@ -41,7 +41,7 @@ function integrityError(message) {
 
 function compareCatalogTags(group, left, right) {
   if (group === "decade") {
-    const decadeDifference = decadeNumber(right.label) - decadeNumber(left.label);
+    const decadeDifference = decadeNumber(left.label) - decadeNumber(right.label);
     if (decadeDifference) return decadeDifference;
   } else {
     const orderDifference = left.sortOrder - right.sortOrder;

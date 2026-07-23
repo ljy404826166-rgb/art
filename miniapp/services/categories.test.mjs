@@ -176,7 +176,7 @@ test("loadCategoryCatalog follows the active pointer, normalizes rows, sorts gro
   );
   assert.deepEqual(
     JSON.parse(JSON.stringify(result.groups[2].tags.map((tag) => tag.label))),
-    ["1900s", "1890s"],
+    ["1890s", "1900s"],
   );
   assert.deepEqual(
     JSON.parse(JSON.stringify(result.groups[0].tags[0])),
@@ -283,7 +283,7 @@ test("cache fallback rebuilds a freshly sorted canonical public catalog", async 
   );
   assert.deepEqual(
     JSON.parse(JSON.stringify(result.groups[2].tags.map((tag) => tag.label))),
-    ["1900s", "1890s"],
+    ["1890s", "1900s"],
   );
   assert.deepEqual(
     JSON.parse(JSON.stringify(Object.keys(result.groups[0].tags[0]).sort())),
