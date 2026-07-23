@@ -194,6 +194,83 @@ test("shows an intentional zero-result state without treating it as an error", a
   assert.equal(page.data.hasMore, false);
 });
 
+test("returning from detail preserves 25 loaded artworks without duplicate requests", async () => {
+  let catalogLoads = 0;
+  let countLoads = 0;
+  const fetchSkips = [];
+  const { page } = loadCategoryPage({
+    storedTag: "流派 A",
+    catalogService: {
+      async loadCategoryCatalog() {
+        catalogLoads += 1;
+        return catalogFixture();
+      },
+    },
+    artworksService: {
+      countArtworksByCategoryFilters: async () => {
+        countLoads += 1;
+        return 25;
+      },
+      fetchArtworksByCategoryFilters: async (_filters, options) => {
+        fetchSkips.push(options.skip);
+        const length = options.skip === 0 ? 20 : 5;
+        return Array.from(
+          { length },
+          (_, index) => ({ id: `art-${options.skip + index + 1}` }),
+        );
+      },
+    },
+  });
+
+  await page.onShow();
+  await page.loadMore();
+  assert.equal(page.data.artworks.length, 25);
+  assert.equal(page.data.skip, 25);
+  assert.equal(page.data.selectedFilters.style, "style-a");
+
+  await page.onShow();
+
+  assert.equal(page.data.artworks.length, 25);
+  assert.equal(page.data.skip, 25);
+  assert.equal(page.data.hasMore, false);
+  assert.equal(page.data.selectedFilters.style, "style-a");
+  assert.equal(catalogLoads, 1);
+  assert.equal(countLoads, 1);
+  assert.deepEqual(fetchSkips, [0, 20]);
+});
+
+test("a new valid stored category request refreshes an initialized page", async () => {
+  const filtersSeen = [];
+  let catalogLoads = 0;
+  const loaded = loadCategoryPage({
+    catalogService: {
+      async loadCategoryCatalog() {
+        catalogLoads += 1;
+        return catalogFixture();
+      },
+    },
+    artworksService: {
+      countArtworksByCategoryFilters: async () => 0,
+      fetchArtworksByCategoryFilters: async (filters) => {
+        filtersSeen.push(clone(filters));
+        return [];
+      },
+    },
+  });
+
+  await loaded.page.onShow();
+  loaded.storage.set(STORED_TAG_KEY, "流派 A");
+  await loaded.page.onShow();
+
+  assert.equal(loaded.page.data.selectedFilters.style, "style-a");
+  assert.deepEqual(filtersSeen, [
+    { style: "", subject: "", decade: "" },
+    { style: "style-a", subject: "", decade: "" },
+  ]);
+  assert.equal(catalogLoads, 2);
+  assert.deepEqual(loaded.removedStorageKeys, [STORED_TAG_KEY]);
+});
+
 test("result errors preserve selected filters and retry only the results", async () => {
   let rejectResults = true;
   let catalogLoads = 0;
@@ -396,6 +473,43 @@ test("loadMore appends only unseen artworks in stable order and advances the raw
   ]);
 });
 
+test("loadMore failure keeps the grid visible and retries from the raw offset", async () => {
+  let failPageTwo = true;
+  const calls = [];
+  const { page } = loadCategoryPage({
+    artworksService: {
+      countArtworksByCategoryFilters: async () => 25,
+      fetchArtworksByCategoryFilters: async (_filters, options) => {
+        calls.push(options.skip);
+        if (options.skip === 20 && failPageTwo) throw new Error("page 2 failed");
+        const length = options.skip === 0 ? 20 : 5;
+        return Array.from(
+          { length },
+          (_, index) => ({ id: `art-${options.skip + index + 1}` }),
+        );
+      },
+    },
+  });
+
+  await page.onShow();
+  await page.loadMore();
+
+  assert.equal(page.data.artworks.length, 20);
+  assert.equal(page.data.skip, 20);
+  assert.equal(page.data.hasMore, true);
+  assert.equal(page.data.resultError, "");
+  assert.equal(page.data.loadMoreError, "page 2 failed");
+
+  failPageTwo = false;
+  await page.retryLoadMore();
+
+  assert.equal(page.data.artworks.length, 25);
+  assert.equal(page.data.skip, 25);
+  assert.equal(page.data.hasMore, false);
+  assert.equal(page.data.loadMoreError, "");
+  assert.deepEqual(calls, [0, 20, 20]);
+});
+
 test("a filter change suppresses an older loadMore response", async () => {
   const olderPage = deferred();
   const { page } = loadCategoryPage({
@@ -420,6 +534,7 @@ test("a filter change suppresses an older loadMore response", async () => {
   assert.deepEqual(clone(page.data.artworks.map((item) => item.id)), ["filtered"]);
   assert.equal(page.data.selectedFilters.style, "style-a");
   assert.equal(page.data.loadingMore, false);
+  assert.equal(page.data.loadMoreError, "");
 });
 
 test("toggleGroup and openDetail preserve their existing behavior", () => {
@@ -449,5 +564,7 @@ test("category template renders catalog tag objects and separate retry states", 
   assert.match(wxml, /bindtap="clearFilters"/);
   assert.match(wxml, /bindretry="retryCatalog"/);
   assert.match(wxml, /bindretry="retryResults"/);
+  assert.match(wxml, /loadMoreError/);
+  assert.match(wxml, /bindtap="retryLoadMore"/);
   assert.doesNotMatch(wxml, /备用|fallback|activeTag/);
 });

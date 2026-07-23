@@ -95,6 +95,10 @@
     </block>
   </view>
 
-  <loading-more wx:if="{{loadingMore}}" text="继续加载..." />
+  <view wx:if="{{loadMoreError}}" class="paging-error">
+    <text class="paging-error-text">{{loadMoreError}}</text>
+    <button class="paging-retry-button" bindtap="retryLoadMore">重试</button>
+  </view>
+  <loading-more wx:elif="{{loadingMore}}" text="继续加载..." />
   <loading-more wx:elif="{{!hasMore && artworks.length}}" text="已显示当前分类作品" done="{{true}}" />
 </view>

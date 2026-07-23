@@ -193,6 +193,39 @@
   padding: 0 34rpx;
 }
 
+.paging-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16rpx;
+  padding: 34rpx 34rpx 10rpx;
+}
+
+.paging-error-text {
+  color: #8a837d;
+  font-size: 24rpx;
+  line-height: 34rpx;
+}
+
+.paging-retry-button {
+  width: auto;
+  min-width: 0;
+  height: 48rpx;
+  margin: 0;
+  border: 0;
+  border-radius: 999rpx;
+  padding: 0 20rpx;
+  color: #5d524c;
+  background: #f6f5f4;
+  font-size: 23rpx;
+  font-weight: 700;
+  line-height: 48rpx;
+}
+
+.paging-retry-button::after {
+  border: 0;
+}
+
 .load-more {
   padding: 34rpx 0 10rpx;
   color: #8a837d;

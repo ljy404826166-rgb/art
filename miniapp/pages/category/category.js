@@ -111,15 +111,29 @@ Page({
     loading: true,
     loadingMore: false,
     resultError: "",
+    loadMoreError: "",
   },
 
   resultsRequestSerial: 0,
   catalogRequestSerial: 0,
+  hasInitialized: false,
 
   async onShow() {
     wx.setNavigationBarTitle({ title: "分类" });
-    await this.loadCatalog();
-    return this.loadResults();
+    const storedTag = wx.getStorageSync(STORED_TAG_KEY);
+    if (this.hasInitialized && !storedTag) return;
+
+    const catalogResult = await this.loadCatalog();
+    if (!this.hasInitialized) {
+      this.hasInitialized = true;
+      return this.loadResults();
+    }
+    if (
+      catalogResult
+      && (catalogResult.filtersChanged || catalogResult.storedRequestApplied)
+    ) {
+      return this.loadResults();
+    }
   },
 
   onReachBottom() {
@@ -140,6 +154,7 @@ Page({
       const groups = catalog.groups || [];
       const previousFilters = cleanFilters(this.data.selectedFilters);
       let selectedFilters = cleanFilters(previousFilters);
+      let storedRequestApplied = false;
       FILTER_GROUPS.forEach((groupKey) => {
         const group = groups.find((candidate) => candidate.key === groupKey);
         const selectionExists = group && (group.tags || [])
@@ -150,9 +165,10 @@ Page({
       const storedTag = wx.getStorageSync(STORED_TAG_KEY);
       if (storedTag) {
         const storedFilter = findStoredFilter(groups, storedTag);
-        selectedFilters = emptyFilters();
         if (storedFilter) {
+          selectedFilters = emptyFilters();
           selectedFilters[storedFilter.group] = storedFilter.tagId;
+          storedRequestApplied = true;
         }
         wx.removeStorageSync(STORED_TAG_KEY);
       }
@@ -172,6 +188,7 @@ Page({
         filtersChanged: FILTER_GROUPS.some(
           (groupKey) => previousFilters[groupKey] !== selectedFilters[groupKey],
         ),
+        storedRequestApplied,
       };
     } catch (error) {
       if (requestSerial !== this.catalogRequestSerial) return;
@@ -179,7 +196,7 @@ Page({
         catalogLoading: false,
         catalogError: normalizeError(error),
       });
-      return { filtersChanged: false };
+      return { filtersChanged: false, storedRequestApplied: false };
     }
   },
 
@@ -236,6 +253,7 @@ Page({
       loading: true,
       loadingMore: false,
       resultError: "",
+      loadMoreError: "",
     });
 
     try {
@@ -258,6 +276,7 @@ Page({
         loading: false,
         loadingMore: false,
         resultError: "",
+        loadMoreError: "",
       });
     } catch (error) {
       if (requestSerial !== this.resultsRequestSerial) return;
@@ -267,6 +286,7 @@ Page({
         hasMore: false,
         resultCountText: "读取失败",
         resultError: normalizeError(error),
+        loadMoreError: "",
       });
     }
   },
@@ -283,7 +303,7 @@ Page({
     const currentSkip = this.data.skip;
     this.setData({
       loadingMore: true,
-      resultError: "",
+      loadMoreError: "",
     });
 
     try {
@@ -301,15 +321,19 @@ Page({
         skip,
         hasMore: skip < this.data.totalCount && nextPage.length > 0,
         loadingMore: false,
-        resultError: "",
+        loadMoreError: "",
       });
     } catch (error) {
       if (requestSerial !== this.resultsRequestSerial) return;
       this.setData({
         loadingMore: false,
-        resultError: normalizeError(error),
+        loadMoreError: normalizeError(error),
       });
     }
+  },
+
+  async retryLoadMore() {
+    return this.loadMore();
   },
 
   toggleGroup(event) {
