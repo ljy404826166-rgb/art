@@ -61,7 +61,8 @@ function createFakeDatabase(rows, counters) {
       field() {
         return this;
       },
-      orderBy() {
+      orderBy(field, direction) {
+        counters.orderBy.push({ collectionName, field, direction });
         return this;
       },
       skip(value) {
@@ -107,7 +108,7 @@ function createFakeDatabase(rows, counters) {
 }
 
 function loadArtworksService(rows) {
-  const counters = { get: 0, count: 0, where: [] };
+  const counters = { get: 0, count: 0, where: [], orderBy: [] };
   const fakeDb = createFakeDatabase(rows, counters);
   const service = loadCommonJsModule(new URL("./artworks.js", import.meta.url), {
     wx: { cloud: { database: () => fakeDb } },
@@ -173,4 +174,83 @@ test("fetchArtworksByTag accepts tag objects and falls back to tag label when ta
 
   assert.deepEqual(page.map((item) => item._id), ["a", "b"]);
   assert.equal(total, 2);
+});
+
+test("getSelectedClassificationIds trims values in group order and removes duplicates", () => {
+  const { service } = loadArtworksService([]);
+
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(service.getSelectedClassificationIds({
+      style: " style-a ",
+      subject: "style-a",
+      decade: " period-1900s ",
+      ignored: "subject-b",
+    }))),
+    ["style-a", "period-1900s"],
+  );
+});
+
+test("category filters require all selected classification ids for fetch and count", async () => {
+  const { service, counters } = loadArtworksService([
+    {
+      _id: "a",
+      status: "published",
+      created_at: "2026-02-01",
+      classification_ids: ["style-a", "subject-a", "period-1900s"],
+    },
+    {
+      _id: "b",
+      status: "published",
+      created_at: "2026-03-01",
+      classification_ids: ["style-a", "subject-a"],
+    },
+    {
+      _id: "c",
+      status: "draft",
+      created_at: "2026-04-01",
+      classification_ids: ["style-a", "subject-a", "period-1900s"],
+    },
+  ]);
+  const filters = { style: "style-a", subject: "subject-a", decade: "period-1900s" };
+
+  const page = await service.fetchArtworksByCategoryFilters(filters, { pageSize: 20, skip: 0 });
+  const total = await service.countArtworksByCategoryFilters(filters);
+
+  assert.deepEqual(page.map((item) => item._id), ["a"]);
+  assert.equal(total, 1);
+  assert.equal(counters.where.length, 2);
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(counters.where[0].clause)),
+    JSON.parse(JSON.stringify(counters.where[1].clause)),
+  );
+  assert.deepEqual(JSON.parse(JSON.stringify(
+    counters.where[0].clause.classification_ids.__all,
+  )), [
+    "style-a",
+    "subject-a",
+    "period-1900s",
+  ]);
+  assert.deepEqual(counters.orderBy.slice(-2), [
+    { collectionName: "artworks", field: "created_at", direction: "desc" },
+    { collectionName: "artworks", field: "_id", direction: "desc" },
+  ]);
+});
+
+test("empty category filters query all published artworks with the same fetch and count clause", async () => {
+  const { service, counters } = loadArtworksService([
+    { _id: "a", status: "published", created_at: "2026-01-01" },
+    { _id: "b", status: "draft", created_at: "2026-02-01" },
+  ]);
+
+  const page = await service.fetchArtworksByCategoryFilters({}, { pageSize: 20, skip: 0 });
+  const total = await service.countArtworksByCategoryFilters({});
+
+  assert.deepEqual(page.map((item) => item._id), ["a"]);
+  assert.equal(total, 1);
+  assert.deepEqual(JSON.parse(JSON.stringify(
+    counters.where.map((entry) => entry.clause),
+  )), [
+    { status: "published" },
+    { status: "published" },
+  ]);
 });

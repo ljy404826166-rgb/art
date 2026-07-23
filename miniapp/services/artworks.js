@@ -236,6 +236,55 @@ function createArrayContainsWhereClause(db, field, value) {
   };
 }
 
+function getSelectedClassificationIds(filters) {
+  return [
+    filters && filters.style,
+    filters && filters.subject,
+    filters && filters.decade,
+  ]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .filter((value, index, values) => values.indexOf(value) === index);
+}
+
+function createCategoryWhereClause(db, filters) {
+  const ids = getSelectedClassificationIds(filters);
+  if (!ids.length) return { status: "published" };
+  if (!db.command || typeof db.command.all !== "function") {
+    throw new Error("WeChat Cloud array-all query is unavailable.");
+  }
+  return {
+    status: "published",
+    classification_ids: db.command.all(ids),
+  };
+}
+
+async function fetchArtworksByCategoryFilters(filters, options) {
+  const pageSize = (options && options.pageSize) || PAGE_SIZE;
+  const skip = (options && options.skip) || 0;
+  const db = database();
+  const whereClause = createCategoryWhereClause(db, filters);
+  const result = await db
+    .collection("artworks")
+    .where(whereClause)
+    .orderBy("created_at", "desc")
+    .orderBy("_id", "desc")
+    .skip(skip)
+    .limit(pageSize)
+    .get();
+  return (result.data || []).map(normalizeArtwork);
+}
+
+async function countArtworksByCategoryFilters(filters) {
+  const db = database();
+  const whereClause = createCategoryWhereClause(db, filters);
+  const result = await db
+    .collection("artworks")
+    .where(whereClause)
+    .count();
+  return Number(result.total || 0);
+}
+
 async function fetchArtworksByTagId(tagId, options) {
   const pageSize = (options && options.pageSize) || PAGE_SIZE;
   const skip = (options && options.skip) || 0;
@@ -678,6 +727,9 @@ module.exports = {
   fetchLatestArtworks,
   fetchRandomArtworks,
   countPublishedArtworks,
+  getSelectedClassificationIds,
+  fetchArtworksByCategoryFilters,
+  countArtworksByCategoryFilters,
   fetchArtworksByTagId,
   countArtworksByTagId,
   fetchArtworksByTag,
