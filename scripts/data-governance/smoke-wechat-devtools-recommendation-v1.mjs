@@ -22,7 +22,7 @@ async function waitUntil(check, { timeout = 30_000, interval = 500, label = "con
 
 async function connectToMiniProgram(
   wsEndpoint,
-  { timeout = 60_000, interval = 1_000, connect = automator.connect } = {},
+  { timeout = 60_000, interval = 1_000, connect = (options) => automator.connect(options) } = {},
 ) {
   const startedAt = Date.now();
   let lastError;
