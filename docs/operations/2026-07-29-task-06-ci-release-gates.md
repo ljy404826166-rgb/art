@@ -3,7 +3,7 @@
 日期：2026-07-29  
 仓库：`ljy404826166-rgb/art`  
 实施分支：`codex/supabase-integration`  
-状态：仓库内实施完成，GitHub 远端保护规则与凭据等待管理员启用
+状态：已完成，GitHub 远端保护、分层凭据与合并后门禁均已启用并验证
 
 ## 1. 实施结果
 
@@ -45,7 +45,7 @@
 
 ## 3. GitHub 远端启用清单
 
-以下属于 GitHub 仓库管理配置，代码无法代替管理员完成。启用后任务六才会在远端真正阻止合并和发布。
+以下 GitHub 仓库管理配置已于 2026-07-29 完成并验证。
 
 ### 3.1 Environments
 
@@ -61,14 +61,27 @@
    - 配置 required reviewers；
    - 禁止未受保护分支使用。
 
-两个 Secret 对应的腾讯云身份均只授予查询和审计所需的最小只读权限，不能拥有集合写入、函数部署、COS 写入或环境管理权限。
+两个 Secret 对应的腾讯云身份均按审计所需的最小 API 面配置，不授予函数部署、
+COS 写入或环境管理权限。腾讯云 CAM 未提供独立的 CloudBase `QUERY` action；
+管理 SDK 的查询必须经过统一的 `tcb:RunCommands` action，因此权限安全还依赖受保护、
+固定为 `QUERY` 的工作流代码与 Environment 审批，不能把这些密钥用于任意脚本。
+
+实际创建了两个禁止控制台登录、仅供 API 使用的独立 CAM 子账号：
+
+- `masterpiece-ci-staging-audit`；
+- `masterpiece-ci-production-audit`。
+
+二者只绑定项目自定义策略 `MasterpieceCITcbAuditAccess`，策略仅包含 SDK
+完成环境元数据读取和数据库审计所需的
+`tcb:DescribeEnvs`、`tcb:DescribeEnvInfo`、`tcb:RunCommands`。工作流代码只发出
+`QUERY` 命令；不授予 SCF、COS、部署或环境管理操作。staging 与 production
+密钥分别存放在对应 GitHub Environment，未写入仓库或本地文件。
 
 ### 3.2 Repository Variables
 
 供 Windows 自托管 runner 使用：
 
-- `WECHAT_DEVTOOLS_CLI`：runner 上微信开发者工具 CLI 的绝对路径；
-- `WECHAT_DEVTOOLS_PORT`：开发者工具服务端口，当前建议 `32070`。
+- `WECHAT_DEVTOOLS_CLI`：runner 上微信开发者工具 CLI 的绝对路径。
 
 runner 需要标签：
 
@@ -76,7 +89,7 @@ runner 需要标签：
 - `windows`
 - `wechat-devtools`
 
-runner 机器需要 Node.js 24、微信开发者工具、已登录且可以打开当前小程序项目。自动化 WebSocket 端口为 `9420`。工作流会先探测现有服务并复用，避免重复 `auto` 导致卡死；启动、冒烟和预览均有超时保护。
+runner 机器需要 Node.js 24、微信开发者工具、已登录且可以打开当前小程序项目。自动化 WebSocket 端口为 `9420`。工作流会先探测现有服务并复用，避免重复 `auto` 导致卡死；微信 CLI 自动发现当前 IDE HTTP 服务端口，不依赖会变化的固定端口；启动、连接、冒烟和预览均有超时保护。
 
 ### 3.3 Branch protection
 
@@ -137,6 +150,21 @@ npm run ci:pr
 
 在本任务收尾联调中，已监听的 `9420` 端口再次执行 CLI `auto` 会等待不返回。工作流因此增加端口复用与步骤超时；该问题不影响上述已通过的真实冒烟证据。
 
+远端最终验证：
+
+- PR #1、#3—#6 均在 required checks 通过后合并；
+- PR quality gate 的 `quality` 与
+  `production-dependency-audit / production-dependencies` 已配置为 `main`
+  必需检查；
+- 合并后运行
+  [30465059137](https://github.com/ljy404826166-rgb/art/actions/runs/30465059137)
+  全部通过；
+- `staging-cloudbase-audit` 成功完成全库审计并归档报告；
+- `wechat-devtools-smoke` 成功完成真实首页推荐冒烟并归档 JSON 与截图；
+- Windows runner `masterpiece-wechat-xttd-2023auuqeu` 在线，带有
+  `self-hosted`、`windows`、`wechat-devtools` 与 `masterpiece` 标签；
+- runner 已配置为当前 Windows 用户登录后自动启动，兼容微信开发者工具的桌面会话要求。
+
 ## 6. 发布操作顺序
 
 1. PR 工作流全部通过后合并；
@@ -148,14 +176,17 @@ npm run ci:pr
 7. 下载并检查生产审计、预览二维码和全部报告；
 8. 只有以上步骤均通过，才进入独立的正式上传或生产写入流程。
 
-## 7. 尚未执行的外部配置
+## 7. 远端启用结论
 
-本地仓库无法证明以下远端状态已生效：
+任务六要求的远端基础设施已经启用：
 
-- GitHub Environment、Secret 和 Variable 已创建；
-- Windows 自托管 runner 已注册并在线；
-- `main` required status checks 已启用；
-- Environment required reviewers 已配置；
-- 正式发布 workflow 已在 GitHub Actions 上成功跑通。
+- `staging-readonly` 与 `production-readonly` Environment 已创建；
+- staging/production 独立 CAM 身份与 GitHub Secret 已配置；
+- `production-readonly` 已配置人工 reviewer；
+- `main` 已启用 PR、最新分支、必需检查、对话解决、禁止强推和禁止删除；
+- Windows 自托管 runner 已注册、在线并配置登录后自动启动；
+- 合并后 staging 门禁已成功跑通。
 
-这些配置必须由具有仓库管理权限的人员在 GitHub 中完成。未完成前，仓库内工作流定义是可复现的，但不能宣称远端发布门禁已经正式启用。
+正式发布工作流已部署到 `main`，但不会为了验证基础设施而伪造版本、回滚清单或
+Android/iOS 人工签字。它应在任务十一的真实发布验收中，由 reviewer 使用真实发布输入手动触发。
+这不再是任务六的远端启用遗留项，而是正式发布时必须执行的受保护操作。
