@@ -20,6 +20,25 @@ async function waitUntil(check, { timeout = 30_000, interval = 500, label = "con
   throw new Error(`Timed out waiting for ${label}. Last value: ${lastValue}`);
 }
 
+async function connectToMiniProgram(
+  wsEndpoint,
+  { timeout = 60_000, interval = 1_000, connect = automator.connect } = {},
+) {
+  const startedAt = Date.now();
+  let lastError;
+  while (Date.now() - startedAt < timeout) {
+    try {
+      return await connect({ wsEndpoint });
+    } catch (error) {
+      lastError = error;
+      await sleep(interval);
+    }
+  }
+  throw new Error(
+    `Timed out connecting to ${wsEndpoint}. Last error: ${lastError?.message || lastError}`,
+  );
+}
+
 function artworkIds(section) {
   return (section?.items || []).map((item) => item?._id || item?.id).filter(Boolean);
 }
@@ -78,7 +97,7 @@ async function run({
   let homePage;
 
   try {
-    miniProgram = await automator.connect({ wsEndpoint });
+    miniProgram = await connectToMiniProgram(wsEndpoint);
     miniProgram.on("console", (event) => {
       consoleEvents.push(event);
     });
