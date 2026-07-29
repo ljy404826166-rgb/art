@@ -151,19 +151,13 @@ jobs:
       - name: Install locked dependencies without lifecycle scripts
         run: npm ci --ignore-scripts
       - name: Compile, automate, and preview the miniapp without uploading
-        shell: pwsh
+        shell: powershell
         timeout-minutes: 12
         env:
           WECHAT_DEVTOOLS_CLI: ${{ vars.WECHAT_DEVTOOLS_CLI }}
-          WECHAT_DEVTOOLS_PORT: ${{ vars.WECHAT_DEVTOOLS_PORT }}
         run: |
           if ([string]::IsNullOrWhiteSpace($env:WECHAT_DEVTOOLS_CLI)) {
             throw "WECHAT_DEVTOOLS_CLI repository variable is required."
-          }
-          $servicePort = if ($env:WECHAT_DEVTOOLS_PORT) {
-            [int]$env:WECHAT_DEVTOOLS_PORT
-          } else {
-            32070
           }
           $projectPath = Join-Path $env:GITHUB_WORKSPACE "miniapp"
           $artifactPath = Join-Path $env:GITHUB_WORKSPACE "artifacts\release\miniapp"
@@ -175,7 +169,6 @@ jobs:
           if (-not $automationReady) {
             & $env:WECHAT_DEVTOOLS_CLI auto `
               --project $projectPath `
-              --port $servicePort `
               --auto-port 9420 `
               --trust-project
             if ($LASTEXITCODE -ne 0) {
@@ -185,7 +178,6 @@ jobs:
           npm run recommendation:devtools-smoke
           & $env:WECHAT_DEVTOOLS_CLI preview `
             --project $projectPath `
-            --port $servicePort `
             --qr-format image `
             --qr-output (Join-Path $artifactPath "preview.png") `
             --info-output (Join-Path $artifactPath "preview.json")
