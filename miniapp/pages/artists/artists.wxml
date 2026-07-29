@@ -6,41 +6,61 @@
     <input
       class="search-input"
       value="{{query}}"
-      placeholder="搜索画家、流派、年代..."
+      placeholder="搜索画家、流派、题材..."
       placeholder-class="search-placeholder"
       confirm-type="search"
       bindinput="handleSearchInput"
     />
-    <button wx:if="{{query}}" class="search-action" bindtap="clearSearch">清除</button>
+    <view
+      wx:if="{{query}}"
+      class="search-action"
+      aria-role="button"
+      bindtap="clearSearch"
+    >
+      清除
+    </view>
   </view>
 
   <view class="filter-panel">
     <block wx:for="{{groups}}" wx:key="key">
-      <view class="filter-section">
+      <view class="filter-section {{item.expanded ? 'is-expanded' : ''}}">
         <view class="filter-head">
           <text class="filter-title">{{item.name}}</text>
+          <view
+            class="expand-button {{item.expanded ? 'is-expanded' : ''}}"
+            data-group="{{item.key}}"
+            bindtap="toggleGroup"
+            hover-class="is-pressed"
+            hover-start-time="0"
+            hover-stay-time="80"
+          >
+            <image class="expand-icon" src="/assets/icons/lucide/svg/chevron-down.svg" mode="aspectFit" />
+          </view>
         </view>
-        <scroll-view class="chip-scroll" scroll-x="true" show-scrollbar="false">
-          <view class="chip-track">
-            <block wx:for="{{item.tags}}" wx:key="*this" wx:for-item="tag">
+
+        <view class="chip-clip" style="{{item.panelStyle}}">
+          <view class="chip-wrap chip-measure">
+            <block wx:for="{{item.tags}}" wx:key="id" wx:for-item="tag">
               <view
-                class="tag-chip {{item.activeTag === tag ? 'is-active' : ''}}"
-                data-key="{{item.key}}"
-                data-tag="{{tag}}"
+                class="tag-chip {{tag.selected ? 'is-active' : ''}}"
                 bindtap="selectTag"
+                data-group="{{item.key}}"
+                data-tag-id="{{tag.id}}"
+                hover-class="is-pressed"
+                hover-start-time="0"
+                hover-stay-time="80"
               >
-                <text class="tag-label">{{tag}}</text>
+                <text class="tag-label">{{tag.label}}</text>
               </view>
             </block>
           </view>
-        </scroll-view>
+        </view>
       </view>
     </block>
   </view>
 
   <view class="result-head">
     <text class="section-title">画家结果</text>
-    <text class="result-count">{{loading ? '读取中' : resultCountText}}</text>
   </view>
 
   <skeleton-card wx:if="{{loading}}" variant="grid" count="{{4}}" />
@@ -57,14 +77,14 @@
   <empty-state
     wx:elif="{{artists.length === 0}}"
     title="暂无符合条件的画家"
-    description="换一个名称、地区、流派或年代试试。"
+    description="换一个名称、地区、流派或作品题材试试。"
   />
 
   <view wx:else>
     <view class="artist-grid">
       <block wx:for="{{artists}}" wx:key="id">
         <view class="artist-card" data-id="{{item.id}}" bindtap="openArtist">
-          <view class="artist-avatar">{{item.avatarText}}</view>
+          <artist-portrait artist="{{item}}" size="list" lazy-load="{{true}}" />
           <view class="artist-copy">
             <text class="artist-name">{{item.nameZh}}</text>
             <text class="artist-en">{{item.nameEn}}</text>

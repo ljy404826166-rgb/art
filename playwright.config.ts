@@ -8,9 +8,9 @@ export default defineConfig({
     trace: "on-first-retry",
   },
   webServer: {
-    command: "D:\\node\\npm.cmd run dev",
+    command: "npm run dev",
     reuseExistingServer: true,
-    timeout: 30_000,
+    timeout: 60_000,
     url: "http://127.0.0.1:5173",
   },
   projects: [

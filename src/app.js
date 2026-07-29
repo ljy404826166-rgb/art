@@ -16,14 +16,8 @@ import {
   subscribeAuthState,
   userSummaryFromUser,
 } from "./lib/auth.ts";
-import {
-  readRemoteUserProfile,
-  saveRemoteUserProfile,
-} from "./lib/remote-user-profile.ts";
-import {
-  readRemoteUserSettings,
-  saveRemoteUserSettings,
-} from "./lib/user-settings.ts";
+import { readRemoteUserProfile, saveRemoteUserProfile } from "./lib/remote-user-profile.ts";
+import { readRemoteUserSettings, saveRemoteUserSettings } from "./lib/user-settings.ts";
 import {
   initialsFromName,
   profileLimits,
@@ -384,7 +378,10 @@ function ratioFromDimensions(value) {
   const text = String(value || "")
     .replace(/,/g, "")
     .replace(/[×xX]/g, " x ");
-  const numbers = text.match(/\d+(?:\.\d+)?/g)?.map(Number).filter((number) => Number.isFinite(number));
+  const numbers = text
+    .match(/\d+(?:\.\d+)?/g)
+    ?.map(Number)
+    .filter((number) => Number.isFinite(number));
   if (!numbers || numbers.length < 2) return 0;
 
   const [width, height] = numbers;
@@ -428,10 +425,17 @@ function paintingToArtwork(painting) {
     displayUrl: painting.display_url || painting.thumbnail_url || "",
     downloadUrl: painting.download_url || "",
     iiifUrl: painting.iiif_url || "",
-    detailLoaded: Boolean(painting.description || painting.location || painting.medium || painting.download_url || painting.iiif_url),
+    detailLoaded: Boolean(
+      painting.description ||
+      painting.location ||
+      painting.medium ||
+      painting.download_url ||
+      painting.iiif_url,
+    ),
     sourceName: "Supabase paintings",
     sourceUrl: "#",
-    description: painting.description || "这条作品资料来自 Supabase 的 paintings 表，详细解读内容仍在完善。",
+    description:
+      painting.description || "这条作品资料来自 Supabase 的 paintings 表，详细解读内容仍在完善。",
     whyItMatters: painting.description || "这条作品资料来自 Supabase 的 paintings 表。",
     studyNotes: [
       painting.title_en ? `英文名：${painting.title_en}` : "",
@@ -463,14 +467,15 @@ function normalizeDownloadRecord(record) {
   if (!artworkId) return null;
   const now = new Date().toISOString();
   const rawStatus = String(record.status || "").trim();
-  const status = {
-    pending: "queued",
-    queued: "queued",
-    started: "downloading",
-    downloading: "downloading",
-    completed: "completed",
-    failed: "failed",
-  }[rawStatus] || "queued";
+  const status =
+    {
+      pending: "queued",
+      queued: "queued",
+      started: "downloading",
+      downloading: "downloading",
+      completed: "completed",
+      failed: "failed",
+    }[rawStatus] || "queued";
   const downloadedBytes = Math.max(0, Number(record.downloadedBytes || record.size || 0) || 0);
   const totalBytes = Math.max(0, Number(record.totalBytes || 0) || 0);
   return {
@@ -485,7 +490,8 @@ function normalizeDownloadRecord(record) {
     createdAt: String(record.createdAt || record.downloadedAt || now),
     updatedAt: String(record.updatedAt || record.downloadedAt || now),
     downloadedAt: record.downloadedAt ? String(record.downloadedAt) : "",
-    errorMessage: record.errorMessage || record.error ? String(record.errorMessage || record.error) : "",
+    errorMessage:
+      record.errorMessage || record.error ? String(record.errorMessage || record.error) : "",
   };
 }
 
@@ -502,7 +508,9 @@ function readLocalDownloadRecords(options = {}) {
 }
 
 function saveLocalDownloadRecords(records) {
-  const normalized = Array.isArray(records) ? records.map(normalizeDownloadRecord).filter(Boolean) : [];
+  const normalized = Array.isArray(records)
+    ? records.map(normalizeDownloadRecord).filter(Boolean)
+    : [];
   localStorage.setItem(downloadStorageKey, JSON.stringify(normalized));
   state.downloads = normalized;
   state.downloadError = "";
@@ -557,7 +565,10 @@ function upsertDownloadRecord(item, patch = {}) {
   });
   if (!record) return null;
 
-  saveLocalDownloadRecords([record, ...state.downloads.filter((itemRecord) => itemRecord.artworkId !== artworkId)]);
+  saveLocalDownloadRecords([
+    record,
+    ...state.downloads.filter((itemRecord) => itemRecord.artworkId !== artworkId),
+  ]);
   return record;
 }
 
@@ -663,7 +674,9 @@ async function downloadRecordFile(record, filename) {
       updateDownloadRecordStatus(record.artworkId, {
         status: "failed",
         errorMessage:
-          fallbackError instanceof Error && fallbackError.message === "missing-url" ? "暂无可下载图源" : "下载未能启动",
+          fallbackError instanceof Error && fallbackError.message === "missing-url"
+            ? "暂无可下载图源"
+            : "下载未能启动",
       });
       throw fallbackError;
     }
@@ -728,7 +741,10 @@ async function handleDetailDownload() {
   try {
     await downloadRecordFile(record, safeDownloadFilename(currentDetailItem));
   } catch (error) {
-    showMotionToast(error instanceof Error && error.message === "missing-url" ? "暂无可下载图源" : "下载未能启动", "error");
+    showMotionToast(
+      error instanceof Error && error.message === "missing-url" ? "暂无可下载图源" : "下载未能启动",
+      "error",
+    );
   }
 
   renderProfile();
@@ -861,10 +877,7 @@ async function loadRemoteSettingsForUser(userId) {
 async function loadAccountDataAfterSignIn() {
   const userId = state.authSummary?.id || state.auth.user?.id;
   if (!userId) return;
-  await Promise.allSettled([
-    loadRemoteProfileForUser(userId),
-    loadRemoteSettingsForUser(userId),
-  ]);
+  await Promise.allSettled([loadRemoteProfileForUser(userId), loadRemoteSettingsForUser(userId)]);
   renderProfile();
   rerenderActiveProfileRoute();
 }
@@ -935,7 +948,8 @@ function renderProfileIdentity() {
     if (state.auth.loading && !state.auth.loaded) {
       nodes.profileBio.textContent = "正在读取账号状态...";
     } else {
-      nodes.profileBio.textContent = state.profile.bio || (isLoggedIn() ? "还没有个人简介" : "登录后可同步资料和设置");
+      nodes.profileBio.textContent =
+        state.profile.bio || (isLoggedIn() ? "还没有个人简介" : "登录后可同步资料和设置");
     }
   }
   if (nodes.profileAuth) {
@@ -962,10 +976,14 @@ function validateProfileDraft(profile) {
   const errors = [];
   const displayName = profile.displayName.trim();
   if (!displayName) errors.push("昵称不能为空");
-  if (displayName.length > profileLimits.displayNameMax) errors.push(`昵称不能超过 ${profileLimits.displayNameMax} 个字符`);
-  if (profile.bio.length > profileLimits.bioMax) errors.push(`简介不能超过 ${profileLimits.bioMax} 个字符`);
-  if (profile.location.length > profileLimits.locationMax) errors.push(`所在地不能超过 ${profileLimits.locationMax} 个字符`);
-  if (profile.website.length > profileLimits.websiteMax) errors.push(`网站不能超过 ${profileLimits.websiteMax} 个字符`);
+  if (displayName.length > profileLimits.displayNameMax)
+    errors.push(`昵称不能超过 ${profileLimits.displayNameMax} 个字符`);
+  if (profile.bio.length > profileLimits.bioMax)
+    errors.push(`简介不能超过 ${profileLimits.bioMax} 个字符`);
+  if (profile.location.length > profileLimits.locationMax)
+    errors.push(`所在地不能超过 ${profileLimits.locationMax} 个字符`);
+  if (profile.website.length > profileLimits.websiteMax)
+    errors.push(`网站不能超过 ${profileLimits.websiteMax} 个字符`);
   if (profile.website && !/^https?:\/\/\S+\.\S+/.test(profile.website)) {
     errors.push("网站需要以 http:// 或 https:// 开头");
   }
@@ -1004,12 +1022,16 @@ function authRouteHtml() {
           <span>密码</span>
           <input id="authPasswordInput" type="password" autocomplete="${isRegister ? "new-password" : "current-password"}" value="${escapeHtml(state.authForm.password)}" />
         </label>
-        ${isRegister ? `
+        ${
+          isRegister
+            ? `
           <label class="profile-form-field">
             <span>确认密码</span>
             <input id="authConfirmPasswordInput" type="password" autocomplete="new-password" value="${escapeHtml(state.authForm.confirmPassword)}" />
           </label>
-        ` : ""}
+        `
+            : ""
+        }
       </section>
 
       <div class="profile-save-bar auth-action-bar">
@@ -1023,7 +1045,8 @@ function authRouteHtml() {
 function renderAuthRoute(mode = state.authForm.mode) {
   state.authForm.mode = mode;
   nodes.profileRoute.dataset.activeRoute = "auth";
-  nodes.profileRouteTitle.textContent = state.authForm.mode === "register" ? "注册账号" : "登录账号";
+  nodes.profileRouteTitle.textContent =
+    state.authForm.mode === "register" ? "注册账号" : "登录账号";
   nodes.profileRouteMain.innerHTML = authRouteHtml();
   bindAuthRouteEvents();
 }
@@ -1039,8 +1062,12 @@ function validateAuthForm() {
   if (!email) return "请输入邮箱";
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return "请输入有效邮箱";
   if (!state.authForm.password) return "请输入密码";
-  if (state.authForm.mode === "register" && state.authForm.password.length < 8) return "密码至少需要 8 位";
-  if (state.authForm.mode === "register" && state.authForm.password !== state.authForm.confirmPassword) {
+  if (state.authForm.mode === "register" && state.authForm.password.length < 8)
+    return "密码至少需要 8 位";
+  if (
+    state.authForm.mode === "register" &&
+    state.authForm.password !== state.authForm.confirmPassword
+  ) {
     return "两次输入的密码不一致";
   }
   return "";
@@ -1062,9 +1089,10 @@ async function handleAuthSubmit() {
   renderAuthRoute();
 
   try {
-    const result = state.authForm.mode === "register"
-      ? await signUpWithEmailPassword(state.authForm.email, state.authForm.password)
-      : await signInWithEmailPassword(state.authForm.email, state.authForm.password);
+    const result =
+      state.authForm.mode === "register"
+        ? await signUpWithEmailPassword(state.authForm.email, state.authForm.password)
+        : await signInWithEmailPassword(state.authForm.email, state.authForm.password);
     state.authForm.message = result.message || "登录成功";
     state.authForm.password = "";
     state.authForm.confirmPassword = "";
@@ -1079,7 +1107,10 @@ async function handleAuthSubmit() {
     }
   } catch (error) {
     console.error("Auth submit failed", error);
-    state.authForm.error = friendlyAuthError(error, state.authForm.mode === "register" ? "注册失败，请稍后重试" : "登录失败，请检查邮箱和密码");
+    state.authForm.error = friendlyAuthError(
+      error,
+      state.authForm.mode === "register" ? "注册失败，请稍后重试" : "登录失败，请检查邮箱和密码",
+    );
   } finally {
     state.authForm.loading = false;
     renderProfile();
@@ -1088,17 +1119,21 @@ async function handleAuthSubmit() {
 }
 
 function bindAuthRouteEvents() {
-  nodes.profileRouteMain.querySelector("[data-auth-action='toggleMode']")?.addEventListener("click", () => {
-    syncAuthFormFromRoute();
-    state.authForm.mode = state.authForm.mode === "register" ? "login" : "register";
-    state.authForm.error = "";
-    state.authForm.message = "";
-    state.authForm.password = "";
-    state.authForm.confirmPassword = "";
-    renderAuthRoute();
-  });
+  nodes.profileRouteMain
+    .querySelector("[data-auth-action='toggleMode']")
+    ?.addEventListener("click", () => {
+      syncAuthFormFromRoute();
+      state.authForm.mode = state.authForm.mode === "register" ? "login" : "register";
+      state.authForm.error = "";
+      state.authForm.message = "";
+      state.authForm.password = "";
+      state.authForm.confirmPassword = "";
+      renderAuthRoute();
+    });
 
-  nodes.profileRouteMain.querySelector("[data-auth-action='submit']")?.addEventListener("click", handleAuthSubmit);
+  nodes.profileRouteMain
+    .querySelector("[data-auth-action='submit']")
+    ?.addEventListener("click", handleAuthSubmit);
   nodes.profileRouteMain.querySelectorAll("input").forEach((input) => {
     input.addEventListener("keydown", (event) => {
       if (event.key === "Enter") handleAuthSubmit();
@@ -1288,9 +1323,11 @@ async function saveProfileDraft() {
 }
 
 function bindProfileEditRouteEvents() {
-  nodes.profileRouteMain.querySelector("#profileAvatarInput")?.addEventListener("change", (event) => {
-    handleProfileAvatarFile(event.target.files?.[0]);
-  });
+  nodes.profileRouteMain
+    .querySelector("#profileAvatarInput")
+    ?.addEventListener("change", (event) => {
+      handleProfileAvatarFile(event.target.files?.[0]);
+    });
 
   nodes.profileRouteMain.querySelectorAll("[data-profile-edit-action]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -1651,8 +1688,10 @@ async function handleSignOut() {
 
 async function loadAuthSummary(options = {}) {
   state.authLoaded = false;
-  if (options.rerenderRoute && nodes.profileRoute.dataset.activeRoute === "profile") renderProfileEditRoute();
-  if (options.rerenderRoute && nodes.profileRouteTitle.textContent === "安全中心") renderSecurityRoute();
+  if (options.rerenderRoute && nodes.profileRoute.dataset.activeRoute === "profile")
+    renderProfileEditRoute();
+  if (options.rerenderRoute && nodes.profileRouteTitle.textContent === "安全中心")
+    renderSecurityRoute();
   try {
     state.authSummary = await getCurrentUserSummary();
     if (state.authSummary && !state.auth.user) {
@@ -1664,8 +1703,10 @@ async function loadAuthSummary(options = {}) {
     state.authSummary = null;
   } finally {
     state.authLoaded = true;
-    if (options.rerenderRoute && nodes.profileRoute.dataset.activeRoute === "profile") renderProfileEditRoute();
-    if (options.rerenderRoute && nodes.profileRouteTitle.textContent === "安全中心") renderSecurityRoute();
+    if (options.rerenderRoute && nodes.profileRoute.dataset.activeRoute === "profile")
+      renderProfileEditRoute();
+    if (options.rerenderRoute && nodes.profileRouteTitle.textContent === "安全中心")
+      renderSecurityRoute();
   }
 }
 
@@ -1899,7 +1940,9 @@ function openProfileRoute(panel) {
         <div class="category-results-grid profile-route-grid" id="profileRouteGrid"></div>
       </section>
     `;
-    renderCategoryCards(document.querySelector("#profileRouteGrid"), config.list, config.empty, { closeRouteBeforeOpen: true });
+    renderCategoryCards(document.querySelector("#profileRouteGrid"), config.list, config.empty, {
+      closeRouteBeforeOpen: true,
+    });
   } else {
     nodes.profileRouteMain.innerHTML = `
       <section class="profile-route-placeholder">
@@ -1929,7 +1972,9 @@ function openTagRoute(tag) {
       <div class="category-results-grid profile-route-grid" id="profileRouteGrid"></div>
     </section>
   `;
-  renderCategoryCards(document.querySelector("#profileRouteGrid"), list, "当前标签下暂无作品", { closeRouteBeforeOpen: true });
+  renderCategoryCards(document.querySelector("#profileRouteGrid"), list, "当前标签下暂无作品", {
+    closeRouteBeforeOpen: true,
+  });
   nodes.profileRoute.dataset.mounted = "true";
   requestAnimationFrame(() => {
     nodes.profileRoute.setAttribute("aria-hidden", "false");
@@ -1955,7 +2000,9 @@ function openHomeSectionRoute(section) {
       <div class="category-results-grid profile-route-grid" id="profileRouteGrid"></div>
     </section>
   `;
-  renderCategoryCards(document.querySelector("#profileRouteGrid"), list, "暂无推荐作品", { closeRouteBeforeOpen: true });
+  renderCategoryCards(document.querySelector("#profileRouteGrid"), list, "暂无推荐作品", {
+    closeRouteBeforeOpen: true,
+  });
   nodes.profileRoute.dataset.mounted = "true";
   requestAnimationFrame(() => {
     nodes.profileRoute.setAttribute("aria-hidden", "false");
@@ -1981,7 +2028,9 @@ function openArtistRoute(artist) {
       <div class="category-results-grid profile-route-grid" id="profileRouteGrid"></div>
     </section>
   `;
-  renderCategoryCards(document.querySelector("#profileRouteGrid"), list, "当前艺术家暂无更多作品", { closeRouteBeforeOpen: true });
+  renderCategoryCards(document.querySelector("#profileRouteGrid"), list, "当前艺术家暂无更多作品", {
+    closeRouteBeforeOpen: true,
+  });
   nodes.profileRoute.dataset.mounted = "true";
   requestAnimationFrame(() => {
     nodes.profileRoute.setAttribute("aria-hidden", "false");
@@ -1990,7 +2039,11 @@ function openArtistRoute(artist) {
 }
 
 function closeProfileRoute() {
-  if (nodes.profileRoute.getAttribute("aria-hidden") === "true" && nodes.profileRoute.dataset.mounted !== "true") return;
+  if (
+    nodes.profileRoute.getAttribute("aria-hidden") === "true" &&
+    nodes.profileRoute.dataset.mounted !== "true"
+  )
+    return;
   window.clearTimeout(profileRouteCloseTimer);
   nodes.profileRoute.setAttribute("aria-hidden", "true");
   document.body.classList.remove("profile-route-open");
@@ -2017,7 +2070,10 @@ const categoryDefinitions = [
     key: "genre",
     title: "流派",
     fallback: ["印象派", "现实主义", "文艺复兴", "表现主义", "抽象派"],
-    matches: (tag) => /派|主义|艺术运动|文艺复兴|巴洛克|洛可可|浪漫|现代|象征|古典|野兽|立体|抽象|印象|现实|表现|学院/i.test(tag),
+    matches: (tag) =>
+      /派|主义|艺术运动|文艺复兴|巴洛克|洛可可|浪漫|现代|象征|古典|野兽|立体|抽象|印象|现实|表现|学院/i.test(
+        tag,
+      ),
   },
   {
     key: "era",
@@ -2029,7 +2085,10 @@ const categoryDefinitions = [
     key: "region",
     title: "地区",
     fallback: ["荷兰艺术", "法国艺术", "意大利艺术", "东亚艺术"],
-    matches: (tag) => /中国|日本|东亚|亚洲|法国|意大利|荷兰|英国|美国|西班牙|德国|欧洲|巴黎|佛兰德|地区|艺术$/i.test(tag),
+    matches: (tag) =>
+      /中国|日本|东亚|亚洲|法国|意大利|荷兰|英国|美国|西班牙|德国|欧洲|巴黎|佛兰德|地区|艺术$/i.test(
+        tag,
+      ),
   },
 ];
 
@@ -2152,7 +2211,8 @@ function setView(view) {
 
   state.activeView = view;
   updateTopbar(view);
-  for (const item of nodes.navItems) item.setAttribute("aria-pressed", String(item.dataset.viewTarget === view));
+  for (const item of nodes.navItems)
+    item.setAttribute("aria-pressed", String(item.dataset.viewTarget === view));
   for (const section of nodes.viewSections) section.hidden = section.dataset.viewSection !== view;
   if (view === "me") renderProfile();
   animateViewEntry(view);
@@ -2308,7 +2368,9 @@ function artworkCard(item) {
 
 function attachImageFallback(card) {
   const image = card.querySelector("img");
-  const imageButton = card.querySelector(".recommendation-image, .image-button, .category-art-image");
+  const imageButton = card.querySelector(
+    ".recommendation-image, .image-button, .category-art-image",
+  );
   image.addEventListener("error", () => {
     card.style.setProperty("--art-card-width", "156px");
     image.removeAttribute("src");
@@ -2345,7 +2407,9 @@ function selectUnusedArtworkItems(candidates, usedArtworkIds, sectionLimit = ROW
 }
 
 function sectionKey(section) {
-  return section.type === "recommendation" ? "recommendation" : `tag:${section.tagName || section.title}`;
+  return section.type === "recommendation"
+    ? "recommendation"
+    : `tag:${section.tagName || section.title}`;
 }
 
 function rowLimit(key) {
@@ -2365,7 +2429,8 @@ function homeSections() {
 
   for (const tag of tags) {
     const tagged = list.filter((item) => itemMatchesTag(item, tag.name));
-    if (tagged.length) sections.push({ type: "tag", title: tag.name, tagName: tag.name, artworks: tagged });
+    if (tagged.length)
+      sections.push({ type: "tag", title: tag.name, tagName: tag.name, artworks: tagged });
   }
 
   return sections;
@@ -2382,7 +2447,11 @@ function dedupedHomeSections() {
     {
       type: "recommendation",
       title: "推荐",
-      artworks: selectUnusedArtworkItems(randomizedList, usedArtworkIds, rowLimit("recommendation")),
+      artworks: selectUnusedArtworkItems(
+        randomizedList,
+        usedArtworkIds,
+        rowLimit("recommendation"),
+      ),
     },
   ];
 
@@ -2393,7 +2462,8 @@ function dedupedHomeSections() {
       usedArtworkIds,
       rowLimit(key),
     );
-    if (tagged.length) sections.push({ type: "tag", title: tag.name, tagName: tag.name, artworks: tagged });
+    if (tagged.length)
+      sections.push({ type: "tag", title: tag.name, tagName: tag.name, artworks: tagged });
   }
 
   return sections;
@@ -2571,13 +2641,18 @@ function renderRecommendationFeed() {
       </div>
       <div class="category-results-grid home-search-results-grid"></div>
     `;
-    renderCategoryCards(group.querySelector(".home-search-results-grid"), visibleResults, "没有找到匹配作品", {
-      hasMore: visibleResults.length < resultCount,
-      onLoadMore: () => {
-        state.searchVisibleCount += SEARCH_PAGE_SIZE;
-        renderHome();
+    renderCategoryCards(
+      group.querySelector(".home-search-results-grid"),
+      visibleResults,
+      "没有找到匹配作品",
+      {
+        hasMore: visibleResults.length < resultCount,
+        onLoadMore: () => {
+          state.searchVisibleCount += SEARCH_PAGE_SIZE;
+          renderHome();
+        },
       },
-    });
+    );
     nodes.grid.append(group);
     return;
   }
@@ -2675,7 +2750,9 @@ function renderCategoryCards(container, list, emptyText, options = {}) {
     sentinel.className = "category-load-more-sentinel";
     sentinel.dataset.categoryLoadMore = "true";
     sentinel.setAttribute("aria-live", "polite");
-    sentinel.textContent = options.loadingMore ? "\u52a0\u8f7d\u4e2d..." : "\u7ee7\u7eed\u4e0b\u6ed1\u52a0\u8f7d\u66f4\u591a";
+    sentinel.textContent = options.loadingMore
+      ? "\u52a0\u8f7d\u4e2d..."
+      : "\u7ee7\u7eed\u4e0b\u6ed1\u52a0\u8f7d\u66f4\u591a";
     container.append(sentinel);
     observeCategoryLoadMore(sentinel, options.onLoadMore);
   }
@@ -2688,7 +2765,12 @@ function observeCategoryLoadMore(sentinel, onLoadMore) {
   categoryInfiniteObserver = new IntersectionObserver(
     (entries) => {
       if (!entries.some((entry) => entry.isIntersecting)) return;
-      if (!state.activeCategory || state.categoryResults.loading || state.categoryResults.loadingMore) return;
+      if (
+        !state.activeCategory ||
+        state.categoryResults.loading ||
+        state.categoryResults.loadingMore
+      )
+        return;
       if (!state.categoryResults.hasMore || state.categoryResults.nextFrom == null) return;
       onLoadMore?.();
     },
@@ -2773,7 +2855,10 @@ function renderCategories() {
     nodes.categoryGrid.append(section);
   }
 
-  if (state.activeCategory && state.categoryResults.key !== categoryResultKey(state.activeCategory)) {
+  if (
+    state.activeCategory &&
+    state.categoryResults.key !== categoryResultKey(state.activeCategory)
+  ) {
     void loadCategoryResults({ reset: true });
   }
 
@@ -2938,7 +3023,13 @@ function appendPaintingsPage(paintings) {
 }
 
 async function loadMorePaintings() {
-  if (state.loading || state.loadingMorePaintings || !state.paintingsHasMore || state.paintingsNextFrom == null) return;
+  if (
+    state.loading ||
+    state.loadingMorePaintings ||
+    !state.paintingsHasMore ||
+    state.paintingsNextFrom == null
+  )
+    return;
   state.loadingMorePaintings = true;
   setStatus("加载更多作品...");
   try {
@@ -2960,7 +3051,8 @@ async function loadMorePaintings() {
 
 function maybeLoadMoreTagSections() {
   if (state.activeView !== "home" || state.loading || state.error || state.query.trim()) return;
-  const remainingDistance = document.documentElement.scrollHeight - window.innerHeight - window.scrollY;
+  const remainingDistance =
+    document.documentElement.scrollHeight - window.innerHeight - window.scrollY;
   if (remainingDistance > 240) return;
 
   const tagCount = allTags().length;
@@ -3224,7 +3316,9 @@ function openDrawer(item) {
   nodes.detailTitleCn.textContent = item.titleCn || item.title;
   nodes.detailTitleEn.textContent = item.titleEn || "";
   nodes.detailCreator.innerHTML = `<button class="detail-artist-button" type="button">${escapeHtml(item.artist)}</button>`;
-  nodes.detailCreator.querySelector(".detail-artist-button").addEventListener("click", () => openArtistRoute(item.artist));
+  nodes.detailCreator
+    .querySelector(".detail-artist-button")
+    .addEventListener("click", () => openArtistRoute(item.artist));
   nodes.detailLocation.textContent = item.location;
   nodes.detailCreated.textContent = item.yearAndPlace;
   nodes.detailMedium.textContent = item.medium;
@@ -3234,7 +3328,10 @@ function openDrawer(item) {
     .join("");
   nodes.detailTags.innerHTML = item.tags
     .slice(0, 8)
-    .map((tag) => `<button class="detail-tag-button" type="button" data-tag="${escapeHtml(tag)}">${escapeHtml(tag)}</button>`)
+    .map(
+      (tag) =>
+        `<button class="detail-tag-button" type="button" data-tag="${escapeHtml(tag)}">${escapeHtml(tag)}</button>`,
+    )
     .join("");
   nodes.detailTags.querySelectorAll("[data-tag]").forEach((button) => {
     button.addEventListener("click", () => openTagRoute(button.dataset.tag));
@@ -3249,7 +3346,11 @@ function openDrawer(item) {
 }
 
 function closeDrawer() {
-  if (nodes.drawer.getAttribute("aria-hidden") === "true" && nodes.drawer.dataset.mounted !== "true") return;
+  if (
+    nodes.drawer.getAttribute("aria-hidden") === "true" &&
+    nodes.drawer.dataset.mounted !== "true"
+  )
+    return;
   window.clearTimeout(detailCloseTimer);
   nodes.drawer.setAttribute("aria-hidden", "true");
   document.body.classList.remove("drawer-open");
@@ -3334,7 +3435,9 @@ async function loadPaintings() {
   }
 }
 
-nodes.navItems.forEach((item) => item.addEventListener("click", () => setView(item.dataset.viewTarget)));
+nodes.navItems.forEach((item) =>
+  item.addEventListener("click", () => setView(item.dataset.viewTarget)),
+);
 nodes.search.addEventListener("input", (event) => {
   window.clearTimeout(searchDebounceTimer);
   const value = event.target.value;
@@ -3382,7 +3485,9 @@ nodes.profileRouteClose?.addEventListener("click", closeProfileRoute);
 nodes.drawerClose.addEventListener("click", closeDrawer);
 nodes.detailDownload?.addEventListener("click", handleDetailDownload);
 nodes.detailFavorite.addEventListener("click", toggleDetailFavorite);
-document.addEventListener("pointerdown", (event) => addPressFeedback(event.target), { passive: true });
+document.addEventListener("pointerdown", (event) => addPressFeedback(event.target), {
+  passive: true,
+});
 window.addEventListener("scroll", maybeLoadMoreTagSections, { passive: true });
 window.addEventListener("touchstart", handleTouchStart, { passive: true });
 window.addEventListener("touchmove", handleTouchMove, { passive: true });

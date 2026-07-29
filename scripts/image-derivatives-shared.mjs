@@ -100,7 +100,9 @@ export function createSupabaseClient() {
 }
 
 export function derivativeObjectPaths(imageId) {
-  const safeImageId = String(imageId || "").trim().replace(/[^a-zA-Z0-9._-]/g, "-");
+  const safeImageId = String(imageId || "")
+    .trim()
+    .replace(/[^a-zA-Z0-9._-]/g, "-");
   if (!safeImageId) {
     throw new Error("imageId is required");
   }

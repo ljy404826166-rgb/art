@@ -1,0 +1,68 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://art-archive.local/schemas/recommendation-signals.schema.json",
+  "title": "RecommendationSignal",
+  "type": "object",
+  "required": [
+    "_id",
+    "type",
+    "label_zh",
+    "review_status",
+    "publish_status",
+    "classification_filter",
+    "version"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "_id": {
+      "type": "string",
+      "pattern": "^signal-[a-z0-9-]+$"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "palette",
+        "visual_language",
+        "setting",
+        "motif",
+        "activity",
+        "cultural_theme",
+        "chronology",
+        "artist_period",
+        "series",
+        "design_theme"
+      ]
+    },
+    "label_zh": {
+      "type": "string",
+      "minLength": 1
+    },
+    "aliases": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "review_status": {
+      "type": "string",
+      "enum": ["candidate", "reviewed", "rejected"]
+    },
+    "publish_status": {
+      "type": "string",
+      "enum": ["draft", "published", "archived"]
+    },
+    "usage_scopes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["recommendation", "search"]
+      }
+    },
+    "classification_filter": {
+      "type": "boolean",
+      "const": false
+    },
+    "version": {
+      "type": "string",
+      "const": "recommendation-signals-v1"
+    }
+  }
+}

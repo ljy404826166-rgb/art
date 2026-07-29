@@ -28,45 +28,50 @@ function hasActiveFilters(filters) {
   return FILTER_GROUPS.some((group) => Boolean(filters[group]));
 }
 
-function makeGroupsView(groups, expandedGroups, selectedFilters) {
+function makeGroupsView(groups, expandedGroups, selectedFilters, groupHeights = {}) {
   return (groups || []).map((group) => {
     const tags = (group.tags || []).map((tag) => ({
       ...tag,
       selected: selectedFilters[group.key] === tag.id,
     }));
     const expanded = Boolean(expandedGroups[group.key]);
+    const expandedHeight = Math.max(0, Number(groupHeights[group.key] || 0));
     return {
       ...group,
       tags,
       expanded,
-      visibleTags: expanded ? tags : tags.slice(0, 8),
+      panelStyle: expanded
+        ? expandedHeight
+          ? `height: ${expandedHeight}px;`
+          : "height: auto;"
+        : "height: 54rpx;",
       canExpand: tags.length > 8,
     };
   });
 }
 
 function findStoredFilter(groups, storedTag) {
-  const storedId = (
-    storedTag
-    && typeof storedTag === "object"
-    && String(storedTag.id || storedTag._id || storedTag.tag_id || storedTag.tagId || "").trim()
-  );
-  const storedLabel = typeof storedTag === "string"
-    ? storedTag.trim()
-    : String(
-      (storedTag && (
-        storedTag.label
-        || storedTag.label_zh
-        || storedTag.labelZh
-        || storedTag.name
-        || storedTag.text
-      )) || "",
-    ).trim();
+  const storedId =
+    storedTag &&
+    typeof storedTag === "object" &&
+    String(storedTag.id || storedTag._id || storedTag.tag_id || storedTag.tagId || "").trim();
+  const storedLabel =
+    typeof storedTag === "string"
+      ? storedTag.trim()
+      : String(
+          (storedTag &&
+            (storedTag.label ||
+              storedTag.label_zh ||
+              storedTag.labelZh ||
+              storedTag.name ||
+              storedTag.text)) ||
+            "",
+        ).trim();
 
   for (const group of groups || []) {
-    const tag = (group.tags || []).find((candidate) => (
-      storedId ? candidate.id === storedId : storedLabel && candidate.label === storedLabel
-    ));
+    const tag = (group.tags || []).find((candidate) =>
+      storedId ? candidate.id === storedId : storedLabel && candidate.label === storedLabel,
+    );
     if (tag) return { group: group.key, tagId: tag.id };
   }
   return null;
@@ -98,6 +103,7 @@ Page({
     groups: [],
     groupsView: [],
     expandedGroups: {},
+    groupHeights: {},
     catalogVersion: "",
     catalogSource: "",
     catalogStale: false,
@@ -128,10 +134,7 @@ Page({
       this.hasInitialized = true;
       return this.loadResults();
     }
-    if (
-      catalogResult
-      && (catalogResult.filtersChanged || catalogResult.storedRequestApplied)
-    ) {
+    if (catalogResult && (catalogResult.filtersChanged || catalogResult.storedRequestApplied)) {
       return this.loadResults();
     }
   },
@@ -157,8 +160,8 @@ Page({
       let storedRequestApplied = false;
       FILTER_GROUPS.forEach((groupKey) => {
         const group = groups.find((candidate) => candidate.key === groupKey);
-        const selectionExists = group && (group.tags || [])
-          .some((tag) => tag.id === selectedFilters[groupKey]);
+        const selectionExists =
+          group && (group.tags || []).some((tag) => tag.id === selectedFilters[groupKey]);
         if (!selectionExists) selectedFilters[groupKey] = "";
       });
 
@@ -173,17 +176,25 @@ Page({
         wx.removeStorageSync(STORED_TAG_KEY);
       }
 
-      this.setData({
-        groups,
-        groupsView: makeGroupsView(groups, this.data.expandedGroups, selectedFilters),
-        selectedFilters,
-        hasActiveFilters: hasActiveFilters(selectedFilters),
-        catalogVersion: String(catalog.catalogVersion || ""),
-        catalogSource: String(catalog.source || ""),
-        catalogStale: Boolean(catalog.stale),
-        catalogLoading: false,
-        catalogError: "",
-      });
+      this.setData(
+        {
+          groups,
+          groupsView: makeGroupsView(
+            groups,
+            this.data.expandedGroups,
+            selectedFilters,
+            this.data.groupHeights,
+          ),
+          selectedFilters,
+          hasActiveFilters: hasActiveFilters(selectedFilters),
+          catalogVersion: String(catalog.catalogVersion || ""),
+          catalogSource: String(catalog.source || ""),
+          catalogStale: Boolean(catalog.stale),
+          catalogLoading: false,
+          catalogError: "",
+        },
+        () => this.measureGroupHeights(),
+      );
       return {
         filtersChanged: FILTER_GROUPS.some(
           (groupKey) => previousFilters[groupKey] !== selectedFilters[groupKey],
@@ -211,11 +222,12 @@ Page({
     const tagId = String(dataset.tagId || "").trim();
     const group = this.data.groups.find((candidate) => candidate.key === groupKey);
     if (
-      !FILTER_GROUPS.includes(groupKey)
-      || !tagId
-      || !group
-      || !(group.tags || []).some((tag) => tag.id === tagId)
-    ) return;
+      !FILTER_GROUPS.includes(groupKey) ||
+      !tagId ||
+      !group ||
+      !(group.tags || []).some((tag) => tag.id === tagId)
+    )
+      return;
 
     const selectedFilters = cleanFilters(this.data.selectedFilters);
     selectedFilters[groupKey] = selectedFilters[groupKey] === tagId ? "" : tagId;
@@ -236,6 +248,7 @@ Page({
         this.data.groups,
         this.data.expandedGroups,
         selectedFilters,
+        this.data.groupHeights,
       ),
     });
     return this.loadResults();
@@ -336,6 +349,38 @@ Page({
     return this.loadMore();
   },
 
+  measureGroupHeights() {
+    const query =
+      typeof this.createSelectorQuery === "function"
+        ? this.createSelectorQuery()
+        : typeof wx !== "undefined" && typeof wx.createSelectorQuery === "function"
+          ? wx.createSelectorQuery()
+          : null;
+    if (!query) return;
+
+    query
+      .selectAll(".chip-measure")
+      .boundingClientRect((rects) => {
+        const groupHeights = {};
+        (rects || []).forEach((rect, index) => {
+          const group = (this.data.groupsView || [])[index];
+          const height = Math.ceil(Number(rect && rect.height) || 0);
+          if (group && height > 0) groupHeights[group.key] = height;
+        });
+        if (!Object.keys(groupHeights).length) return;
+        this.setData({
+          groupHeights,
+          groupsView: makeGroupsView(
+            this.data.groups,
+            this.data.expandedGroups,
+            this.data.selectedFilters,
+            groupHeights,
+          ),
+        });
+      })
+      .exec();
+  },
+
   toggleGroup(event) {
     const groupKey = String(
       (event && event.currentTarget && event.currentTarget.dataset.group) || "",
@@ -351,6 +396,7 @@ Page({
         this.data.groups,
         expandedGroups,
         this.data.selectedFilters,
+        this.data.groupHeights,
       ),
     });
   },

@@ -4,366 +4,129 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 
-const CACHE_KEY = "artArchive:categoryCatalog:v1";
-
-function loadCategoriesService(wxApi) {
-  const filename = fileURLToPath(new URL("./categories.js", import.meta.url));
+function loadCommonJsModule(relativeUrl, dependencies = {}) {
+  const filename = fileURLToPath(new URL(relativeUrl, import.meta.url));
   const source = readFileSync(filename, "utf8");
   const module = { exports: {} };
-  vm.runInNewContext(source, {
-    module,
-    exports: module.exports,
-    wx: wxApi,
-  }, { filename });
-  return { service: module.exports, source };
-}
-
-function createCatalogWx({
-  pointer = { _id: "active", active_catalog_version: "classification-v1" },
-  rows = [],
-  rejectCloud = false,
-  rejectPointer = rejectCloud,
-  rejectCatalog = rejectCloud,
-  initialCache,
-} = {}) {
-  const storage = new Map();
-  if (initialCache !== undefined) storage.set(CACHE_KEY, initialCache);
-  const counters = { pointerGets: 0, catalogGets: 0, where: [], cacheWrites: [] };
-
-  const wxApi = {
-    getStorageSync(key) {
-      return storage.get(key);
-    },
-    setStorageSync(key, value) {
-      storage.set(key, value);
-      counters.cacheWrites.push({ key, value });
-    },
-    cloud: {
-      database() {
-        return {
-          collection(name) {
-            if (name === "category_catalog_state") {
-              return {
-                doc(id) {
-                  assert.equal(id, "active");
-                  return {
-                    async get() {
-                      counters.pointerGets += 1;
-                      if (rejectPointer) throw new Error("cloud unavailable");
-                      return { data: pointer };
-                    },
-                  };
-                },
-              };
-            }
-
-            assert.equal(name, "category_catalog");
-            return {
-              where(clause) {
-                counters.where.push(clause);
-                let skip = 0;
-                let limit = 20;
-                return {
-                  skip(value) {
-                    skip = Number(value || 0);
-                    return this;
-                  },
-                  limit(value) {
-                    limit = Number(value || 20);
-                    return this;
-                  },
-                  async get() {
-                    counters.catalogGets += 1;
-                    if (rejectCatalog) throw new Error("cloud unavailable");
-                    const matched = rows.filter((row) => Object.entries(clause)
-                      .every(([field, value]) => row[field] === value));
-                    return { data: matched.slice(skip, skip + limit) };
-                  },
-                };
-              },
-            };
-          },
-        };
+  vm.runInNewContext(
+    source,
+    {
+      module,
+      exports: module.exports,
+      require(id) {
+        if (Object.prototype.hasOwnProperty.call(dependencies, id)) {
+          return dependencies[id];
+        }
+        throw new Error(`Unexpected dependency: ${id}`);
       },
     },
-  };
-
-  return { wxApi, storage, counters };
+    { filename },
+  );
+  return { exports: module.exports, source };
 }
 
-function validRows() {
-  return [
-    {
-      _id: "v1--style-b",
-      catalog_version: "classification-v1",
-      group: "style",
-      term_id: "style-b",
-      label: "流派 B",
-      artwork_count: 2,
-      sort_order: 20,
-      display_enabled: true,
-      publish_status: "ready",
-    },
-    {
-      _id: "v1--style-a",
-      catalog_version: "classification-v1",
-      group: "style",
-      term_id: "style-a",
-      label: "流派 A",
-      artwork_count: 3,
-      sort_order: 10,
-      display_enabled: true,
-      publish_status: "ready",
-    },
-    {
-      _id: "v1--subject-a",
-      catalog_version: "classification-v1",
-      group: "subject",
-      term_id: "subject-a",
-      label: "题材 A",
-      artwork_count: 1,
-      sort_order: 5,
-      display_enabled: true,
-      publish_status: "ready",
-    },
-    {
-      _id: "v1--period-1890s",
-      catalog_version: "classification-v1",
-      group: "decade",
-      term_id: "period-1890s",
-      label: "1890s",
-      artwork_count: 1,
-      sort_order: 1890,
-      display_enabled: true,
-      publish_status: "ready",
-    },
-    {
-      _id: "v1--period-1900s",
-      catalog_version: "classification-v1",
-      group: "decade",
-      term_id: "period-1900s",
-      label: "1900s",
-      artwork_count: 2,
-      sort_order: 1900,
-      display_enabled: true,
-      publish_status: "ready",
-    },
-  ];
+function loadLocalCatalog() {
+  return loadCommonJsModule("../data/category-catalog.js").exports;
 }
 
-test("loadCategoryCatalog follows the active pointer, normalizes rows, sorts groups, and caches them", async () => {
-  const rows = [
-    ...validRows(),
-    { ...validRows()[0], _id: "not-ready", term_id: "style-not-ready", publish_status: "draft" },
-    { ...validRows()[0], _id: "hidden", term_id: "style-hidden", display_enabled: false },
-    { ...validRows()[0], _id: "empty", term_id: "style-empty", artwork_count: 0 },
-  ];
-  const { wxApi, storage, counters } = createCatalogWx({ rows });
-  const { service } = loadCategoriesService(wxApi);
+function loadCategoriesService() {
+  const localCatalog = loadLocalCatalog();
+  return loadCommonJsModule("./categories.js", {
+    "../data/category-catalog": localCatalog,
+  });
+}
 
+function clone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+test("local classification-v7 catalog contains the fixed 124 production tags", async () => {
+  const { exports: service } = loadCategoriesService();
   const result = await service.loadCategoryCatalog();
 
-  assert.equal(result.catalogVersion, "classification-v1");
-  assert.equal(result.source, "cloud");
+  assert.equal(result.catalogVersion, "classification-v7");
+  assert.equal(result.source, "local");
   assert.equal(result.stale, false);
   assert.deepEqual(
-    JSON.parse(JSON.stringify(result.groups.map((group) => group.key))),
-    ["style", "subject", "decade"],
+    clone(result.groups.map((group) => [group.key, group.name, group.tags.length])),
+    [
+      ["style", "流派", 34],
+      ["subject", "题材", 42],
+      ["decade", "年代", 48],
+    ],
   );
-  assert.deepEqual(
-    JSON.parse(JSON.stringify(result.groups[0].tags.map((tag) => tag.id))),
-    ["style-a", "style-b"],
-  );
-  assert.deepEqual(
-    JSON.parse(JSON.stringify(result.groups[2].tags.map((tag) => tag.label))),
-    ["1890s", "1900s"],
-  );
-  assert.deepEqual(
-    JSON.parse(JSON.stringify(result.groups[0].tags[0])),
-    { id: "style-a", label: "流派 A", count: 3 },
-  );
-  assert.equal(counters.pointerGets, 1);
-  assert.deepEqual(JSON.parse(JSON.stringify(counters.where)), [{
-    catalog_version: "classification-v1",
-    publish_status: "ready",
-  }]);
-  assert.equal(counters.cacheWrites.length, 1);
-  assert.equal(counters.cacheWrites[0].key, CACHE_KEY);
-  const cached = storage.get(CACHE_KEY);
-  assert.equal(cached.catalogVersion, result.catalogVersion);
-  assert.deepEqual(
-    JSON.parse(JSON.stringify(cached.groups[0].tags[0])),
-    { id: "style-a", label: "流派 A", count: 3, sortOrder: 10 },
+  assert.equal(
+    result.groups.reduce((total, group) => total + group.tags.length, 0),
+    124,
   );
 });
 
-test("loadCategoryCatalog returns only structurally valid cached catalog when cloud fails", async () => {
-  const healthy = createCatalogWx({ rows: validRows() });
-  const { service } = loadCategoriesService(healthy.wxApi);
-  const cloudResult = await service.loadCategoryCatalog();
-  const cached = healthy.storage.get(CACHE_KEY);
+test("fixed catalog has canonical unique ids and labels", async () => {
+  const { exports: service } = loadCategoriesService();
+  const result = await service.loadCategoryCatalog();
+  const tags = result.groups.flatMap((group) => group.tags);
+  const ids = tags.map((tag) => tag.id);
 
-  const offline = createCatalogWx({ rejectCloud: true, initialCache: cached });
-  const offlineService = loadCategoriesService(offline.wxApi).service;
-  const result = await offlineService.loadCategoryCatalog();
-
-  assert.equal(result.catalogVersion, cloudResult.catalogVersion);
-  assert.equal(result.source, "cache");
-  assert.equal(result.stale, true);
-  assert.deepEqual(
-    JSON.parse(JSON.stringify(result.groups)),
-    JSON.parse(JSON.stringify(cloudResult.groups)),
-  );
-  assert.equal(offline.counters.cacheWrites.length, 0);
-});
-
-test("loadCategoryCatalog rejects invalid active v2 rows instead of serving cached v1", async () => {
-  const healthy = createCatalogWx({ rows: validRows() });
-  const healthyService = loadCategoriesService(healthy.wxApi).service;
-  await healthyService.loadCategoryCatalog();
-  const cachedV1 = healthy.storage.get(CACHE_KEY);
-
-  const brokenV2 = createCatalogWx({
-    pointer: { _id: "active", active_catalog_version: "classification-v2" },
-    rows: [],
-    initialCache: cachedV1,
+  assert.equal(new Set(ids).size, 124);
+  tags.forEach((tag) => {
+    assert.equal(typeof tag.id, "string");
+    assert.equal(tag.id, tag.id.trim());
+    assert.ok(tag.id.length > 0);
+    assert.equal(typeof tag.label, "string");
+    assert.equal(tag.label, tag.label.trim());
+    assert.ok(tag.label.length > 0);
+    assert.equal(Number.isFinite(tag.count), true);
+    assert.ok(tag.count > 0);
+    assert.deepEqual(Object.keys(clone(tag)).sort(), ["count", "id", "label"]);
   });
-  const service = loadCategoriesService(brokenV2.wxApi).service;
-
-  await assert.rejects(
-    () => service.loadCategoryCatalog(),
-    /Category catalog group is empty: style/,
-  );
-  assert.equal(brokenV2.counters.pointerGets, 1);
-  assert.equal(brokenV2.counters.catalogGets, 1);
-  assert.equal(brokenV2.counters.cacheWrites.length, 0);
 });
 
-test("catalog read failure uses cache only when it matches the resolved active version", async () => {
-  const healthy = createCatalogWx({ rows: validRows() });
-  const healthyService = loadCategoriesService(healthy.wxApi).service;
-  await healthyService.loadCategoryCatalog();
-  const cachedV1 = healthy.storage.get(CACHE_KEY);
+test("fixed decades remain sorted from earliest to latest", async () => {
+  const { exports: service } = loadCategoriesService();
+  const result = await service.loadCategoryCatalog();
+  const decades = result.groups
+    .find((group) => group.key === "decade")
+    .tags.map((tag) => Number(tag.label.slice(0, -1)));
 
-  const sameVersion = createCatalogWx({
-    rejectCatalog: true,
-    initialCache: cachedV1,
-  });
-  const sameVersionResult = await loadCategoriesService(sameVersion.wxApi)
-    .service
-    .loadCategoryCatalog();
-  assert.equal(sameVersionResult.catalogVersion, "classification-v1");
-  assert.equal(sameVersionResult.source, "cache");
-  assert.equal(sameVersionResult.stale, true);
-
-  const newerVersion = createCatalogWx({
-    pointer: { _id: "active", active_catalog_version: "classification-v2" },
-    rejectCatalog: true,
-    initialCache: cachedV1,
-  });
-  await assert.rejects(
-    () => loadCategoriesService(newerVersion.wxApi).service.loadCategoryCatalog(),
-    /cloud unavailable/,
-  );
-});
-
-test("cache fallback rebuilds a freshly sorted canonical public catalog", async () => {
-  const healthy = createCatalogWx({ rows: validRows() });
-  await loadCategoriesService(healthy.wxApi).service.loadCategoryCatalog();
-  const cached = JSON.parse(JSON.stringify(healthy.storage.get(CACHE_KEY)));
-  cached.groups[0].tags.reverse();
-  cached.groups[2].tags.reverse();
-
-  const offline = createCatalogWx({ rejectCloud: true, initialCache: cached });
-  const result = await loadCategoriesService(offline.wxApi).service.loadCategoryCatalog();
-
+  assert.equal(decades[0], 1200);
+  assert.equal(decades.at(-1), 1960);
   assert.deepEqual(
-    JSON.parse(JSON.stringify(result.groups[0].tags.map((tag) => tag.id))),
-    ["style-a", "style-b"],
-  );
-  assert.deepEqual(
-    JSON.parse(JSON.stringify(result.groups[2].tags.map((tag) => tag.label))),
-    ["1890s", "1900s"],
-  );
-  assert.deepEqual(
-    JSON.parse(JSON.stringify(Object.keys(result.groups[0].tags[0]).sort())),
-    ["count", "id", "label"],
-  );
-  assert.notEqual(result.groups, cached.groups);
-});
-
-test("cache fallback rejects coerced counts and whitespace-padded identity fields", async () => {
-  const healthy = createCatalogWx({ rows: validRows() });
-  await loadCategoriesService(healthy.wxApi).service.loadCategoryCatalog();
-  const cached = healthy.storage.get(CACHE_KEY);
-
-  const stringCountCache = JSON.parse(JSON.stringify(cached));
-  stringCountCache.groups[0].tags[0].count = "3";
-  const stringCountWx = createCatalogWx({
-    rejectCloud: true,
-    initialCache: stringCountCache,
-  }).wxApi;
-  await assert.rejects(
-    () => loadCategoriesService(stringCountWx).service.loadCategoryCatalog(),
-    /cloud unavailable/,
-  );
-
-  const paddedIdCache = JSON.parse(JSON.stringify(cached));
-  paddedIdCache.groups[0].tags[0].id = ` ${paddedIdCache.groups[0].tags[0].id} `;
-  const paddedIdWx = createCatalogWx({
-    rejectCloud: true,
-    initialCache: paddedIdCache,
-  }).wxApi;
-  await assert.rejects(
-    () => loadCategoriesService(paddedIdWx).service.loadCategoryCatalog(),
-    /cloud unavailable/,
+    decades,
+    decades.slice().sort((left, right) => left - right),
   );
 });
 
-test("loadCategoryCatalog reads every catalog page when the version has more than 20 rows", async () => {
-  const styleRows = Array.from({ length: 20 }, (_, index) => ({
-    _id: `v1--style-${index}`,
-    catalog_version: "classification-v1",
-    group: "style",
-    term_id: `style-${String(index).padStart(2, "0")}`,
-    label: `流派 ${index}`,
-    artwork_count: 1,
-    sort_order: index,
-    display_enabled: true,
-    publish_status: "ready",
-  }));
-  const rows = [
-    ...styleRows,
-    validRows().find((row) => row.group === "subject"),
-    validRows().find((row) => row.group === "decade"),
-  ];
-  const { wxApi, counters } = createCatalogWx({ rows });
-  const { service } = loadCategoriesService(wxApi);
+test("each catalog load returns an isolated copy", async () => {
+  const { exports: service } = loadCategoriesService();
+  const first = await service.loadCategoryCatalog();
+  first.groups[0].name = "已修改";
+  first.groups[0].tags[0].label = "已修改";
+  first.groups[0].tags.push({ id: "unexpected", label: "异常" });
 
+  const second = await service.loadCategoryCatalog();
+
+  assert.equal(second.groups[0].name, "流派");
+  assert.equal(second.groups[0].tags[0].label, "印象派");
+  assert.equal(second.groups[0].tags.length, 34);
+});
+
+test("styles and subjects are ordered by artwork count", async () => {
+  const { exports: service } = loadCategoriesService();
   const result = await service.loadCategoryCatalog();
 
-  assert.equal(result.groups[0].tags.length, 20);
-  assert.equal(result.groups[1].tags.length, 1);
-  assert.equal(result.groups[2].tags.length, 1);
-  assert.equal(counters.catalogGets, 2);
+  for (const key of ["style", "subject"]) {
+    const counts = result.groups.find((group) => group.key === key).tags.map((tag) => tag.count);
+    assert.deepEqual(
+      counts,
+      counts.slice().sort((left, right) => right - left),
+    );
+  }
 });
 
-test("loadCategoryCatalog rejects cloud failure when cache is structurally invalid", async () => {
-  const { wxApi } = createCatalogWx({
-    rejectCloud: true,
-    initialCache: {
-      catalogVersion: "classification-v1",
-      groups: [{ key: "style", name: "流派", tags: [] }],
-    },
-  });
-  const { service } = loadCategoriesService(wxApi);
+test("category service has no cloud database or storage dependency", () => {
+  const { source } = loadCategoriesService();
 
-  await assert.rejects(() => service.loadCategoryCatalog(), /cloud unavailable/);
-});
-
-test("category service does not import hardcoded fallback groups", () => {
-  const { wxApi } = createCatalogWx({ rows: validRows() });
-  const { source } = loadCategoriesService(wxApi);
-
-  assert.doesNotMatch(source, /fallbackGroups|fallback-artworks/);
+  assert.doesNotMatch(source, /wx\.cloud|database\(|category_catalog_state|category_catalog/);
+  assert.doesNotMatch(source, /getStorageSync|setStorageSync|CACHE_KEY/);
+  assert.match(source, /source:\s*"local"/);
 });

@@ -43,7 +43,10 @@ test("parseReviewedRecordsFromText accepts only approved reviewed records", () =
   assert.equal(parseReviewedRecordsFromText(`${JSON.stringify(approved)}\n`).length, 1);
 
   assert.throws(
-    () => parseReviewedRecordsFromText(`${JSON.stringify({ ...approved, review_status: "pending" })}\n`),
+    () =>
+      parseReviewedRecordsFromText(
+        `${JSON.stringify({ ...approved, review_status: "pending" })}\n`,
+      ),
     /not approved/,
   );
 });
@@ -89,8 +92,14 @@ test("reviewedRecordToCloudbaseDocument publishes reviewed metadata with COS URL
   assert.equal(doc.title_en, "Reviewed Title");
   assert.equal(doc.artist, "审核艺术家 (Reviewed Artist)");
   assert.equal(doc.source_record_id, "80705");
-  assert.equal(doc.download_url, "https://masterpiece-1437223579.cos.ap-beijing.myqcloud.com/ppaintings/001_standard.jpg");
-  assert.equal(doc.thumbnail_url, "https://masterpiece-1437223579.cos.ap-beijing.myqcloud.com/ppaintings/derivatives/thumb/001_standard.webp");
+  assert.equal(
+    doc.download_url,
+    "https://masterpiece-1437223579.cos.ap-beijing.myqcloud.com/ppaintings/001_standard.jpg",
+  );
+  assert.equal(
+    doc.thumbnail_url,
+    "https://masterpiece-1437223579.cos.ap-beijing.myqcloud.com/ppaintings/derivatives/thumb/001_standard.webp",
+  );
   assert.deepEqual(doc.tag_keys, ["风景", "油画", "法国", "公共领域"]);
   assert.equal(doc.sync_target, "cloudbase");
 });

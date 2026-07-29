@@ -259,18 +259,18 @@ test("buildArtistShareMessage uses a stable artist id", () => {
     nameZh: "克洛德·莫奈",
     nameEn: "Claude Monet",
   }), {
-    title: "克洛德·莫奈（Claude Monet）· Art Archive",
+    title: "克洛德·莫奈（Claude Monet）· Masterpiece",
     path: "/pages/artist-detail/artist-detail?id=claude-monet",
   });
 });
 
 test("share payloads fall back to the home page without a stable id", () => {
   assert.deepEqual(buildArtworkShareMessage(null), {
-    title: "Art Archive · 在线画廊",
+    title: "Masterpiece · 在线画廊",
     path: "/pages/home/home",
   });
   assert.deepEqual(buildArtistShareMessage({ nameZh: "未知画家" }), {
-    title: "Art Archive · 在线画廊",
+    title: "Masterpiece · 在线画廊",
     path: "/pages/home/home",
   });
 });
@@ -292,7 +292,7 @@ Create `miniapp/services/share-routes.js`:
 
 ```js
 const HOME_SHARE = {
-  title: "Art Archive · 在线画廊",
+  title: "Masterpiece · 在线画廊",
   path: "/pages/home/home",
 };
 
@@ -312,7 +312,7 @@ function buildArtworkShareMessage(artwork) {
   const title = compactText(artwork.titleCn || artwork.title_cn || artwork.title || artwork.titleEn) || "未命名作品";
   const artist = compactText(artwork.artist);
   return withOptionalImage({
-    title: artist ? `${title} · ${artist}` : `${title} · Art Archive`,
+    title: artist ? `${title} · ${artist}` : `${title} · Masterpiece`,
     path: `/pages/detail/detail?id=${encodeURIComponent(id)}`,
   }, artwork.thumbnail_url || artwork.display_url);
 }
@@ -325,7 +325,7 @@ function buildArtistShareMessage(artist) {
   const nameEn = compactText(artist.nameEn || artist.name_en);
   const name = nameZh && nameEn ? `${nameZh}（${nameEn}）` : (nameZh || nameEn || "画家");
   return withOptionalImage({
-    title: `${name} · Art Archive`,
+    title: `${name} · Masterpiece`,
     path: `/pages/artist-detail/artist-detail?id=${encodeURIComponent(id)}`,
   }, artist.avatarUrl || artist.avatar_url);
 }

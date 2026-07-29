@@ -18,7 +18,11 @@ function parseEnvFile(filePath) {
     const match = line.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
     if (!match) continue;
     let value = match[2].trim();
-    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1, -1);
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    )
+      value = value.slice(1, -1);
     out[match[1]] = value;
   }
   return out;
@@ -46,12 +50,15 @@ function parseArgs(argv) {
     else if (arg === "--in") options.input = path.resolve(required(argv, (index += 1), arg));
     else if (arg === "--env-id") options.envId = required(argv, (index += 1), arg);
     else if (arg === "--collection") options.collection = required(argv, (index += 1), arg);
-    else if (arg === "--report-dir") options.reportDir = path.resolve(required(argv, (index += 1), arg));
-    else if (arg === "--batch-size") options.batchSize = positiveInt(required(argv, (index += 1), arg), arg);
+    else if (arg === "--report-dir")
+      options.reportDir = path.resolve(required(argv, (index += 1), arg));
+    else if (arg === "--batch-size")
+      options.batchSize = positiveInt(required(argv, (index += 1), arg), arg);
     else if (arg === "--limit") options.limit = positiveInt(required(argv, (index += 1), arg), arg);
     else throw new Error(`Unknown argument: ${arg}`);
   }
-  if (options.batchSize > 50) throw new Error("--batch-size must be <= 50 to keep CloudBase commands small.");
+  if (options.batchSize > 50)
+    throw new Error("--batch-size must be <= 50 to keep CloudBase commands small.");
   return options;
 }
 
@@ -63,13 +70,19 @@ function required(argv, index, flag) {
 
 function positiveInt(value, flag) {
   const number = Number(value);
-  if (!Number.isSafeInteger(number) || number < 1) throw new Error(`${flag} must be a positive integer.`);
+  if (!Number.isSafeInteger(number) || number < 1)
+    throw new Error(`${flag} must be a positive integer.`);
   return number;
 }
 
 function readDocuments(filePath, limit) {
   const text = fs.readFileSync(filePath, "utf8").trim();
-  const rows = text.startsWith("[") ? JSON.parse(text) : text.split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+  const rows = text.startsWith("[")
+    ? JSON.parse(text)
+    : text
+        .split(/\r?\n/)
+        .filter(Boolean)
+        .map((line) => JSON.parse(line));
   const docs = (limit ? rows.slice(0, limit) : rows).map((row) => ({ ...row }));
   for (const doc of docs) {
     if (!doc._id) throw new Error(`Encountered document without _id in ${filePath}`);
@@ -81,15 +94,19 @@ function readDocuments(filePath, limit) {
 }
 
 function createClient(options, config) {
-  const secretId = config.TENCENT_SECRET_ID || config.TENCENTCLOUD_SECRETID || config.TENCENT_CLOUD_SECRET_ID;
-  const secretKey = config.TENCENT_SECRET_KEY || config.TENCENTCLOUD_SECRETKEY || config.TENCENT_CLOUD_SECRET_KEY;
-  if (!secretId || !secretKey) throw new Error("Missing Tencent credentials. Set TENCENT_SECRET_ID and TENCENT_SECRET_KEY.");
+  const secretId =
+    config.TENCENT_SECRET_ID || config.TENCENTCLOUD_SECRETID || config.TENCENT_CLOUD_SECRET_ID;
+  const secretKey =
+    config.TENCENT_SECRET_KEY || config.TENCENTCLOUD_SECRETKEY || config.TENCENT_CLOUD_SECRET_KEY;
+  if (!secretId || !secretKey)
+    throw new Error("Missing Tencent credentials. Set TENCENT_SECRET_ID and TENCENT_SECRET_KEY.");
   return CloudBase.init({ envId: options.envId, secretId, secretKey });
 }
 
 function chunk(items, size) {
   const chunks = [];
-  for (let index = 0; index < items.length; index += size) chunks.push(items.slice(index, index + size));
+  for (let index = 0; index < items.length; index += size)
+    chunks.push(items.slice(index, index + size));
   return chunks;
 }
 
@@ -103,11 +120,19 @@ async function queryExistingIds(database, collection) {
   const pageSize = 1000;
   for (let skip = 0; ; skip += pageSize) {
     const result = await database.runCommands({
-      MgoCommands: [{
-        TableName: collection,
-        CommandType: "QUERY",
-        Command: JSON.stringify({ find: collection, filter: {}, projection: { _id: 1 }, skip, limit: pageSize }),
-      }],
+      MgoCommands: [
+        {
+          TableName: collection,
+          CommandType: "QUERY",
+          Command: JSON.stringify({
+            find: collection,
+            filter: {},
+            projection: { _id: 1 },
+            skip,
+            limit: pageSize,
+          }),
+        },
+      ],
     });
     const rows = parseCommandRows(result.Data?.[0]);
     ids.push(...rows.map((row) => row._id).filter(Boolean));
@@ -118,27 +143,31 @@ async function queryExistingIds(database, collection) {
 
 async function upsertBatch(database, collection, docs) {
   return database.runCommands({
-    MgoCommands: [{
-      TableName: collection,
-      CommandType: "UPDATE",
-      Command: JSON.stringify({
-        update: collection,
-        updates: docs.map((doc) => ({ q: { _id: doc._id }, u: { $set: doc }, upsert: true })),
-      }),
-    }],
+    MgoCommands: [
+      {
+        TableName: collection,
+        CommandType: "UPDATE",
+        Command: JSON.stringify({
+          update: collection,
+          updates: docs.map((doc) => ({ q: { _id: doc._id }, u: { $set: doc }, upsert: true })),
+        }),
+      },
+    ],
   });
 }
 
 async function deleteBatch(database, collection, ids) {
   return database.runCommands({
-    MgoCommands: [{
-      TableName: collection,
-      CommandType: "DELETE",
-      Command: JSON.stringify({
-        delete: collection,
-        deletes: ids.map((id) => ({ q: { _id: id }, limit: 1 })),
-      }),
-    }],
+    MgoCommands: [
+      {
+        TableName: collection,
+        CommandType: "DELETE",
+        Command: JSON.stringify({
+          delete: collection,
+          deletes: ids.map((id) => ({ q: { _id: id }, limit: 1 })),
+        }),
+      },
+    ],
   });
 }
 
@@ -150,12 +179,17 @@ async function main() {
   const options = parseArgs(process.argv.slice(2));
   const docs = readDocuments(options.input, options.limit);
   fs.mkdirSync(options.reportDir, { recursive: true });
-  const timestamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+  const timestamp = new Date()
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\.\d{3}Z$/, "Z");
   const reportPath = path.join(options.reportDir, `cloudbase-upsert-${timestamp}.json`);
 
   const app = createClient(options, env());
   await app.database.createCollectionIfNotExists(options.collection);
-  const existingIds = options.pruneStale ? await queryExistingIds(app.database, options.collection) : [];
+  const existingIds = options.pruneStale
+    ? await queryExistingIds(app.database, options.collection)
+    : [];
   const inputIds = new Set(docs.map((doc) => doc._id));
   const staleIds = existingIds.filter((id) => !inputIds.has(id));
 
@@ -182,7 +216,12 @@ async function main() {
         await upsertBatch(app.database, options.collection, docsChunk);
         summary.upserted_batches += 1;
       } catch (error) {
-        summary.failures.push({ action: "upsert", first_id: docsChunk[0]?._id, count: docsChunk.length, error: error.message });
+        summary.failures.push({
+          action: "upsert",
+          first_id: docsChunk[0]?._id,
+          count: docsChunk.length,
+          error: error.message,
+        });
       }
     }
     if (options.pruneStale && staleIds.length) {
@@ -191,7 +230,12 @@ async function main() {
           await deleteBatch(app.database, options.collection, idsChunk);
           summary.deleted_batches += 1;
         } catch (error) {
-          summary.failures.push({ action: "delete", first_id: idsChunk[0], count: idsChunk.length, error: error.message });
+          summary.failures.push({
+            action: "delete",
+            first_id: idsChunk[0],
+            count: idsChunk.length,
+            error: error.message,
+          });
         }
       }
     }

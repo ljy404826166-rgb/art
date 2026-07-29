@@ -40,11 +40,15 @@ export function normalizeSettings(value: unknown): AppSettings {
   if (!isRecord(value)) return defaultAppSettings;
 
   return {
-    theme: themes.includes(value.theme as AppTheme) ? (value.theme as AppTheme) : defaultAppSettings.theme,
+    theme: themes.includes(value.theme as AppTheme)
+      ? (value.theme as AppTheme)
+      : defaultAppSettings.theme,
     fontSize: fontSizes.includes(value.fontSize as AppFontSize)
       ? (value.fontSize as AppFontSize)
       : defaultAppSettings.fontSize,
-    motion: motions.includes(value.motion as AppMotion) ? (value.motion as AppMotion) : defaultAppSettings.motion,
+    motion: motions.includes(value.motion as AppMotion)
+      ? (value.motion as AppMotion)
+      : defaultAppSettings.motion,
     downloadQuality: qualities.includes(value.downloadQuality as DownloadQuality)
       ? (value.downloadQuality as DownloadQuality)
       : defaultAppSettings.downloadQuality,
@@ -53,9 +57,15 @@ export function normalizeSettings(value: unknown): AppSettings {
         ? value.confirmBeforeDownload
         : defaultAppSettings.confirmBeforeDownload,
     saveDownloadHistory:
-      typeof value.saveDownloadHistory === "boolean" ? value.saveDownloadHistory : defaultAppSettings.saveDownloadHistory,
-    syncFavorites: typeof value.syncFavorites === "boolean" ? value.syncFavorites : defaultAppSettings.syncFavorites,
-    syncHistory: typeof value.syncHistory === "boolean" ? value.syncHistory : defaultAppSettings.syncHistory,
+      typeof value.saveDownloadHistory === "boolean"
+        ? value.saveDownloadHistory
+        : defaultAppSettings.saveDownloadHistory,
+    syncFavorites:
+      typeof value.syncFavorites === "boolean"
+        ? value.syncFavorites
+        : defaultAppSettings.syncFavorites,
+    syncHistory:
+      typeof value.syncHistory === "boolean" ? value.syncHistory : defaultAppSettings.syncHistory,
   };
 }
 

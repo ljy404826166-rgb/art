@@ -40,7 +40,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function limitText(value: unknown, maxLength: number): string {
-  return String(value ?? "").trim().slice(0, maxLength);
+  return String(value ?? "")
+    .trim()
+    .slice(0, maxLength);
 }
 
 export function initialsFromName(value: string): string {
@@ -51,7 +53,8 @@ export function initialsFromName(value: string): string {
 
 export function normalizeUserProfile(value: unknown): LocalUserProfile {
   if (!isRecord(value)) return defaultUserProfile;
-  const displayName = limitText(value.displayName, profileLimits.displayNameMax) || defaultUserProfile.displayName;
+  const displayName =
+    limitText(value.displayName, profileLimits.displayNameMax) || defaultUserProfile.displayName;
 
   return {
     displayName,

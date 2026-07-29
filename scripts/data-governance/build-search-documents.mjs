@@ -1,23 +1,23 @@
-import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 
-import { parseArgs, writeJsonLines } from './generate-artist-candidates.mjs';
-import { readJsonRecords } from './validate-reviewed-data.mjs';
+import { parseArgs, writeJsonLines } from "./generate-artist-candidates.mjs";
+import { readJsonRecords } from "./validate-reviewed-data.mjs";
 
-const DEFAULT_ARTWORKS_PATH = path.resolve('miniapp/data/artworks.cloudbase.json');
-const DEFAULT_DERIVED_PATH = path.resolve('miniapp/data/review/derived-artworks-patch.jsonl');
-const DEFAULT_SEARCH_DOCS_OUT = path.resolve('miniapp/data/review/search-documents.jsonl');
+const DEFAULT_ARTWORKS_PATH = path.resolve("miniapp/data/artworks.cloudbase.json");
+const DEFAULT_DERIVED_PATH = path.resolve("miniapp/data/review/derived-artworks-patch.jsonl");
+const DEFAULT_SEARCH_DOCS_OUT = path.resolve("miniapp/data/review/search-documents.jsonl");
 
 function cleanText(value) {
-  return String(value ?? '')
-    .replace(/\uFEFF/g, '')
-    .replace(/\s+/g, ' ')
+  return String(value ?? "")
+    .replace(/\uFEFF/g, "")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
 function asArray(value) {
   if (Array.isArray(value)) return value;
-  if (value == null || value === '') return [];
+  if (value == null || value === "") return [];
   return [value];
 }
 
@@ -37,11 +37,17 @@ function uniqueValues(values = []) {
 }
 
 function joinValues(values = []) {
-  return uniqueValues(values).join(' ');
+  return uniqueValues(values).join(" ");
 }
 
 function getArtworkId(artwork, index) {
-  return cleanText(artwork?._id || artwork?.id || artwork?.source_id || artwork?.supabase_id || `artwork-${index + 1}`);
+  return cleanText(
+    artwork?._id ||
+      artwork?.id ||
+      artwork?.source_id ||
+      artwork?.supabase_id ||
+      `artwork-${index + 1}`,
+  );
 }
 
 function mergeDerivedFields(artwork, derived) {
@@ -88,11 +94,7 @@ export function buildSearchDocument(artwork, index = 0, derived) {
   const artistLabels = joinValues(merged.artist_labels);
   const tagIds = joinValues(merged.tag_ids);
   const tagLabels = joinValues(merged.tag_labels);
-  const tagsText = joinValues([
-    merged.tags_text,
-    merged.tags,
-    merged.tag_keys,
-  ]);
+  const tagsText = joinValues([merged.tags_text, merged.tags, merged.tag_keys]);
 
   const document = {
     id: artworkId,
@@ -122,13 +124,17 @@ export function buildSearchDocument(artwork, index = 0, derived) {
 export function buildSearchDocuments({ artworks = [], derivedArtworks = [] } = {}) {
   const derivedById = buildDerivedLookup(derivedArtworks);
   return artworks
-    .map((artwork, index) => buildSearchDocument(artwork, index, derivedById.get(getArtworkId(artwork, index))))
+    .map((artwork, index) =>
+      buildSearchDocument(artwork, index, derivedById.get(getArtworkId(artwork, index))),
+    )
     .filter((document) => document.id);
 }
 
 export function runCli(argv = process.argv.slice(2)) {
   const args = parseArgs(argv);
-  const artworksPath = path.resolve(args.artworks || args.input || args.in || DEFAULT_ARTWORKS_PATH);
+  const artworksPath = path.resolve(
+    args.artworks || args.input || args.in || DEFAULT_ARTWORKS_PATH,
+  );
   const derivedPath = path.resolve(args.derived || DEFAULT_DERIVED_PATH);
   const outputPath = path.resolve(args.out || DEFAULT_SEARCH_DOCS_OUT);
 
@@ -138,14 +144,20 @@ export function runCli(argv = process.argv.slice(2)) {
 
   writeJsonLines(outputPath, documents);
 
-  process.stdout.write(`${JSON.stringify({
-    inputs: {
-      artworks: artworksPath,
-      derived: derivedPath,
-    },
-    output: outputPath,
-    documentCount: documents.length,
-  }, null, 2)}\n`);
+  process.stdout.write(
+    `${JSON.stringify(
+      {
+        inputs: {
+          artworks: artworksPath,
+          derived: derivedPath,
+        },
+        output: outputPath,
+        documentCount: documents.length,
+      },
+      null,
+      2,
+    )}\n`,
+  );
 
   return 0;
 }

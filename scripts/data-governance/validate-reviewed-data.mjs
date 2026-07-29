@@ -1,44 +1,46 @@
-import fs from 'node:fs';
-import { pathToFileURL } from 'node:url';
+import fs from "node:fs";
+import { pathToFileURL } from "node:url";
 
-const REVIEW_STATUSES = new Set(['candidate', 'reviewed', 'rejected']);
+const REVIEW_STATUSES = new Set(["candidate", "reviewed", "rejected"]);
 const VOCAB_TYPES = new Set([
-  'style',
-  'subject',
-  'medium',
-  'period',
-  'region',
-  'country',
-  'collection',
-  'source',
+  "style",
+  "subject",
+  "medium",
+  "period",
+  "region",
+  "country",
+  "collection",
+  "source",
 ]);
 const ARTWORK_ARTIST_ROLES = new Set([
-  'creator',
-  'after',
-  'attributed_to',
-  'workshop',
-  'publisher',
-  'subject',
-  'unknown',
+  "creator",
+  "after",
+  "attributed_to",
+  "workshop",
+  "publisher",
+  "subject",
+  "unknown",
 ]);
 
 function isPlainObject(value) {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function isNonEmptyString(value) {
-  return typeof value === 'string' && value.trim().length > 0;
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 function normalizeToken(value) {
-  return String(value ?? '').trim().toLocaleLowerCase();
+  return String(value ?? "")
+    .trim()
+    .toLocaleLowerCase();
 }
 
 function createError(collection, index, record, field, message) {
   return {
     collection,
     index,
-    id: isPlainObject(record) ? record._id ?? null : null,
+    id: isPlainObject(record) ? (record._id ?? null) : null,
     field,
     message,
   };
@@ -57,8 +59,8 @@ function pushStatusError(errors, collection, index, record) {
         collection,
         index,
         record,
-        'review_status',
-        'review_status must be candidate, reviewed, or rejected',
+        "review_status",
+        "review_status must be candidate, reviewed, or rejected",
       ),
     );
   }
@@ -98,7 +100,7 @@ function pushDuplicateAliasErrors(errors, collection, index, record) {
   }
 
   if (!Array.isArray(record.aliases)) {
-    errors.push(createError(collection, index, record, 'aliases', 'aliases must be an array'));
+    errors.push(createError(collection, index, record, "aliases", "aliases must be an array"));
     return;
   }
 
@@ -106,12 +108,14 @@ function pushDuplicateAliasErrors(errors, collection, index, record) {
   record.aliases.forEach((alias) => {
     const normalized = normalizeToken(alias);
     if (!normalized) {
-      errors.push(createError(collection, index, record, 'aliases', 'aliases cannot contain empty values'));
+      errors.push(
+        createError(collection, index, record, "aliases", "aliases cannot contain empty values"),
+      );
       return;
     }
 
     if (seen.has(normalized)) {
-      errors.push(createError(collection, index, record, 'aliases', `duplicate alias: ${alias}`));
+      errors.push(createError(collection, index, record, "aliases", `duplicate alias: ${alias}`));
       return;
     }
 
@@ -130,38 +134,38 @@ export function validateArtists(records = []) {
   const errors = [];
 
   if (!Array.isArray(records)) {
-    return finish([createError('artists', null, null, 'records', 'artists must be an array')]);
+    return finish([createError("artists", null, null, "records", "artists must be an array")]);
   }
 
   records.forEach((record, index) => {
     if (!isPlainObject(record)) {
-      errors.push(createError('artists', index, record, 'record', 'artist must be an object'));
+      errors.push(createError("artists", index, record, "record", "artist must be an object"));
       return;
     }
 
-    pushRequiredStringError(errors, 'artists', index, record, '_id');
-    pushRequiredStringError(errors, 'artists', index, record, 'name_zh');
-    pushRequiredStringError(errors, 'artists', index, record, 'name_en');
-    pushStatusError(errors, 'artists', index, record);
+    pushRequiredStringError(errors, "artists", index, record, "_id");
+    pushRequiredStringError(errors, "artists", index, record, "name_zh");
+    pushRequiredStringError(errors, "artists", index, record, "name_en");
+    pushStatusError(errors, "artists", index, record);
 
     if (!Array.isArray(record.aliases)) {
-      errors.push(createError('artists', index, record, 'aliases', 'aliases must be an array'));
+      errors.push(createError("artists", index, record, "aliases", "aliases must be an array"));
     } else {
-      pushDuplicateAliasErrors(errors, 'artists', index, record);
+      pushDuplicateAliasErrors(errors, "artists", index, record);
     }
 
     if (
-      record.review_status === 'reviewed' &&
+      record.review_status === "reviewed" &&
       !hasNonEmptyAuthorityIds(record.authority_ids) &&
       !hasNonEmptySource(record.sources)
     ) {
       errors.push(
         createError(
-          'artists',
+          "artists",
           index,
           record,
-          'sources',
-          'reviewed artist must include authority_ids or at least one source',
+          "sources",
+          "reviewed artist must include authority_ids or at least one source",
         ),
       );
     }
@@ -174,32 +178,36 @@ export function validateVocabTerms(records = []) {
   const errors = [];
 
   if (!Array.isArray(records)) {
-    return finish([createError('vocab_terms', null, null, 'records', 'vocab_terms must be an array')]);
+    return finish([
+      createError("vocab_terms", null, null, "records", "vocab_terms must be an array"),
+    ]);
   }
 
   records.forEach((record, index) => {
     if (!isPlainObject(record)) {
-      errors.push(createError('vocab_terms', index, record, 'record', 'vocab term must be an object'));
+      errors.push(
+        createError("vocab_terms", index, record, "record", "vocab term must be an object"),
+      );
       return;
     }
 
-    pushRequiredStringError(errors, 'vocab_terms', index, record, '_id');
-    pushRequiredStringError(errors, 'vocab_terms', index, record, 'label_zh');
-    pushStatusError(errors, 'vocab_terms', index, record);
+    pushRequiredStringError(errors, "vocab_terms", index, record, "_id");
+    pushRequiredStringError(errors, "vocab_terms", index, record, "label_zh");
+    pushStatusError(errors, "vocab_terms", index, record);
 
     if (!VOCAB_TYPES.has(record.type)) {
       errors.push(
         createError(
-          'vocab_terms',
+          "vocab_terms",
           index,
           record,
-          'type',
-          'type must be style, subject, medium, period, region, country, collection, or source',
+          "type",
+          "type must be style, subject, medium, period, region, country, collection, or source",
         ),
       );
     }
 
-    pushDuplicateAliasErrors(errors, 'vocab_terms', index, record);
+    pushDuplicateAliasErrors(errors, "vocab_terms", index, record);
   });
 
   return finish(errors);
@@ -210,33 +218,45 @@ export function validateArtworkArtistLinks(records = []) {
 
   if (!Array.isArray(records)) {
     return finish([
-      createError('artwork_artist_links', null, null, 'records', 'artwork_artist_links must be an array'),
+      createError(
+        "artwork_artist_links",
+        null,
+        null,
+        "records",
+        "artwork_artist_links must be an array",
+      ),
     ]);
   }
 
   records.forEach((record, index) => {
     if (!isPlainObject(record)) {
       errors.push(
-        createError('artwork_artist_links', index, record, 'record', 'artwork artist link must be an object'),
+        createError(
+          "artwork_artist_links",
+          index,
+          record,
+          "record",
+          "artwork artist link must be an object",
+        ),
       );
       return;
     }
 
-    pushRequiredStringError(errors, 'artwork_artist_links', index, record, '_id');
-    pushRequiredStringError(errors, 'artwork_artist_links', index, record, 'artwork_id');
-    pushRequiredStringError(errors, 'artwork_artist_links', index, record, 'artist_id');
-    pushStatusError(errors, 'artwork_artist_links', index, record);
+    pushRequiredStringError(errors, "artwork_artist_links", index, record, "_id");
+    pushRequiredStringError(errors, "artwork_artist_links", index, record, "artwork_id");
+    pushRequiredStringError(errors, "artwork_artist_links", index, record, "artist_id");
+    pushStatusError(errors, "artwork_artist_links", index, record);
 
     if (!isNonEmptyString(record.role)) {
-      errors.push(createError('artwork_artist_links', index, record, 'role', 'role is required'));
+      errors.push(createError("artwork_artist_links", index, record, "role", "role is required"));
     } else if (!ARTWORK_ARTIST_ROLES.has(record.role)) {
       errors.push(
         createError(
-          'artwork_artist_links',
+          "artwork_artist_links",
           index,
           record,
-          'role',
-          'role must be creator, after, attributed_to, workshop, publisher, subject, or unknown',
+          "role",
+          "role must be creator, after, attributed_to, workshop, publisher, subject, or unknown",
         ),
       );
     }
@@ -245,7 +265,11 @@ export function validateArtworkArtistLinks(records = []) {
   return finish(errors);
 }
 
-export function validateReviewedData({ artists = [], vocabTerms = [], artworkArtistLinks = [] } = {}) {
+export function validateReviewedData({
+  artists = [],
+  vocabTerms = [],
+  artworkArtistLinks = [],
+} = {}) {
   const results = [
     validateArtists(artists),
     validateVocabTerms(vocabTerms),
@@ -256,12 +280,12 @@ export function validateReviewedData({ artists = [], vocabTerms = [], artworkArt
 }
 
 export function readJsonRecords(filePath) {
-  const raw = fs.readFileSync(filePath, 'utf8').trim();
+  const raw = fs.readFileSync(filePath, "utf8").trim();
   if (!raw) {
     return [];
   }
 
-  if (raw.startsWith('[')) {
+  if (raw.startsWith("[")) {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) {
       throw new Error(`${filePath} must contain a JSON array or JSON Lines`);
@@ -285,13 +309,13 @@ function parseArgs(argv) {
   const args = {};
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
-    if (!token.startsWith('--')) {
+    if (!token.startsWith("--")) {
       continue;
     }
 
     const key = token.slice(2);
     const next = argv[index + 1];
-    if (next && !next.startsWith('--')) {
+    if (next && !next.startsWith("--")) {
       args[key] = next;
       index += 1;
     } else {
@@ -308,11 +332,11 @@ export function runCli(argv = process.argv.slice(2)) {
   if (args.artists) {
     payload.artists = readJsonRecords(args.artists);
   }
-  if (args['vocab-terms']) {
-    payload.vocabTerms = readJsonRecords(args['vocab-terms']);
+  if (args["vocab-terms"]) {
+    payload.vocabTerms = readJsonRecords(args["vocab-terms"]);
   }
-  if (args['artwork-artist-links']) {
-    payload.artworkArtistLinks = readJsonRecords(args['artwork-artist-links']);
+  if (args["artwork-artist-links"]) {
+    payload.artworkArtistLinks = readJsonRecords(args["artwork-artist-links"]);
   }
 
   const result = validateReviewedData(payload);

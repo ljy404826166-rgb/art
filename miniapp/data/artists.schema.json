@@ -122,11 +122,7 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": [
-          "title",
-          "url",
-          "fields"
-        ],
+        "required": ["title", "url", "fields"],
         "properties": {
           "title": {
             "type": "string",
@@ -150,11 +146,7 @@
     },
     "review_status": {
       "type": "string",
-      "enum": [
-        "candidate",
-        "reviewed",
-        "rejected"
-      ]
+      "enum": ["candidate", "reviewed", "rejected"]
     },
     "reviewed_by": {
       "type": "string"

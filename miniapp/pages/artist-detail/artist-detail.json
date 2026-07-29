@@ -1,6 +1,7 @@
 {
   "onReachBottomDistance": 160,
   "usingComponents": {
+    "artist-portrait": "../../components/artist-portrait/artist-portrait",
     "empty-state": "../../components/empty-state/empty-state",
     "error-state": "../../components/error-state/error-state",
     "loading-more": "../../components/loading-more/loading-more"

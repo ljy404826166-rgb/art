@@ -4,7 +4,14 @@
       <text class="library-title">下载管理</text>
       <text class="library-count">{{artworks.length}}件作品</text>
     </view>
-    <button wx:if="{{artworks.length}}" class="clear-button" bindtap="clearDownloads">清空</button>
+    <view
+      wx:if="{{artworks.length}}"
+      class="clear-button"
+      aria-role="button"
+      bindtap="clearDownloads"
+    >
+      清空
+    </view>
   </view>
 
   <empty-state

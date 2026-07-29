@@ -1,14 +1,35 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://art-archive.local/schemas/artists.schema.json",
-  "title": "Artist",
+  "title": "Canonical Artist or Creator Entity",
   "type": "object",
-  "required": ["_id", "name_zh", "name_en", "aliases", "review_status"],
+  "required": [
+    "_id",
+    "entity_type",
+    "identity_status",
+    "name_zh",
+    "name_en",
+    "aliases",
+    "bio_zh",
+    "review_status",
+    "sources"
+  ],
   "additionalProperties": true,
   "properties": {
     "_id": {
       "type": "string",
       "minLength": 1
+    },
+    "entity_type": {
+      "type": "string",
+      "enum": ["person", "organization", "workshop", "attribution", "anonymous", "unresolved"]
+    },
+    "identity_status": {
+      "type": "string",
+      "enum": ["verified", "provisional", "conflicted", "duplicate", "unresolved"]
+    },
+    "merged_into_artist_id": {
+      "type": ["string", "null"]
     },
     "name_zh": {
       "type": "string",
@@ -18,6 +39,9 @@
       "type": "string",
       "minLength": 1
     },
+    "preferred_name": {
+      "type": "string"
+    },
     "aliases": {
       "type": "array",
       "items": {
@@ -26,57 +50,293 @@
       },
       "uniqueItems": true
     },
-    "review_status": {
+    "birth_year": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "death_year": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "birth_date_text": {
+      "type": "string"
+    },
+    "death_date_text": {
+      "type": "string"
+    },
+    "birth_place": {
+      "type": "string"
+    },
+    "death_place": {
+      "type": "string"
+    },
+    "lifespan_text": {
+      "type": "string"
+    },
+    "country_code": {
+      "type": ["string", "null"],
+      "pattern": "^[A-Z]{2}$"
+    },
+    "country_zh": {
+      "type": "string"
+    },
+    "country": {
+      "type": "string"
+    },
+    "region_id": {
       "type": "string",
-      "enum": ["candidate", "reviewed", "rejected"]
+      "pattern": "^region-"
+    },
+    "region": {
+      "type": "string"
+    },
+    "occupations_zh": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "active_period": {
+      "type": "string"
+    },
+    "bio_zh": {
+      "type": "string",
+      "minLength": 200,
+      "maxLength": 300
+    },
+    "bio_char_count": {
+      "type": "integer",
+      "minimum": 200,
+      "maximum": 300
+    },
+    "bio_facts": {
+      "type": "object",
+      "required": ["lifespan", "title", "career", "standing"],
+      "additionalProperties": false,
+      "properties": {
+        "lifespan": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "career": {
+          "type": "string",
+          "minLength": 1
+        },
+        "standing": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "historical_significance_zh": {
+      "type": "string"
+    },
+    "portrait_url": {
+      "type": ["string", "null"]
+    },
+    "portrait_source": {
+      "type": ["string", "null"]
+    },
+    "portrait_license": {
+      "type": ["string", "null"]
+    },
+    "portrait_credit": {
+      "type": ["string", "null"]
+    },
+    "portrait_kind": {
+      "type": ["string", "null"],
+      "enum": [
+        "photograph",
+        "painted_portrait",
+        "self_portrait",
+        "drawing",
+        "print",
+        "sculpture",
+        "other",
+        null
+      ]
+    },
+    "portrait_artwork_id": {
+      "type": ["string", "null"]
+    },
+    "portrait_status": {
+      "type": ["string", "null"],
+      "enum": [
+        "approved",
+        "no_eligible_asset",
+        "non_person_entity",
+        "identity_unresolved",
+        "rights_blocked",
+        null
+      ]
+    },
+    "portrait_updated_at": {
+      "type": ["string", "null"]
+    },
+    "avatar_text": {
+      "type": "string"
+    },
+    "styles": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "periods": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "classification_version": {
+      "type": "string"
+    },
+    "classification_updated_at": {
+      "type": "string"
+    },
+    "style_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^style-"
+      },
+      "uniqueItems": true
+    },
+    "subject_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^subject-"
+      },
+      "uniqueItems": true
+    },
+    "decade_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^period-[0-9]{4}s$"
+      },
+      "uniqueItems": true
+    },
+    "representative_artwork_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "representative_work_labels": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "representative_works": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "artwork_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "classified_artwork_count": {
+      "type": "integer",
+      "minimum": 0
     },
     "authority_ids": {
       "type": "object",
       "additionalProperties": {
         "oneOf": [
-          { "type": "string" },
+          {
+            "type": "string"
+          },
           {
             "type": "array",
-            "items": { "type": "string" }
+            "items": {
+              "type": "string"
+            }
           }
         ]
+      },
+      "properties": {
+        "wikidata": {
+          "type": "string",
+          "pattern": "^Q[0-9]+$"
+        },
+        "ulan": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        },
+        "viaf": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        }
       }
     },
     "sources": {
       "type": "array",
+      "minItems": 1,
       "items": {
         "type": "object",
+        "required": ["title", "url"],
         "additionalProperties": true,
         "properties": {
-          "title": { "type": "string" },
-          "url": { "type": "string" },
-          "publisher": { "type": "string" },
-          "accessed_at": { "type": "string" }
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "url": {
+            "type": "string",
+            "minLength": 1
+          },
+          "publisher": {
+            "type": "string"
+          },
+          "accessed_at": {
+            "type": "string"
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "uniqueItems": true
+          }
         }
       }
     },
-    "birth_year": {
-      "type": ["integer", "null"]
+    "unresolved_reason": {
+      "type": ["string", "null"]
     },
-    "death_year": {
-      "type": ["integer", "null"]
+    "review_status": {
+      "type": "string",
+      "enum": ["candidate", "reviewed", "rejected"]
     },
-    "nationality": {
+    "reviewed_by": {
       "type": "string"
     },
-    "styles": {
-      "type": "array",
-      "items": { "type": "string" }
+    "reviewed_at": {
+      "type": "string"
     },
-    "periods": {
-      "type": "array",
-      "items": { "type": "string" }
-    },
-    "tags": {
-      "type": "array",
-      "items": { "type": "string" }
-    },
-    "summary": {
+    "updated_at": {
       "type": "string"
     }
   }

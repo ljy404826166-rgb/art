@@ -66,12 +66,14 @@ function parseArgs(argv) {
       options.overwrite = true;
       continue;
     }
-    const [name, inlineValue] = arg.startsWith("--") && arg.includes("=")
-      ? arg.slice(2).split(/=(.*)/s, 2)
-      : [arg.startsWith("--") ? arg.slice(2) : "", undefined];
+    const [name, inlineValue] =
+      arg.startsWith("--") && arg.includes("=")
+        ? arg.slice(2).split(/=(.*)/s, 2)
+        : [arg.startsWith("--") ? arg.slice(2) : "", undefined];
     if (!name) throw new Error(`Unknown argument: ${arg}`);
     const value = inlineValue ?? argv[index + 1];
-    if (value === undefined || value.startsWith("--")) throw new Error(`Missing value for --${name}`);
+    if (value === undefined || value.startsWith("--"))
+      throw new Error(`Missing value for --${name}`);
     if (inlineValue === undefined) index += 1;
 
     if (name === "source-dir") options.sourceDir = path.resolve(value);
@@ -88,7 +90,11 @@ function parseArgs(argv) {
     else throw new Error(`Unknown option: --${name}`);
   }
 
-  if (!Number.isSafeInteger(options.concurrency) || options.concurrency < 1 || options.concurrency > 16) {
+  if (
+    !Number.isSafeInteger(options.concurrency) ||
+    options.concurrency < 1 ||
+    options.concurrency > 16
+  ) {
     throw new Error("--concurrency must be an integer from 1 to 16.");
   }
   if (options.limit && (!Number.isSafeInteger(options.limit) || options.limit < 1)) {
@@ -112,7 +118,9 @@ async function imageFiles(sourceDir, limit) {
   const files = entries
     .filter((entry) => entry.isFile() && JPG_PATTERN.test(entry.name))
     .map((entry) => entry.name)
-    .sort((left, right) => Number(left.match(/^\d+/)?.[0] || 0) - Number(right.match(/^\d+/)?.[0] || 0));
+    .sort(
+      (left, right) => Number(left.match(/^\d+/)?.[0] || 0) - Number(right.match(/^\d+/)?.[0] || 0),
+    );
   return (limit ? files.slice(0, limit) : files).map((name) => path.join(sourceDir, name));
 }
 
@@ -145,9 +153,9 @@ async function headObject(cos, params) {
     return true;
   } catch (error) {
     if (
-      String(error?.statusCode || "") === "403"
-      || String(error?.statusCode || "") === "404"
-      || /forbidden|not found|NoSuchKey/i.test(String(error?.message || ""))
+      String(error?.statusCode || "") === "403" ||
+      String(error?.statusCode || "") === "404" ||
+      /forbidden|not found|NoSuchKey/i.test(String(error?.message || ""))
     ) {
       return false;
     }
@@ -164,7 +172,7 @@ async function uploadOne(cos, filePath, options) {
     Key: key,
   };
 
-  if (!options.overwrite && await headObject(cos, baseParams)) {
+  if (!options.overwrite && (await headObject(cos, baseParams))) {
     return {
       status: "skipped",
       file: filePath,
@@ -214,20 +222,27 @@ async function main() {
   const options = parseArgs(process.argv.slice(2));
   const files = await imageFiles(options.sourceDir, options.limit);
   await mkdir(options.reportDir, { recursive: true });
-  const timestamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+  const timestamp = new Date()
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\.\d{3}Z$/, "Z");
   const reportPath = path.join(options.reportDir, `tencent-cos-migration-${timestamp}.jsonl`);
 
   log(`Source images: ${files.length}`);
   log(`Source dir: ${options.sourceDir}`);
   log(`Mode: ${options.run ? "upload" : "dry-run"}`);
   if (!options.run) {
-    await writeFile(reportPath, `${JSON.stringify({
-      status: "dry-run",
-      files: files.length,
-      sourceDir: options.sourceDir,
-      prefix: options.prefix,
-      createdAt: new Date().toISOString(),
-    })}\n`, "utf8");
+    await writeFile(
+      reportPath,
+      `${JSON.stringify({
+        status: "dry-run",
+        files: files.length,
+        sourceDir: options.sourceDir,
+        prefix: options.prefix,
+        createdAt: new Date().toISOString(),
+      })}\n`,
+      "utf8",
+    );
     log(`Dry-run report: ${reportPath}`);
     log("Run again with --run after setting Tencent COS bucket, region, SecretId, and SecretKey.");
     return;
@@ -249,7 +264,9 @@ async function main() {
       if (result.status === "uploaded") uploaded += 1;
       if (result.status === "skipped") skipped += 1;
       if ((uploaded + skipped + failed) % 25 === 0 || index === files.length - 1) {
-        log(`Progress ${uploaded + skipped + failed}/${files.length}; uploaded=${uploaded}, skipped=${skipped}, failed=${failed}`);
+        log(
+          `Progress ${uploaded + skipped + failed}/${files.length}; uploaded=${uploaded}, skipped=${skipped}, failed=${failed}`,
+        );
       }
       return { ...result, index, at: new Date().toISOString() };
     } catch (error) {
@@ -264,7 +281,11 @@ async function main() {
       return { ...result, index, at: new Date().toISOString() };
     }
   });
-  await writeFile(reportPath, results.map((result) => JSON.stringify(result)).join("\n") + "\n", "utf8");
+  await writeFile(
+    reportPath,
+    results.map((result) => JSON.stringify(result)).join("\n") + "\n",
+    "utf8",
+  );
 
   log(`Report: ${reportPath}`);
   log(`Done. uploaded=${uploaded}, skipped=${skipped}, failed=${failed}`);

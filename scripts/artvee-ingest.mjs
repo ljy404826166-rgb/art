@@ -3,14 +3,20 @@
 import { createClient } from "@supabase/supabase-js";
 import CloudBase from "@cloudbase/manager-node";
 import { createHash } from "node:crypto";
+import { execFile } from "node:child_process";
 import { createRequire } from "node:module";
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
+import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
+import { Agent as UndiciAgent, fetch as undiciFetch } from "undici";
+import { buildArtworkSearchTerms } from "./cloudbase/artwork-search-terms.mjs";
+import { artworkDedupeKey } from "./museum-api-ingest.mjs";
 
 const require = createRequire(import.meta.url);
 const COS = require("cos-nodejs-sdk-v5");
+const execFileAsync = promisify(execFile);
 
 const ARTVEE_BASE_URL = "https://artvee.com";
 const DEFAULT_OUTPUT_DIR = path.resolve(process.cwd(), "csv");
@@ -22,7 +28,7 @@ const DEFAULT_IMAGE_DELAY_MS = [25000, 45000];
 const DEFAULT_HTML_LIMIT_PER_HOUR = 180;
 const DEFAULT_IMAGE_LIMIT_PER_HOUR = 0;
 const DEFAULT_MAX_ARTWORK_PAGES_PER_RUN = 70;
-const DEFAULT_MAX_IMAGES_PER_RUN = 100;
+const DEFAULT_MAX_IMAGES_PER_RUN = 200;
 const DEFAULT_TIMEOUT_MS = 15000;
 const DEFAULT_MAX_RETRIES = 1;
 const DEFAULT_CACHE_DIR = path.resolve(process.cwd(), "csv", ".artvee-cache");
@@ -151,6 +157,7 @@ const VALUE_FLAGS = new Set([
   "max-retries",
   "max-image-mb",
   "artist-start",
+  "scan-artist-start",
   "artists-url",
   "artist-priority-list",
   "per-artist",
@@ -167,6 +174,7 @@ const VALUE_FLAGS = new Set([
   "cache-dir",
   "checkpoint-dir",
   "famous-list",
+  "existing-index",
   "max-artist-per-run",
   "max-series-per-run",
 ]);
@@ -180,9 +188,13 @@ export function parseArgs(argv) {
     artistUrl: "",
     artistsUrl: `${ARTVEE_BASE_URL}/artists/`,
     artistStart: 1,
+    scanArtistStart: 0,
     perArtist: 0,
     famousList: path.resolve(process.env.ARTVEE_FAMOUS_LIST || DEFAULT_FAMOUS_LIST),
-    artistPriorityList: path.resolve(process.env.ARTVEE_ARTIST_PRIORITY_LIST || DEFAULT_ARTIST_PRIORITY_LIST),
+    existingIndex: "",
+    artistPriorityList: path.resolve(
+      process.env.ARTVEE_ARTIST_PRIORITY_LIST || DEFAULT_ARTIST_PRIORITY_LIST,
+    ),
     maxArtistPerRun: 3,
     maxSeriesPerRun: 2,
     outputDir: path.resolve(process.env.ARTVEE_OUTPUT_DIR || DEFAULT_OUTPUT_DIR),
@@ -233,10 +245,19 @@ export function parseArgs(argv) {
     cosRegion: process.env.TENCENT_COS_REGION || DEFAULT_TENCENT_COS_REGION,
     cosPrefix: process.env.TENCENT_COS_PREFIX || DEFAULT_TENCENT_COS_PREFIX,
     cosDomain: process.env.TENCENT_COS_DOMAIN || DEFAULT_TENCENT_COS_DOMAIN,
-    cosSecretId: process.env.TENCENT_SECRET_ID || process.env.TENCENT_CLOUD_SECRET_ID || process.env.TENCENTCLOUD_SECRETID || "",
-    cosSecretKey: process.env.TENCENT_SECRET_KEY || process.env.TENCENT_CLOUD_SECRET_KEY || process.env.TENCENTCLOUD_SECRETKEY || "",
+    cosSecretId:
+      process.env.TENCENT_SECRET_ID ||
+      process.env.TENCENT_CLOUD_SECRET_ID ||
+      process.env.TENCENTCLOUD_SECRETID ||
+      "",
+    cosSecretKey:
+      process.env.TENCENT_SECRET_KEY ||
+      process.env.TENCENT_CLOUD_SECRET_KEY ||
+      process.env.TENCENTCLOUD_SECRETKEY ||
+      "",
     cosSessionToken: process.env.TENCENT_SESSION_TOKEN || "",
-    cloudbaseEnvId: process.env.CLOUDBASE_ENV_ID || process.env.TCB_ENV_ID || DEFAULT_CLOUDBASE_ENV_ID,
+    cloudbaseEnvId:
+      process.env.CLOUDBASE_ENV_ID || process.env.TCB_ENV_ID || DEFAULT_CLOUDBASE_ENV_ID,
     cloudbaseCollection: process.env.CLOUDBASE_COLLECTION || DEFAULT_CLOUDBASE_COLLECTION,
   };
 
@@ -311,15 +332,23 @@ export function parseArgs(argv) {
     if (name === "ai-retries") options.aiRetries = parsePositiveInteger(value, "--ai-retries");
     if (name === "delay-ms") options.delayMs = parsePositiveInteger(value, "--delay-ms");
     if (name === "page-delay-ms") options.pageDelayMs = parseDelayRange(value, "--page-delay-ms");
-    if (name === "image-delay-ms") options.imageDelayMs = parseDelayRange(value, "--image-delay-ms");
-    if (name === "html-limit-per-hour") options.htmlLimitPerHour = parsePositiveInteger(value, "--html-limit-per-hour");
-    if (name === "image-limit-per-hour") options.imageLimitPerHour = parsePositiveInteger(value, "--image-limit-per-hour");
-    if (name === "max-artwork-pages-per-run") options.maxArtworkPagesPerRun = parsePositiveInteger(value, "--max-artwork-pages-per-run");
-    if (name === "max-images-per-run") options.maxImagesPerRun = parsePositiveInteger(value, "--max-images-per-run");
+    if (name === "image-delay-ms")
+      options.imageDelayMs = parseDelayRange(value, "--image-delay-ms");
+    if (name === "html-limit-per-hour")
+      options.htmlLimitPerHour = parsePositiveInteger(value, "--html-limit-per-hour");
+    if (name === "image-limit-per-hour")
+      options.imageLimitPerHour = parsePositiveInteger(value, "--image-limit-per-hour");
+    if (name === "max-artwork-pages-per-run")
+      options.maxArtworkPagesPerRun = parsePositiveInteger(value, "--max-artwork-pages-per-run");
+    if (name === "max-images-per-run")
+      options.maxImagesPerRun = parsePositiveInteger(value, "--max-images-per-run");
     if (name === "timeout-ms") options.timeoutMs = parsePositiveInteger(value, "--timeout-ms");
     if (name === "max-retries") options.maxRetries = parsePositiveInteger(value, "--max-retries");
     if (name === "max-image-mb") options.maxImageMb = parsePositiveInteger(value, "--max-image-mb");
-    if (name === "artist-start") options.artistStart = parsePositiveInteger(value, "--artist-start");
+    if (name === "artist-start")
+      options.artistStart = parsePositiveInteger(value, "--artist-start");
+    if (name === "scan-artist-start")
+      options.scanArtistStart = parsePositiveInteger(value, "--scan-artist-start");
     if (name === "artists-url") options.artistsUrl = normalizeArtistsUrl(value);
     if (name === "artist-priority-list") options.artistPriorityList = path.resolve(value);
     if (name === "per-artist") options.perArtist = parseNonNegativeInteger(value, "--per-artist");
@@ -335,23 +364,32 @@ export function parseArgs(argv) {
     if (name === "cache-dir") options.cacheDir = path.resolve(value);
     if (name === "checkpoint-dir") options.checkpointDir = path.resolve(value);
     if (name === "famous-list") options.famousList = path.resolve(value);
-    if (name === "max-artist-per-run") options.maxArtistPerRun = parsePositiveInteger(value, "--max-artist-per-run");
-    if (name === "max-series-per-run") options.maxSeriesPerRun = parsePositiveInteger(value, "--max-series-per-run");
+    if (name === "existing-index") options.existingIndex = path.resolve(value);
+    if (name === "max-artist-per-run")
+      options.maxArtistPerRun = parsePositiveInteger(value, "--max-artist-per-run");
+    if (name === "max-series-per-run")
+      options.maxSeriesPerRun = parsePositiveInteger(value, "--max-series-per-run");
   }
 
-  if (!["random", "search", "popular", "artist", "artists", "artists-priority", "famous"].includes(command)) {
-    throw new Error(`Unknown command: ${command}. Use random, search, popular, artist, artists, artists-priority, or famous.`);
+  if (
+    !["random", "search", "popular", "artist", "artists", "artists-priority", "famous"].includes(
+      command,
+    )
+  ) {
+    throw new Error(
+      `Unknown command: ${command}. Use random, search, popular, artist, artists, artists-priority, or famous.`,
+    );
   }
 
-  const trailingCount = positional.length > 0 && /^\d+$/.test(positional.at(-1))
-    ? Number(positional.pop())
-    : undefined;
+  const trailingCount =
+    positional.length > 0 && /^\d+$/.test(positional.at(-1)) ? Number(positional.pop()) : undefined;
   if (command === "search") {
     options.keyword = positional.join(" ").trim();
     if (!options.keyword) throw new Error("The search command requires a keyword.");
   } else if (command === "artist") {
     options.artistUrl = normalizeArtistUrl(positional.shift() || "");
-    if (!options.artistUrl) throw new Error("The artist command requires an Artvee artist page URL or slug.");
+    if (!options.artistUrl)
+      throw new Error("The artist command requires an Artvee artist page URL or slug.");
     if (positional.length > 0) {
       throw new Error(`artist accepts one URL/slug and a count, not: ${positional.join(" ")}`);
     }
@@ -395,7 +433,9 @@ export function parseArgs(argv) {
     options.databaseTarget = "none";
     options.saveImages = false;
   } else if (options.directPublishRequested) {
-    throw new Error("artvee-ingest now only creates raw evidence files. Use the reviewed publish step after Codex review and human approval.");
+    throw new Error(
+      "artvee-ingest now only creates raw evidence files. Use the reviewed publish step after Codex review and human approval.",
+    );
   }
 
   options.cosPrefix = String(options.cosPrefix || "").replace(/^\/+|\/+$/g, "");
@@ -428,11 +468,11 @@ function parseDelayRange(value, label) {
     return [parts[0], parts[0]];
   }
   if (
-    parts.length !== 2
-    || !Number.isSafeInteger(parts[0])
-    || !Number.isSafeInteger(parts[1])
-    || parts[0] < 0
-    || parts[1] < parts[0]
+    parts.length !== 2 ||
+    !Number.isSafeInteger(parts[0]) ||
+    !Number.isSafeInteger(parts[1]) ||
+    parts[0] < 0 ||
+    parts[1] < parts[0]
   ) {
     throw new Error(`${label} must be a millisecond value or range like 5000-12000.`);
   }
@@ -509,7 +549,9 @@ async function loadFamousSearchQueries(options) {
     log(`Famous list is empty; using built-in fallback: ${options.famousList}`);
   } catch (error) {
     if (error.code !== "ENOENT") {
-      log(`Failed to read famous list ${options.famousList}: ${error.message}; using built-in fallback.`);
+      log(
+        `Failed to read famous list ${options.famousList}: ${error.message}; using built-in fallback.`,
+      );
     }
   }
   return buildFamousSearchQueries(DEFAULT_FAMOUS_SEEDS);
@@ -535,9 +577,14 @@ export function buildArtistPriorityEntries(records = []) {
       score: Number.isFinite(Number(record?.score)) ? Number(record.score) : 0,
       index,
     }))
-    .sort((left, right) => left.rank - right.rank || right.score - left.score || left.index - right.index)
+    .sort(
+      (left, right) =>
+        left.rank - right.rank || right.score - left.score || left.index - right.index,
+    )
     .map((record) => {
-      const url = record.url ? normalizeArtistUrl(record.url) : normalizeArtistUrl(record.slug || slugFromArtistName(record.name));
+      const url = record.url
+        ? normalizeArtistUrl(record.url)
+        : normalizeArtistUrl(record.slug || slugFromArtistName(record.name));
       return {
         url,
         name: record.name || url.replace(/^https?:\/\/[^/]+\/artist\//i, "").replace(/\/$/g, ""),
@@ -567,7 +614,13 @@ async function loadArtistPriorityEntries(options) {
   return artists;
 }
 
-export function buildListingUrl({ command, keyword = "", artistUrl = "", page = 1, perPage = DEFAULT_PER_PAGE }) {
+export function buildListingUrl({
+  command,
+  keyword = "",
+  artistUrl = "",
+  page = 1,
+  perPage = DEFAULT_PER_PAGE,
+}) {
   if (command === "search" || command === "famous") {
     const params = new URLSearchParams();
     params.set("s", keyword);
@@ -593,7 +646,9 @@ export function buildListingUrl({ command, keyword = "", artistUrl = "", page = 
 }
 
 export function extractListingsFromHtml(html, pageUrl = ARTVEE_BASE_URL) {
-  const matches = [...html.matchAll(/<div\b[^>]*class=["'][^"']*\bproduct-element-top\b[^"']*["'][^>]*>/gi)];
+  const matches = [
+    ...html.matchAll(/<div\b[^>]*class=["'][^"']*\bproduct-element-top\b[^"']*["'][^>]*>/gi),
+  ];
   const listings = [];
   const seen = new Set();
 
@@ -603,17 +658,32 @@ export function extractListingsFromHtml(html, pageUrl = ARTVEE_BASE_URL) {
     const end = matches[index + 1]?.index ?? html.length;
     const segment = html.slice(start, end);
     const attrs = getAttributes(tag);
-    const href = extractFirst(segment, /<h3\b[^>]*class=["'][^"']*product-title[^"']*["'][^>]*>[\s\S]*?<a\b[^>]*href=["']([^"']+)["'][^>]*>/i)
-      ?? attrs["data-url"];
+    const href =
+      extractFirst(
+        segment,
+        /<h3\b[^>]*class=["'][^"']*product-title[^"']*["'][^>]*>[\s\S]*?<a\b[^>]*href=["']([^"']+)["'][^>]*>/i,
+      ) ?? attrs["data-url"];
     const url = normalizeArtveeUrl(absoluteUrl(href, pageUrl));
     if (!url || seen.has(url)) continue;
 
     const sk = parseDataSk(attrs["data-sk"]);
-    const titleHtml = extractFirst(segment, /<h3\b[^>]*class=["'][^"']*product-title[^"']*["'][^>]*>([\s\S]*?)<\/h3>/i);
+    const titleHtml = extractFirst(
+      segment,
+      /<h3\b[^>]*class=["'][^"']*product-title[^"']*["'][^>]*>([\s\S]*?)<\/h3>/i,
+    );
     const title = cleanText(titleHtml);
-    const artistHtml = extractFirst(segment, /<div\b[^>]*class=["'][^"']*woodmart-product-brands-links[^"']*["'][^>]*>([\s\S]*?)<\/div>/i);
-    const tagsHtml = extractFirst(segment, /<div\b[^>]*class=["'][^"']*woodmart-product-cats[^"']*["'][^>]*>([\s\S]*?)<\/div>/i);
-    const imageUrl = absoluteUrl(extractFirst(segment, /<img\b[^>]*(?:data-src|src)=["']([^"']+)["']/i), pageUrl);
+    const artistHtml = extractFirst(
+      segment,
+      /<div\b[^>]*class=["'][^"']*woodmart-product-brands-links[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
+    );
+    const tagsHtml = extractFirst(
+      segment,
+      /<div\b[^>]*class=["'][^"']*woodmart-product-cats[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
+    );
+    const imageUrl = absoluteUrl(
+      extractFirst(segment, /<img\b[^>]*(?:data-src|src)=["']([^"']+)["']/i),
+      pageUrl,
+    );
 
     seen.add(url);
     listings.push({
@@ -636,17 +706,29 @@ export function extractListingsFromHtml(html, pageUrl = ARTVEE_BASE_URL) {
 export function extractArtistsFromHtml(html, pageUrl = `${ARTVEE_BASE_URL}/artists/`) {
   const artists = [];
   const seen = new Set();
-  const cardMatches = [...String(html || "").matchAll(/<div\b[^>]*class=["'][^"']*\bwrapp-catti\b[^"']*["'][^>]*>[\s\S]*?<\/div>/gi)];
+  const cardMatches = [
+    ...String(html || "").matchAll(
+      /<div\b[^>]*class=["'][^"']*\bwrapp-catti\b[^"']*["'][^>]*>[\s\S]*?<\/div>/gi,
+    ),
+  ];
   const segments = cardMatches.length ? cardMatches.map((match) => match[0]) : [String(html || "")];
 
   for (const segment of segments) {
     const href = extractFirst(segment, /<a\b[^>]*href=["']([^"']*\/artist\/[^"']+)["'][^>]*>/i);
     const url = normalizeArtistUrl(absoluteUrl(href, pageUrl));
     if (!url || seen.has(url)) continue;
-    const name = cleanText(extractFirst(segment, /<span\b[^>]*>([\s\S]*?)<\/span>/i))
-      || cleanText(extractFirst(segment, /<a\b[^>]*>[\s\S]*?<h3\b[^>]*>([\s\S]*?)(?:<mark\b|<\/h3>)/i))
-      || slugFromUrl(url).replace(/-/g, " ");
-    const countText = cleanText(extractFirst(segment, /<mark\b[^>]*class=["'][^"']*\bcount\b[^"']*["'][^>]*>([\s\S]*?)<\/mark>/i));
+    const name =
+      cleanText(extractFirst(segment, /<span\b[^>]*>([\s\S]*?)<\/span>/i)) ||
+      cleanText(
+        extractFirst(segment, /<a\b[^>]*>[\s\S]*?<h3\b[^>]*>([\s\S]*?)(?:<mark\b|<\/h3>)/i),
+      ) ||
+      slugFromUrl(url).replace(/-/g, " ");
+    const countText = cleanText(
+      extractFirst(
+        segment,
+        /<mark\b[^>]*class=["'][^"']*\bcount\b[^"']*["'][^>]*>([\s\S]*?)<\/mark>/i,
+      ),
+    );
     artists.push({ url, name, countText });
     seen.add(url);
   }
@@ -654,25 +736,47 @@ export function extractArtistsFromHtml(html, pageUrl = `${ARTVEE_BASE_URL}/artis
 }
 
 export function parseArtworkPage(html, sourceUrl, listing = {}) {
-  const headingHtml = extractFirst(html, /<h1\b[^>]*class=["'][^"']*product_title[^"']*["'][^>]*>([\s\S]*?)<\/h1>/i)
-    ?? extractFirst(html, /<meta\b[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["'][^>]*>/i)
-    ?? listing.title
-    ?? "";
+  const headingHtml =
+    extractFirst(
+      html,
+      /<h1\b[^>]*class=["'][^"']*product_title[^"']*["'][^>]*>([\s\S]*?)<\/h1>/i,
+    ) ??
+    extractFirst(
+      html,
+      /<meta\b[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["'][^>]*>/i,
+    ) ??
+    listing.title ??
+    "";
   const { title, year } = splitTitleAndYear(cleanText(headingHtml).replace(/\s+-\s+Artvee$/i, ""));
-  const artistHtml = extractFirst(html, /<div\b[^>]*class=["']tartist["'][^>]*>([\s\S]*?)<\/div>\s*<\/div>/i)
-    ?? extractFirst(html, /<div\b[^>]*class=["'][^"']*woodmart-product-brands-links[^"']*["'][^>]*>([\s\S]*?)<\/div>/i);
-  const standardBlock = extractFirst(html, /<div\b[^>]*class=["'][^"']*w3eden[^"']*dl_med[^"']*["'][^>]*>([\s\S]*?)<\/div>\s*<div\b[^>]*class=["'][^"']*w3eden/i)
-    || html;
-  const collection = cleanText(extractFirst(html, /In Collection:\s*([\s\S]*?)(?:<a\b|\(|<\/h2>)/i));
-  const license = cleanText(extractFirst(html, /License:\s*<\/span>([\s\S]*?)<\/h6>/i))
-    || cleanText(extractFirst(html, /<h6\b[^>]*>([\s\S]*?public domain[\s\S]*?)<\/h6>/i));
-  const ogImage = absoluteUrl(extractFirst(html, /<meta\b[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["'][^>]*>/i), sourceUrl);
+  const artistHtml =
+    extractFirst(html, /<div\b[^>]*class=["']tartist["'][^>]*>([\s\S]*?)<\/div>\s*<\/div>/i) ??
+    extractFirst(
+      html,
+      /<div\b[^>]*class=["'][^"']*woodmart-product-brands-links[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
+    );
+  const standardBlock =
+    extractFirst(
+      html,
+      /<div\b[^>]*class=["'][^"']*w3eden[^"']*dl_med[^"']*["'][^>]*>([\s\S]*?)<\/div>\s*<div\b[^>]*class=["'][^"']*w3eden/i,
+    ) || html;
+  const collection = cleanText(
+    extractFirst(html, /In Collection:\s*([\s\S]*?)(?:<a\b|\(|<\/h2>)/i),
+  );
+  const license =
+    cleanText(extractFirst(html, /License:\s*<\/span>([\s\S]*?)<\/h6>/i)) ||
+    cleanText(extractFirst(html, /<h6\b[^>]*>([\s\S]*?public domain[\s\S]*?)<\/h6>/i));
+  const ogImage = absoluteUrl(
+    extractFirst(html, /<meta\b[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["'][^>]*>/i),
+    sourceUrl,
+  );
   const downloadUrl = extractStandardDownloadUrl(html, sourceUrl);
-  const dimensions = cleanText(extractFirst(standardBlock, /Standard,\s*([^<,]+?px)/i))
-    || listing.dimensions
-    || "";
-  const medium = cleanText(extractFirst(standardBlock, /\b(JPEG|JPG|PNG|WEBP|TIFF?)\b/i)).toUpperCase();
-  const sourceRecordId = listing.sourceRecordId || extractFirst(html, /\bpostid-(\d+)\b/i) || slugFromUrl(sourceUrl);
+  const dimensions =
+    cleanText(extractFirst(standardBlock, /Standard,\s*([^<,]+?px)/i)) || listing.dimensions || "";
+  const medium = cleanText(
+    extractFirst(standardBlock, /\b(JPEG|JPG|PNG|WEBP|TIFF?)\b/i),
+  ).toUpperCase();
+  const sourceRecordId =
+    listing.sourceRecordId || extractFirst(html, /\bpostid-(\d+)\b/i) || slugFromUrl(sourceUrl);
   const tags = uniqueCompact([
     ...(listing.tags || []),
     collection,
@@ -706,19 +810,23 @@ function extractPageEvidenceText(html) {
 }
 
 function extractStandardDownloadUrl(html, sourceUrl) {
-  const anchors = [...html.matchAll(/<a\b([^>]*href=["'][^"']+["'][^>]*)>\s*Download\s*<\/a>/gi)]
-    .map((match) => getAttributes(`<a ${match[1]}>`));
-  const standard = anchors.find((attrs) => {
-    const className = attrs.class || "";
-    const href = attrs.href || "";
-    return href.includes("/sdl/") || /\bsdl\b|\bdis\b/.test(className);
-  }) ?? anchors.find((attrs) => attrs.href);
+  const anchors = [
+    ...html.matchAll(/<a\b([^>]*href=["'][^"']+["'][^>]*)>\s*Download\s*<\/a>/gi),
+  ].map((match) => getAttributes(`<a ${match[1]}>`));
+  const standard =
+    anchors.find((attrs) => {
+      const className = attrs.class || "";
+      const href = attrs.href || "";
+      return href.includes("/sdl/") || /\bsdl\b|\bdis\b/.test(className);
+    }) ?? anchors.find((attrs) => attrs.href);
   return absoluteUrl(standard?.href, sourceUrl);
 }
 
 function splitTitleAndYear(text) {
   const cleaned = text.replace(/\s+/g, " ").trim();
-  const match = cleaned.match(/^(.*)\s+\(([^()]*(?:\d{3,4}|century|Century|before|circa|c\.)[^()]*)\)\s*$/);
+  const match = cleaned.match(
+    /^(.*)\s+\(([^()]*(?:\d{3,4}|century|Century|before|circa|c\.)[^()]*)\)\s*$/,
+  );
   if (!match) return { title: cleaned, year: "" };
   return { title: match[1].trim(), year: match[2].trim() };
 }
@@ -747,7 +855,9 @@ function extractFirst(text = "", regex) {
 
 function extractLinkTexts(html = "") {
   if (!html) return [];
-  const links = [...html.matchAll(/<a\b[^>]*>([\s\S]*?)<\/a>/gi)].map((match) => cleanText(match[1]));
+  const links = [...html.matchAll(/<a\b[^>]*>([\s\S]*?)<\/a>/gi)].map((match) =>
+    cleanText(match[1]),
+  );
   return uniqueCompact(links.length ? links : [cleanText(html)]);
 }
 
@@ -772,7 +882,13 @@ function hasCjk(value = "") {
 
 function isUnknownish(value = "") {
   const text = cleanText(value).toLowerCase();
-  return !text || text === "unknown" || text === "unknown artist" || text === "untitled" || text === UNKNOWN_VALUE;
+  return (
+    !text ||
+    text === "unknown" ||
+    text === "unknown artist" ||
+    text === "untitled" ||
+    text === UNKNOWN_VALUE
+  );
 }
 
 function isImageFileMedium(value = "") {
@@ -791,15 +907,13 @@ function knownOrUnknown(value = "") {
 function normalizeDescription(value = "", artwork = {}) {
   const description = cleanText(value) || fallbackReaderDescription(artwork);
   if (description.length <= 400) return description;
-  const clipped = description
-    .slice(0, 399)
-    .replace(/[，、；;:\s]+$/g, "");
+  const clipped = description.slice(0, 399).replace(/[，、；;:\s]+$/g, "");
   return /[。！？!?]$/.test(clipped) ? clipped : `${clipped.slice(0, 399)}。`;
 }
 
 function decodeHtml(value = "") {
   return String(value)
-    .replace(/&quot;/g, "\"")
+    .replace(/&quot;/g, '"')
     .replace(/&#039;/g, "'")
     .replace(/&#8217;/g, "'")
     .replace(/&#038;/g, "&")
@@ -824,7 +938,11 @@ function normalizeArtveeUrl(value = "") {
   if (!value) return "";
   try {
     const url = new URL(value);
-    if (url.hostname.endsWith("artvee.com") && url.pathname.startsWith("/dl/") && !url.pathname.endsWith("/")) {
+    if (
+      url.hostname.endsWith("artvee.com") &&
+      url.pathname.startsWith("/dl/") &&
+      !url.pathname.endsWith("/")
+    ) {
       url.pathname = `${url.pathname}/`;
     }
     return url.toString();
@@ -878,12 +996,15 @@ export function toCsv(rows) {
 
 function csvCell(value) {
   const text = Array.isArray(value) ? value.join(",") : String(value ?? "");
-  if (/[",\n\r]/.test(text)) return `"${text.replace(/"/g, "\"\"")}"`;
+  if (/[",\n\r]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
   return text;
 }
 
 function csvTimestamp(date = new Date()) {
-  return date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+  return date
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\.\d{3}Z$/, "Z");
 }
 
 export function buildCsvRow(artwork, number, generatedMetadata) {
@@ -895,8 +1016,13 @@ export function buildCsvRow(artwork, number, generatedMetadata) {
     artist: knownOrUnknown(generatedMetadata?.artist || artwork.artist),
     location: knownOrUnknown(generatedMetadata?.location || artwork.location),
     year_and_place: knownOrUnknown(generatedMetadata?.year_and_place || artwork.yearAndPlace),
-    medium: knownOrUnknown(generatedMetadata?.medium || (isImageFileMedium(artwork.medium) ? "" : artwork.medium)),
-    dimensions: knownOrUnknown(generatedMetadata?.dimensions || (isPixelDimensions(artwork.dimensions) ? "" : artwork.dimensions)),
+    medium: knownOrUnknown(
+      generatedMetadata?.medium || (isImageFileMedium(artwork.medium) ? "" : artwork.medium),
+    ),
+    dimensions: knownOrUnknown(
+      generatedMetadata?.dimensions ||
+        (isPixelDimensions(artwork.dimensions) ? "" : artwork.dimensions),
+    ),
     description: knownOrUnknown(generatedMetadata?.description),
     tags: tagsForCsv(rawTags),
   };
@@ -1019,13 +1145,14 @@ async function* iterateListings(options) {
 
 async function* iterateArtistDirectoryListings(options) {
   let artists = [];
+  const scanArtistStart = options.scanArtistStart || options.artistStart;
   if (options.command === "artists-priority") {
     log(`Loading artist priority list: ${options.artistPriorityList}`);
-    artists = (await loadArtistPriorityEntries(options)).slice(options.artistStart - 1);
+    artists = (await loadArtistPriorityEntries(options)).slice(scanArtistStart - 1);
   } else {
     log(`Fetching artists directory: ${options.artistsUrl}`);
     const html = await fetchText(options.artistsUrl, options);
-    artists = extractArtistsFromHtml(html, options.artistsUrl).slice(options.artistStart - 1);
+    artists = extractArtistsFromHtml(html, options.artistsUrl).slice(scanArtistStart - 1);
   }
   const seen = new Set();
 
@@ -1033,12 +1160,15 @@ async function* iterateArtistDirectoryListings(options) {
     const artist = artists[artistIndex];
     let emittedForArtist = 0;
     const artistLimit = options.perArtist > 0 ? options.perArtist : Number.POSITIVE_INFINITY;
-    const plannedPages = options.perArtist > 0
-      ? Math.max(1, Math.ceil(options.perArtist / options.perPage))
-      : (options.pages || options.maxArtworkPagesPerRun || DEFAULT_MAX_ARTWORK_PAGES_PER_RUN);
+    const plannedPages =
+      options.perArtist > 0
+        ? Math.max(1, Math.ceil(options.perArtist / options.perPage))
+        : options.pages || options.maxArtworkPagesPerRun || DEFAULT_MAX_ARTWORK_PAGES_PER_RUN;
     const maxPages = Math.min(plannedPages, options.maxArtworkPagesPerRun || plannedPages);
     const rankText = artist.priorityRank ? ` rank ${artist.priorityRank}` : "";
-    log(`Fetching artist ${options.artistStart + artistIndex}${rankText}: ${artist.name} (${artist.url})`);
+    log(
+      `Fetching artist ${scanArtistStart + artistIndex}${rankText}: ${artist.name} (${artist.url})`,
+    );
 
     for (let page = 1; page <= maxPages && emittedForArtist < artistLimit; page += 1) {
       const url = buildListingUrl({
@@ -1051,7 +1181,10 @@ async function* iterateArtistDirectoryListings(options) {
       try {
         pageHtml = await fetchText(url, options);
       } catch (error) {
-        if (/Fetch failed 404\b/.test(error.message)) break;
+        if (shouldTreatArtistPageErrorAsEnd(error, page)) {
+          log(`Artist list pagination ended at page ${page}: ${url} (${error.message})`);
+          break;
+        }
         throw error;
       }
       const listings = extractListingsFromHtml(pageHtml, url);
@@ -1063,7 +1196,7 @@ async function* iterateArtistDirectoryListings(options) {
           ...listing,
           artistDirectoryName: artist.name,
           artistDirectoryUrl: artist.url,
-          artistDirectoryIndex: options.artistStart + artistIndex,
+          artistDirectoryIndex: scanArtistStart + artistIndex,
         };
         emittedForArtist += 1;
         if (emittedForArtist >= artistLimit) break;
@@ -1072,18 +1205,33 @@ async function* iterateArtistDirectoryListings(options) {
   }
 }
 
+export function shouldTreatArtistPageErrorAsEnd(error, page) {
+  const message = error instanceof Error ? error.message : String(error || "");
+  return /Fetch failed 404\b/i.test(message);
+}
+
+function isTransientCrawlError(error) {
+  const message = error instanceof Error ? error.message : String(error || "");
+  return /Fetch failed 5\d\d\b|fetch failed|timeout|timed out|aborted|AbortError|ECONNRESET|UND_ERR_CONNECT_TIMEOUT|maintenance page/i.test(
+    message,
+  );
+}
+
 function normalizeFamousArtist(value = "") {
-  return cleanText(value)
-    .replace(/\([^)]*\)/g, "")
-    .replace(/\b(follower|circle|school|studio|after|workshop|cercle)\s+of\b/gi, "")
-    .replace(/[^a-z0-9]+/gi, " ")
-    .trim()
-    .toLowerCase() || "unknown";
+  return (
+    cleanText(value)
+      .replace(/\([^)]*\)/g, "")
+      .replace(/\b(follower|circle|school|studio|after|workshop|cercle)\s+of\b/gi, "")
+      .replace(/[^a-z0-9]+/gi, " ")
+      .trim()
+      .toLowerCase() || "unknown"
+  );
 }
 
 function normalizeFamousSeries(value = "") {
   const title = cleanText(value).toLowerCase();
-  if (/album of sketches by katsushika hokusai/i.test(title)) return "album-of-sketches-by-katsushika-hokusai";
+  if (/album of sketches by katsushika hokusai/i.test(title))
+    return "album-of-sketches-by-katsushika-hokusai";
   return title
     .replace(/\bpl\.?\s*\d+\b/gi, "")
     .replace(/\b(?:plate|no|number)\s*\d+\b/gi, "")
@@ -1094,12 +1242,15 @@ function normalizeFamousSeries(value = "") {
 
 function isFamousRelatedDerivative(listing = {}) {
   const text = `${listing.title || ""} ${listing.artist || ""} ${(listing.tags || []).join(" ")}`;
-  return /\b(album|pl\.|plate|study|studies|sketch|after|follower|circle|school|studio|workshop|cercle|poster|posters|lith|illustration|copy|reproduction)\b/i.test(text);
+  return /\b(album|pl\.|plate|study|studies|sketch|after|follower|circle|school|studio|workshop|cercle|poster|posters|lith|illustration|copy|reproduction)\b/i.test(
+    text,
+  );
 }
 
 function famousRequiredTitlePattern(query = "") {
   const q = query.toLowerCase();
-  if (/mona lisa|gioconda/.test(q)) return /(?:^|,\s*)(?:the\s+)?mona lisa$|^mona lisa$|la gioconda$|gioconda$/i;
+  if (/mona lisa|gioconda/.test(q))
+    return /(?:^|,\s*)(?:the\s+)?mona lisa$|^mona lisa$|la gioconda$|gioconda$/i;
   if (/starry night/.test(q)) return /^(?:the\s+)?starry night$/i;
   if (/school of athens/.test(q)) return /school of athens|skolen i athen/i;
   if (/birth of venus/.test(q)) return /birth of venus/i;
@@ -1139,7 +1290,10 @@ function isFamousCandidateRelevant(listing = {}, query = "") {
 
 function famousListingScore(listing, query) {
   const haystack = `${listing.title || ""} ${listing.artist || ""}`.toLowerCase();
-  const tokens = query.toLowerCase().split(/\s+/).filter((token) => token.length > 2);
+  const tokens = query
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((token) => token.length > 2);
   const hits = tokens.filter((token) => haystack.includes(token)).length;
   const title = cleanText(listing.title).toLowerCase();
   const artist = cleanText(listing.artist).toLowerCase();
@@ -1147,7 +1301,8 @@ function famousListingScore(listing, query) {
   let score = hits * 100 + (listing.popularity || 0);
   if (/mona lisa|gioconda/.test(queryText) && /mona lisa|gioconda/.test(title)) score += 300;
   if (/starry night/.test(queryText) && /starry night/.test(title)) score += 300;
-  if (/school of athens/.test(queryText) && /school of athens|skolen i athen/.test(title)) score += 300;
+  if (/school of athens/.test(queryText) && /school of athens|skolen i athen/.test(title))
+    score += 300;
   if (/birth of venus/.test(queryText) && /birth of venus/.test(title)) score += 300;
   if (/great wave/.test(queryText) && /great wave/.test(title)) score += 300;
   if (/leonardo|vinci/.test(queryText) && /leonardo|vinci/.test(artist)) score += 500;
@@ -1163,8 +1318,10 @@ function canSelectFamousCandidate(candidate, counts, limits) {
   const seriesKey = normalizeFamousSeries(candidate.title);
   const maxArtist = limits.maxArtistPerRun || 3;
   const maxSeries = limits.maxSeriesPerRun || 2;
-  return (counts.artist.get(artistKey) || 0) < maxArtist
-    && (counts.series.get(seriesKey) || 0) < maxSeries;
+  return (
+    (counts.artist.get(artistKey) || 0) < maxArtist &&
+    (counts.series.get(seriesKey) || 0) < maxSeries
+  );
 }
 
 function countFamousCandidate(candidate, counts) {
@@ -1181,7 +1338,9 @@ export function selectFamousCandidates(candidates = [], options = {}) {
     series: new Map(),
   };
   const selected = [];
-  for (const candidate of [...candidates].filter((item) => isFamousCandidateRelevant(item, query)).sort((left, right) => famousListingScore(right, query) - famousListingScore(left, query))) {
+  for (const candidate of [...candidates]
+    .filter((item) => isFamousCandidateRelevant(item, query))
+    .sort((left, right) => famousListingScore(right, query) - famousListingScore(left, query))) {
     if (!canSelectFamousCandidate(candidate, counts, options)) continue;
     countFamousCandidate(candidate, counts);
     selected.push(candidate);
@@ -1198,7 +1357,10 @@ async function* iterateFamousListings(options) {
     series: new Map(),
   };
   let yielded = 0;
-  const queryLimit = Math.min(queries.length, options.pages || options.maxArtworkPagesPerRun || queries.length);
+  const queryLimit = Math.min(
+    queries.length,
+    options.pages || options.maxArtworkPagesPerRun || queries.length,
+  );
 
   for (const query of queries.slice(0, queryLimit)) {
     const url = buildListingUrl({
@@ -1223,7 +1385,9 @@ async function* iterateFamousListings(options) {
       maxArtistPerRun: options.maxArtistPerRun,
       maxSeriesPerRun: options.maxSeriesPerRun,
     });
-    const primary = pageListings.find((item) => !seen.has(item.url) && canSelectFamousCandidate(item, selectedCounts, options));
+    const primary = pageListings.find(
+      (item) => !seen.has(item.url) && canSelectFamousCandidate(item, selectedCounts, options),
+    );
     if (primary) {
       seen.add(primary.url);
       countFamousCandidate(primary, selectedCounts);
@@ -1251,24 +1415,93 @@ async function collectListings(options) {
 
 async function fetchText(url, options) {
   const cached = await readTextCache(url, options);
-  if (cached) {
+  if (cached && !isArtveeMaintenancePage(cached)) {
     log(`Cache hit: ${url}`);
     return cached;
   }
+  if (cached) log(`Ignoring stale maintenance-page cache: ${url}`);
   await ensureRobotsAllowed(url, options);
   await waitForRequestBudget(options, "html");
-  const response = await fetchWithRetries(url, {
-    headers: {
-      "user-agent": options.userAgent,
-      accept: "text/html,application/xhtml+xml",
-    },
-  }, options);
-  if (!response.ok) {
-    throw new Error(`Fetch failed ${response.status} ${response.statusText}: ${url}`);
+  let text = "";
+  try {
+    const response = await fetchWithRetries(
+      url,
+      {
+        headers: {
+          "user-agent": options.userAgent,
+          accept: "text/html,application/xhtml+xml",
+        },
+      },
+      options,
+    );
+    if (!response.ok) {
+      throw new Error(`Fetch failed ${response.status} ${response.statusText}: ${url}`);
+    }
+    text = await response.text();
+  } catch (error) {
+    if (!canUseCurlHtmlFallback(error)) throw error;
+    log(`Node HTML request failed (${describeFetchError(error)}); trying curl fallback: ${url}`);
+    text = await fetchTextWithCurl(url, options);
   }
-  const text = await response.text();
+  if (isArtveeMaintenancePage(text)) {
+    throw new Error(`Artvee maintenance page returned for ${url}`);
+  }
   await writeTextCache(url, text, options);
   return text;
+}
+
+export function canUseCurlHtmlFallback(error) {
+  const message = describeFetchError(error);
+  return (
+    process.platform === "win32" &&
+    /Fetch failed 5\d\d\b|fetch failed|timeout|timed out|aborted|ECONNRESET|UND_ERR_CONNECT_TIMEOUT/i.test(
+      message,
+    ) &&
+    !/Stop requested|Fetch failed 40[134]\b/i.test(message)
+  );
+}
+
+async function fetchTextWithCurl(url, options) {
+  const maxTimeSeconds = Math.max(
+    45,
+    Math.ceil((options.timeoutMs || DEFAULT_TIMEOUT_MS) / 1000) + 15,
+  );
+  try {
+    const { stdout } = await execFileAsync(
+      "curl.exe",
+      [
+        "-L",
+        "--fail",
+        "--silent",
+        "--show-error",
+        "--max-time",
+        String(maxTimeSeconds),
+        "--user-agent",
+        options.userAgent,
+        "--header",
+        "accept: text/html,application/xhtml+xml",
+        url,
+      ],
+      {
+        encoding: "utf8",
+        maxBuffer: 16 * 1024 * 1024,
+        timeout: (maxTimeSeconds + 5) * 1000,
+        windowsHide: true,
+      },
+    );
+    if (!stdout.trim()) throw new Error("curl returned an empty HTML response");
+    return stdout;
+  } catch (error) {
+    throw new Error(`curl HTML fallback failed: ${describeFetchError(error)}`, { cause: error });
+  }
+}
+
+export function isArtveeMaintenancePage(html = "") {
+  const text = String(html);
+  return (
+    /<title>\s*(?:Site\s+)?Under Maintenance\b/i.test(text) ||
+    /\bOur website is currently undergoing scheduled maintenance\b/i.test(text)
+  );
 }
 
 async function fetchImageBuffer(url, fallbackUrl, options) {
@@ -1280,12 +1513,16 @@ async function fetchImageBuffer(url, fallbackUrl, options) {
     try {
       log(`Downloading image: ${currentUrl}`);
       await waitForRequestBudget(options, "image");
-      const response = await fetchWithRetries(currentUrl, {
-        headers: {
-          "user-agent": options.userAgent,
-          accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+      const response = await fetchWithRetries(
+        currentUrl,
+        {
+          headers: {
+            "user-agent": options.userAgent,
+            accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+          },
         },
-      }, options);
+        options,
+      );
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const contentType = response.headers.get("content-type") || "image/jpeg";
       if (!contentType.startsWith("image/")) {
@@ -1334,7 +1571,9 @@ function buildMetadataPrompt(artwork, researchContext = "") {
     `Artvee 下载图像像素规格: ${artwork.dimensions || "Artvee 未注明"}`,
     `Artvee 文件格式: ${artwork.medium || "Artvee 未注明"}`,
     `授权信息: ${artwork.license || "Artvee 未注明"}`,
-    researchContext ? `可验证补全资料: ${researchContext}` : "可验证补全资料: 暂无；不要据此编造缺失字段。",
+    researchContext
+      ? `可验证补全资料: ${researchContext}`
+      : "可验证补全资料: 暂无；不要据此编造缺失字段。",
   ].join("\n");
 }
 
@@ -1343,17 +1582,19 @@ export function buildGeminiResearchRequestBody(artwork) {
     contents: [
       {
         role: "user",
-        parts: [{
-          text: [
-            "请使用可验证的公开资料核对这件艺术作品的中文标题、艺术家中文名、馆藏地点、创作年份/地点、作品媒介和实体尺寸。",
-            "只总结有来源依据的信息；没有可靠依据的字段写“暂不明确”。",
-            "不要输出长文，不要编造。",
-            "",
-            `作品标题: ${artwork.titleEn || artwork.titleCn || "Untitled"}`,
-            `艺术家: ${artwork.artist || "Unknown artist"}`,
-            `Artvee 来源页面: ${artwork.sourceUrl}`,
-          ].join("\n"),
-        }],
+        parts: [
+          {
+            text: [
+              "请使用可验证的公开资料核对这件艺术作品的中文标题、艺术家中文名、馆藏地点、创作年份/地点、作品媒介和实体尺寸。",
+              "只总结有来源依据的信息；没有可靠依据的字段写“暂不明确”。",
+              "不要输出长文，不要编造。",
+              "",
+              `作品标题: ${artwork.titleEn || artwork.titleCn || "Untitled"}`,
+              `艺术家: ${artwork.artist || "Unknown artist"}`,
+              `Artvee 来源页面: ${artwork.sourceUrl}`,
+            ].join("\n"),
+          },
+        ],
       },
     ],
     tools: [{ google_search: {} }],
@@ -1369,9 +1610,15 @@ function buildOpenAIMetadataSchema() {
       title_cn: stringField("作品中文名称；无可靠依据时填“暂不明确”。"),
       title_en: stringField("作品英文或原文名称；无可靠依据时填“暂不明确”。"),
       artist: stringField("艺术家，格式为“中文名 (English name)”；无可靠依据时填“暂不明确”。"),
-      location: stringField("馆藏或地点，格式为“中文地点/机构 (English name)”；无可靠依据时填“暂不明确”。"),
-      year_and_place: stringField("年份和地点，格式如“1888年，法国阿尔勒”；无可靠依据时填“暂不明确”。"),
-      medium: stringField("作品媒介，格式如“布面油画 (Oil on canvas)”；不要填写 JPG/PNG 等文件格式。"),
+      location: stringField(
+        "馆藏或地点，格式为“中文地点/机构 (English name)”；无可靠依据时填“暂不明确”。",
+      ),
+      year_and_place: stringField(
+        "年份和地点，格式如“1888年，法国阿尔勒”；无可靠依据时填“暂不明确”。",
+      ),
+      medium: stringField(
+        "作品媒介，格式如“布面油画 (Oil on canvas)”；不要填写 JPG/PNG 等文件格式。",
+      ),
       dimensions: stringField("作品实体尺寸；不要填写像素尺寸；无可靠依据时填“暂不明确”。"),
       description: stringField("250-400 字中文作品简介。"),
       tags: {
@@ -1396,9 +1643,15 @@ function buildGeminiResponseSchema() {
       title_cn: stringField("作品中文名称；无可靠依据时填“暂不明确”。"),
       title_en: stringField("作品英文或原文名称；无可靠依据时填“暂不明确”。"),
       artist: stringField("艺术家，格式为“中文名 (English name)”；无可靠依据时填“暂不明确”。"),
-      location: stringField("馆藏或地点，格式为“中文地点/机构 (English name)”；无可靠依据时填“暂不明确”。"),
-      year_and_place: stringField("年份和地点，格式如“1888年，法国阿尔勒”；无可靠依据时填“暂不明确”。"),
-      medium: stringField("作品媒介，格式如“布面油画 (Oil on canvas)”；不要填写 JPG/PNG 等文件格式。"),
+      location: stringField(
+        "馆藏或地点，格式为“中文地点/机构 (English name)”；无可靠依据时填“暂不明确”。",
+      ),
+      year_and_place: stringField(
+        "年份和地点，格式如“1888年，法国阿尔勒”；无可靠依据时填“暂不明确”。",
+      ),
+      medium: stringField(
+        "作品媒介，格式如“布面油画 (Oil on canvas)”；不要填写 JPG/PNG 等文件格式。",
+      ),
       dimensions: stringField("作品实体尺寸；不要填写像素尺寸；无可靠依据时填“暂不明确”。"),
       description: stringField("250-400 字中文作品简介。"),
       tags: {
@@ -1459,7 +1712,9 @@ async function generateArtworkMetadata(artwork, options) {
 async function generateOpenAIArtworkMetadata(artwork, options) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    throw new Error("OPENAI_API_KEY is required for description and tag generation. Omit --with-ai for raw website-only metadata.");
+    throw new Error(
+      "OPENAI_API_KEY is required for description and tag generation. Omit --with-ai for raw website-only metadata.",
+    );
   }
 
   const response = await fetch("https://api.openai.com/v1/responses", {
@@ -1485,13 +1740,20 @@ async function generateOpenAIArtworkMetadata(artwork, options) {
 async function generateGeminiArtworkMetadata(artwork, options) {
   const apiKey = resolveGeminiApiKey();
   if (!apiKey) {
-    throw new Error("GEMINI_API_KEY is required for Gemini description and tag generation. Omit --with-ai for raw website-only metadata.");
+    throw new Error(
+      "GEMINI_API_KEY is required for Gemini description and tag generation. Omit --with-ai for raw website-only metadata.",
+    );
   }
 
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(options.model)}:generateContent`;
   let researchContext = "";
   if (options.grounding) {
-    const researchData = await postGeminiGenerate(endpoint, apiKey, buildGeminiResearchRequestBody(artwork), options);
+    const researchData = await postGeminiGenerate(
+      endpoint,
+      apiKey,
+      buildGeminiResearchRequestBody(artwork),
+      options,
+    );
     researchContext = extractGeminiText(researchData).slice(0, 4000);
     log(`Waiting ${Math.round(options.delayMs / 1000)} seconds before structured Gemini request.`);
     await sleep(options.delayMs);
@@ -1531,7 +1793,9 @@ async function postGeminiGenerate(endpoint, apiKey, body, options) {
     lastStatus = response.status;
     lastBody = await response.text();
     if (!isRetriableGeminiStatus(response.status) || attempt >= attempts) break;
-    log(`Gemini API ${response.status}; retrying after ${Math.round(options.delayMs / 1000)} seconds (${attempt}/${attempts - 1}).`);
+    log(
+      `Gemini API ${response.status}; retrying after ${Math.round(options.delayMs / 1000)} seconds (${attempt}/${attempts - 1}).`,
+    );
     await sleep(options.delayMs);
   }
 
@@ -1547,7 +1811,10 @@ export function isRetriableGeminiStatus(status) {
 
 function extractGeminiText(data) {
   const parts = data?.candidates?.[0]?.content?.parts || [];
-  return parts.map((part) => part.text || "").join("\n").trim();
+  return parts
+    .map((part) => part.text || "")
+    .join("\n")
+    .trim();
 }
 
 function extractOpenAIText(data) {
@@ -1581,23 +1848,33 @@ function parseGeneratedMetadata(text) {
 }
 
 export function normalizeGeneratedMetadata(value, artwork = {}) {
-  const titleEn = knownOrUnknown(value?.title_en || value?.titleEn || artwork.titleEn || artwork.titleCn);
+  const titleEn = knownOrUnknown(
+    value?.title_en || value?.titleEn || artwork.titleEn || artwork.titleCn,
+  );
   const generatedTitleCn = cleanText(value?.title_cn || value?.titleCn || artwork.titleCn || "");
   const artist = knownOrUnknown(value?.artist || artwork.artist);
   const location = knownOrUnknown(value?.location || artwork.location);
-  const yearAndPlace = knownOrUnknown(value?.year_and_place || value?.yearAndPlace || artwork.yearAndPlace);
+  const yearAndPlace = knownOrUnknown(
+    value?.year_and_place || value?.yearAndPlace || artwork.yearAndPlace,
+  );
   const rawMedium = cleanText(value?.medium || artwork.medium || "");
   const medium = knownOrUnknown(isImageFileMedium(rawMedium) ? "" : rawMedium);
   const rawDimensions = cleanText(value?.dimensions || artwork.dimensions || "");
   const dimensions = knownOrUnknown(isPixelDimensions(rawDimensions) ? "" : rawDimensions);
-  const description = normalizeDescription(value?.description || value?.summary || value?.text || "", artwork);
+  const description = normalizeDescription(
+    value?.description || value?.summary || value?.text || "",
+    artwork,
+  );
   const rawTags = Array.isArray(value?.tags)
     ? value.tags
     : String(value?.tags || "").split(/[,锛?锛涖€乗n]/);
   const tags = uniqueCompact(rawTags.map((tag) => cleanText(tag).replace(/^#+/, "")));
   const filledTags = uniqueCompact([...tags, ...fallbackTags(artwork)]).slice(0, 6);
   return {
-    title_cn: generatedTitleCn && hasCjk(generatedTitleCn) && !isUnknownish(generatedTitleCn) ? generatedTitleCn : UNKNOWN_VALUE,
+    title_cn:
+      generatedTitleCn && hasCjk(generatedTitleCn) && !isUnknownish(generatedTitleCn)
+        ? generatedTitleCn
+        : UNKNOWN_VALUE,
     title_en: titleEn,
     artist,
     location,
@@ -1655,8 +1932,8 @@ async function loadDotEnvFile(filePath) {
     const key = match[1];
     let value = match[2].trim();
     if (
-      (value.startsWith("\"") && value.endsWith("\""))
-      || (value.startsWith("'") && value.endsWith("'"))
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
     ) {
       value = value.slice(1, -1);
     }
@@ -1673,7 +1950,9 @@ function createSupabaseAdmin() {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) {
-    throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for upload/database writes.");
+    throw new Error(
+      "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for upload/database writes.",
+    );
   }
   return createClient(url, key, {
     auth: {
@@ -1685,7 +1964,10 @@ function createSupabaseAdmin() {
 
 function sequencePathFor(options, bucket) {
   const key = [bucket || DEFAULT_BUCKET, "storage-sequence"].join("-");
-  return path.join(options?.checkpointDir || DEFAULT_CHECKPOINT_DIR, `${key.replace(/[^a-zA-Z0-9]+/g, "-").toLowerCase()}.json`);
+  return path.join(
+    options?.checkpointDir || DEFAULT_CHECKPOINT_DIR,
+    `${key.replace(/[^a-zA-Z0-9]+/g, "-").toLowerCase()}.json`,
+  );
 }
 
 async function readStorageSequenceNumber(options, bucket) {
@@ -1703,12 +1985,20 @@ async function writeStorageSequenceNumber(options, bucket, number) {
   const current = await readStorageSequenceNumber(options, bucket);
   const maxNumber = Math.max(current, Number(number) || 0);
   await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, `${JSON.stringify({
-    version: 1,
-    bucket,
-    maxNumber,
-    updatedAt: new Date().toISOString(),
-  }, null, 2)}\n`, "utf8");
+  await writeFile(
+    filePath,
+    `${JSON.stringify(
+      {
+        version: 1,
+        bucket,
+        maxNumber,
+        updatedAt: new Date().toISOString(),
+      },
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
 }
 
 function extractMaxCsvIdNumber(rows = [], column = "id") {
@@ -1723,7 +2013,10 @@ function extractMaxCsvIdNumber(rows = [], column = "id") {
 async function getMaxNumberFromTable(supabase, table, column) {
   let max = 0;
   for (let from = 0; ; from += 1000) {
-    const { data, error } = await supabase.from(table).select(column).range(from, from + 999);
+    const { data, error } = await supabase
+      .from(table)
+      .select(column)
+      .range(from, from + 999);
     if (error) throw new Error(`Failed to read ${table}.${column}: ${error.message}`);
     max = Math.max(max, extractMaxCsvIdNumber(data || [], column));
     if (!data || data.length < 1000) break;
@@ -1750,7 +2043,9 @@ async function getNextStorageNumber(supabase, bucket, startOverride = 0, options
   const storageMax = extractMaxStorageNumber(objects);
   const sequenceMax = await readStorageSequenceNumber(options, bucket);
   const paintingsMax = await getMaxNumberFromTable(supabase, "paintings", "id").catch(() => 0);
-  const imageLinksMax = await getMaxNumberFromTable(supabase, "artwork_images", "image_id").catch(() => 0);
+  const imageLinksMax = await getMaxNumberFromTable(supabase, "artwork_images", "image_id").catch(
+    () => 0,
+  );
   return nextStorageNumberFromMaxes(storageMax, sequenceMax, paintingsMax, imageLinksMax);
 }
 
@@ -1760,7 +2055,8 @@ async function ensureArtveeSource(supabase) {
     name: "Artvee",
     base_url: ARTVEE_BASE_URL,
     source_type: "aggregator",
-    rights_notes: "Artvee page states public-domain availability; verify original source and rights before publishing.",
+    rights_notes:
+      "Artvee page states public-domain availability; verify original source and rights before publishing.",
   };
   const { data, error } = await supabase
     .from("sources")
@@ -1802,7 +2098,15 @@ async function ensureArtist(supabase, artist) {
   return data?.id || null;
 }
 
-async function upsertNormalizedArtwork(supabase, sourceId, artwork, csvRow, publicUrl, assetName, status) {
+async function upsertNormalizedArtwork(
+  supabase,
+  sourceId,
+  artwork,
+  csvRow,
+  publicUrl,
+  assetName,
+  status,
+) {
   const artistId = await ensureArtist(supabase, csvRow.artist);
   const payload = {
     source_id: sourceId,
@@ -1861,9 +2165,7 @@ async function upsertLegacyPainting(supabase, csvRow, publicUrl) {
     ...csvRow,
     display_url: publicUrl,
   };
-  const { error } = await supabase
-    .from("paintings")
-    .upsert(payload, { onConflict: "id" });
+  const { error } = await supabase.from("paintings").upsert(payload, { onConflict: "id" });
   if (error) throw new Error(`Failed to upsert legacy painting row: ${error.message}`);
 }
 
@@ -1874,7 +2176,10 @@ export function tencentCosObjectKey(assetName, options = {}) {
 }
 
 function encodeCosKey(key) {
-  return String(key || "").split("/").map(encodeURIComponent).join("/");
+  return String(key || "")
+    .split("/")
+    .map(encodeURIComponent)
+    .join("/");
 }
 
 export function tencentCosPublicUrl(key, options = {}) {
@@ -1886,7 +2191,10 @@ export function tencentCosPublicUrl(key, options = {}) {
 
 function tencentCosDerivativeUrl(assetName, kind, options = {}) {
   const baseName = String(assetName || "").replace(/\.[^.]+$/, "");
-  return tencentCosPublicUrl(tencentCosObjectKey(`derivatives/${kind}/${baseName}.webp`, options), options);
+  return tencentCosPublicUrl(
+    tencentCosObjectKey(`derivatives/${kind}/${baseName}.webp`, options),
+    options,
+  );
 }
 
 export function buildCloudbaseArtworkDocument(artwork, csvRow, publicUrl, assetName, options = {}) {
@@ -1894,7 +2202,7 @@ export function buildCloudbaseArtworkDocument(artwork, csvRow, publicUrl, assetN
   const sourceRecordId = artwork.sourceRecordId || csvRow.source_record_id || csvRow.id || imageId;
   const tags = uniqueCompact(String(csvRow.tags || "").split(","));
   const now = new Date().toISOString();
-  return {
+  const document = {
     _id: `artwork_${imageId}`,
     id: imageId,
     source_name: "Artvee",
@@ -1912,7 +2220,9 @@ export function buildCloudbaseArtworkDocument(artwork, csvRow, publicUrl, assetN
     dimensions: csvRow.dimensions || "",
     description: csvRow.description || "",
     license: artwork.license || "Artvee public domain statement; verify before publication.",
-    is_public_domain: String(artwork.license || "").toLowerCase().includes("public domain"),
+    is_public_domain: String(artwork.license || "")
+      .toLowerCase()
+      .includes("public domain"),
     status: options.status || "draft",
     image_id: imageId,
     thumbnail_url: tencentCosDerivativeUrl(assetName, "thumb", options),
@@ -1931,6 +2241,9 @@ export function buildCloudbaseArtworkDocument(artwork, csvRow, publicUrl, assetN
     created_at: now,
     updated_at: now,
   };
+  document.search_terms = buildArtworkSearchTerms(document);
+  document.search_terms_version = "search-terms-v1";
+  return document;
 }
 
 function cosCall(cos, method, params) {
@@ -1948,9 +2261,9 @@ async function cosObjectExists(cos, params) {
     return true;
   } catch (error) {
     if (
-      String(error?.statusCode || "") === "403"
-      || String(error?.statusCode || "") === "404"
-      || /forbidden|not found|NoSuchKey|Not Found/i.test(String(error?.message || ""))
+      String(error?.statusCode || "") === "403" ||
+      String(error?.statusCode || "") === "404" ||
+      /forbidden|not found|NoSuchKey|Not Found/i.test(String(error?.message || ""))
     ) {
       return false;
     }
@@ -2037,14 +2350,16 @@ function createCloudbaseApp(options) {
 
 async function upsertCloudbaseArtwork(database, collection, doc) {
   return database.runCommands({
-    MgoCommands: [{
-      TableName: collection,
-      CommandType: "UPDATE",
-      Command: JSON.stringify({
-        update: collection,
-        updates: [{ q: { _id: doc._id }, u: { $set: doc }, upsert: true }],
-      }),
-    }],
+    MgoCommands: [
+      {
+        TableName: collection,
+        CommandType: "UPDATE",
+        Command: JSON.stringify({
+          update: collection,
+          updates: [{ q: { _id: doc._id }, u: { $set: doc }, upsert: true }],
+        }),
+      },
+    ],
   });
 }
 
@@ -2064,9 +2379,13 @@ function isAlreadyUploadedError(error) {
 }
 
 export async function uploadImageWithRetry(supabase, bucket, assetName, image, options = {}) {
-  const maxRetries = Number.isInteger(options.maxRetries) ? Math.max(0, options.maxRetries) : DEFAULT_MAX_RETRIES;
+  const maxRetries = Number.isInteger(options.maxRetries)
+    ? Math.max(0, options.maxRetries)
+    : DEFAULT_MAX_RETRIES;
   const attempts = maxRetries + 1;
-  const retryDelayMs = Number.isInteger(options.retryDelayMs) ? Math.max(0, options.retryDelayMs) : 2000;
+  const retryDelayMs = Number.isInteger(options.retryDelayMs)
+    ? Math.max(0, options.retryDelayMs)
+    : 2000;
   const uploadFn = options.uploadFn || uploadImage;
   const sleepFn = options.sleepFn || sleep;
   const logFn = options.logFn || log;
@@ -2084,14 +2403,18 @@ export async function uploadImageWithRetry(supabase, bucket, assetName, image, o
         return { uploaded: true, publicUrl: data.publicUrl, error: "" };
       }
       if (attempt < attempts) {
-        logFn(`Upload failed for ${assetName} (attempt ${attempt}/${attempts}): ${error.message}. Retrying.`);
+        logFn(
+          `Upload failed for ${assetName} (attempt ${attempt}/${attempts}): ${error.message}. Retrying.`,
+        );
         await sleepFn(retryDelayMs * attempt);
       }
     }
   }
 
   const message = lastError?.message || "unknown upload error";
-  logFn(`Upload failed for ${assetName} after ${attempts} attempts: ${message}; continuing without Storage upload.`);
+  logFn(
+    `Upload failed for ${assetName} after ${attempts} attempts: ${message}; continuing without Storage upload.`,
+  );
   return { uploaded: false, publicUrl: "", error: message };
 }
 
@@ -2126,19 +2449,23 @@ function evidencePathFor(options, outputPath) {
 }
 
 function slugLabel(value, fallback) {
-  return String(value || "")
-    .replace(/^https?:\/\/[^/]+/i, "")
-    .replace(/\/page\/\d+\/?$/i, "")
-    .replace(/[^a-zA-Z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .toLowerCase() || fallback;
+  return (
+    String(value || "")
+      .replace(/^https?:\/\/[^/]+/i, "")
+      .replace(/\/page\/\d+\/?$/i, "")
+      .replace(/[^a-zA-Z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .toLowerCase() || fallback
+  );
 }
 
 function labelForOptions(options) {
   if (options.command === "search") return `search-${slugLabel(options.keyword, "keyword")}`;
   if (options.command === "famous") return "famous";
-  if (options.command === "artists") return `artists-from-${String(options.artistStart).padStart(3, "0")}`;
-  if (options.command === "artists-priority") return `artists-priority-from-${String(options.artistStart).padStart(3, "0")}`;
+  if (options.command === "artists")
+    return `artists-from-${String(options.artistStart).padStart(3, "0")}`;
+  if (options.command === "artists-priority")
+    return `artists-priority-from-${String(options.artistStart).padStart(3, "0")}`;
   if (options.command === "artist") {
     const pathLabel = (() => {
       try {
@@ -2155,22 +2482,51 @@ function labelForOptions(options) {
 function checkpointKeyFor(options) {
   const keyword = options.command === "search" ? options.keyword : "";
   const artist = options.command === "artist" ? options.artistUrl : "";
-  const artists = options.command === "artists" ? `${options.artistsUrl}-${options.artistStart}-${options.perArtist}` : "";
-  const artistsPriority = options.command === "artists-priority" ? `${options.artistPriorityList}-${options.artistStart}-${options.perArtist}` : "";
+  const artists =
+    options.command === "artists"
+      ? `${options.artistsUrl}-${options.artistStart}-${options.perArtist}`
+      : "";
+  const artistsPriority =
+    options.command === "artists-priority"
+      ? `${options.artistPriorityList}-${options.artistStart}-${options.perArtist}`
+      : "";
   const famous = options.command === "famous" ? options.famousList : "";
-  const storageScope = options.storageTarget === "cos"
-    ? [options.cosBucket, options.cosPrefix].filter(Boolean).join("-")
-    : options.bucket;
-  const raw = [options.command, keyword, artist, artists, artistsPriority, famous, storageScope, options.status].filter(Boolean).join("-");
-  return raw.replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase() || "artvee";
+  const storageScope =
+    options.storageTarget === "cos"
+      ? [options.cosBucket, options.cosPrefix].filter(Boolean).join("-")
+      : options.bucket;
+  const raw = [
+    options.command,
+    keyword,
+    artist,
+    artists,
+    artistsPriority,
+    famous,
+    storageScope,
+    options.status,
+  ]
+    .filter(Boolean)
+    .join("-");
+  return (
+    raw
+      .replace(/[^a-zA-Z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .toLowerCase() || "artvee"
+  );
 }
 
 function checkpointPathFor(options) {
-  return path.join(options.checkpointDir || DEFAULT_CHECKPOINT_DIR, `${checkpointKeyFor(options)}.checkpoint.json`);
+  return path.join(
+    options.checkpointDir || DEFAULT_CHECKPOINT_DIR,
+    `${checkpointKeyFor(options)}.checkpoint.json`,
+  );
 }
 
 function historyPathFor(options) {
-  return path.join(options.checkpointDir || DEFAULT_CHECKPOINT_DIR, `${checkpointKeyFor(options)}.history.json`);
+  return path.join(
+    options.checkpointDir || DEFAULT_CHECKPOINT_DIR,
+    `${checkpointKeyFor(options)}.history.json`,
+  );
 }
 
 function failurePathFor(outputPath) {
@@ -2187,6 +2543,7 @@ export function buildCheckpointState({
   nextNumber,
   imagesThisRun,
   uploadFailures = [],
+  skippedSemantic = 0,
   status = "running",
 }) {
   return {
@@ -2200,6 +2557,7 @@ export function buildCheckpointState({
     artistUrl: options.artistUrl,
     artistsUrl: options.artistsUrl,
     artistStart: options.artistStart,
+    scanArtistStart: options.scanArtistStart || options.artistStart,
     perArtist: options.perArtist,
     artistPriorityList: options.artistPriorityList,
     famousList: options.famousList,
@@ -2213,6 +2571,8 @@ export function buildCheckpointState({
     nextNumber,
     imagesThisRun,
     uploadFailures,
+    skippedSemantic,
+    existingIndex: options.existingIndex || "",
     updatedAt: new Date().toISOString(),
   };
 }
@@ -2255,7 +2615,7 @@ async function readProcessedSourceHistory(options) {
       const state = JSON.parse(await readFile(filePath, "utf8"));
       if (state.key && state.key !== checkpointKeyFor(options)) continue;
       if (state.dryRun) continue;
-      const values = Array.isArray(state) ? state : (state.processedSourceUrls || state.urls || []);
+      const values = Array.isArray(state) ? state : state.processedSourceUrls || state.urls || [];
       for (const url of values) {
         if (url) urls.add(url);
       }
@@ -2272,27 +2632,62 @@ async function writeProcessedSourceHistory(options, processedSourceUrls) {
   const existing = await readProcessedSourceHistory(options);
   const urls = [...mergeProcessedSourceUrls(existing, processedSourceUrls)];
   await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, `${JSON.stringify({
-    version: 1,
-    key: checkpointKeyFor(options),
-    command: options.command,
-    keyword: options.keyword,
-    artistUrl: options.artistUrl,
-    artistsUrl: options.artistsUrl,
-    artistStart: options.artistStart,
-    perArtist: options.perArtist,
-    artistPriorityList: options.artistPriorityList,
-    bucket: options.bucket,
-    normalizedStatus: options.status,
-    urls,
-    updatedAt: new Date().toISOString(),
-  }, null, 2)}\n`, "utf8");
+  await writeFile(
+    filePath,
+    `${JSON.stringify(
+      {
+        version: 1,
+        key: checkpointKeyFor(options),
+        command: options.command,
+        keyword: options.keyword,
+        artistUrl: options.artistUrl,
+        artistsUrl: options.artistsUrl,
+        artistStart: options.artistStart,
+        perArtist: options.perArtist,
+        artistPriorityList: options.artistPriorityList,
+        bucket: options.bucket,
+        normalizedStatus: options.status,
+        urls,
+        updatedAt: new Date().toISOString(),
+      },
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
+}
+
+async function loadExistingSemanticDedupeKeys(filePath) {
+  const keys = new Set();
+  if (!filePath) return keys;
+  const payload = JSON.parse(await readFile(filePath, "utf8"));
+  const rows = Array.isArray(payload)
+    ? payload
+    : payload.artworks || payload.rows || payload.documents || payload.items || [];
+  if (!Array.isArray(rows)) {
+    throw new Error(`Existing semantic index must contain an artworks or rows array: ${filePath}`);
+  }
+  for (const row of rows) {
+    const key =
+      row.semanticKey ||
+      row.dedupeKey ||
+      artworkDedupeKey(
+        row.title_en || row.titleEn || row.title || row.title_cn || "",
+        row.artist || row.artist_display || row.artistEn || "",
+      );
+    if (key) keys.add(key);
+  }
+  return keys;
 }
 
 async function appendFailure(outputPath, failure) {
   const filePath = failurePathFor(outputPath);
   await mkdir(path.dirname(filePath), { recursive: true });
-  await appendFile(filePath, `${JSON.stringify({ ...failure, at: new Date().toISOString() })}\n`, "utf8");
+  await appendFile(
+    filePath,
+    `${JSON.stringify({ ...failure, at: new Date().toISOString() })}\n`,
+    "utf8",
+  );
 }
 
 export function formatProgressLine({ current, total, stage = "", width = 28 }) {
@@ -2315,11 +2710,15 @@ function createProgressReporter(options) {
   return {
     update(current, stage) {
       if (!enabled) return;
-      process.stdout.write(`\r[artvee] ${formatProgressLine({ current, total: options.count, stage })}`);
+      process.stdout.write(
+        `\r[artvee] ${formatProgressLine({ current, total: options.count, stage })}`,
+      );
     },
     done(current, stage) {
       if (!enabled) return;
-      process.stdout.write(`\r[artvee] ${formatProgressLine({ current, total: options.count, stage })}\n`);
+      process.stdout.write(
+        `\r[artvee] ${formatProgressLine({ current, total: options.count, stage })}\n`,
+      );
     },
   };
 }
@@ -2330,27 +2729,50 @@ async function ingest(options) {
   const historicalProcessedSourceUrls = await readProcessedSourceHistory(options);
   const outputPath = checkpoint?.outputPath || outputPathFor(options);
   const evidencePath = checkpoint?.evidencePath || evidencePathFor(options, outputPath);
-  const cosClient = options.upload && options.storageTarget === "cos" ? createTencentCosClient(options) : null;
-  const cloudbaseApp = options.database && options.databaseTarget === "cloudbase" ? createCloudbaseApp(options) : null;
-  if (cloudbaseApp) await cloudbaseApp.database.createCollectionIfNotExists(options.cloudbaseCollection);
-  let nextNumber = checkpoint?.nextNumber || (cosClient
-    ? await getNextTencentCosNumber(cosClient, options)
-    : (options.start || 1));
+  const cosClient =
+    options.upload && options.storageTarget === "cos" ? createTencentCosClient(options) : null;
+  const cloudbaseApp =
+    options.database && options.databaseTarget === "cloudbase" ? createCloudbaseApp(options) : null;
+  if (cloudbaseApp)
+    await cloudbaseApp.database.createCollectionIfNotExists(options.cloudbaseCollection);
+  let nextNumber =
+    checkpoint?.nextNumber ||
+    (cosClient ? await getNextTencentCosNumber(cosClient, options) : options.start || 1);
 
   log(`Output CSV: ${outputPath}`);
   log(`Evidence JSONL: ${evidencePath}`);
-  if (options.legacySupabaseUploadRequested) log("--supabase-upload is disabled; use --cos-upload for Tencent COS uploads.");
-  if (options.legacyDatabaseRequested) log("--db is disabled; use --cloudbase-db for WeChat Cloud Database writes.");
+  if (options.legacySupabaseUploadRequested)
+    log("--supabase-upload is disabled; use --cos-upload for Tencent COS uploads.");
+  if (options.legacyDatabaseRequested)
+    log("--db is disabled; use --cloudbase-db for WeChat Cloud Database writes.");
   if (cosClient) log(`Next COS asset: ${formatAssetName(nextNumber)}`);
   if (cloudbaseApp) log(`CloudBase collection: ${options.cloudbaseCollection}`);
-  if (checkpoint) log(`Resuming checkpoint with ${checkpoint.rows?.length || 0} CSV rows: ${checkpointPathFor(options)}`);
+  if (checkpoint)
+    log(
+      `Resuming checkpoint with ${checkpoint.rows?.length || 0} CSV rows: ${checkpointPathFor(options)}`,
+    );
 
   const rows = Array.isArray(checkpoint?.rows) ? [...checkpoint.rows] : [];
   const evidenceRows = Array.isArray(checkpoint?.evidenceRows) ? [...checkpoint.evidenceRows] : [];
-  const uploadFailures = Array.isArray(checkpoint?.uploadFailures) ? [...checkpoint.uploadFailures] : [];
-  const processedSourceUrls = mergeProcessedSourceUrls(historicalProcessedSourceUrls, checkpoint?.processedSourceUrls || []);
+  const uploadFailures = Array.isArray(checkpoint?.uploadFailures)
+    ? [...checkpoint.uploadFailures]
+    : [];
+  const existingSemanticDedupeKeys = await loadExistingSemanticDedupeKeys(options.existingIndex);
+  const internalSemanticDedupeKeys = new Set(
+    rows.map((row) => artworkDedupeKey(row.title_en, row.artist)).filter(Boolean),
+  );
+  let skippedSemantic = checkpoint?.skippedSemantic || 0;
+  const processedSourceUrls = mergeProcessedSourceUrls(
+    historicalProcessedSourceUrls,
+    checkpoint?.processedSourceUrls || [],
+  );
   if (historicalProcessedSourceUrls.size > 0 && !checkpoint) {
-    log(`Loaded ${historicalProcessedSourceUrls.size} previously processed Artvee URLs for de-duplication.`);
+    log(
+      `Loaded ${historicalProcessedSourceUrls.size} previously processed Artvee URLs for de-duplication.`,
+    );
+  }
+  if (existingSemanticDedupeKeys.size > 0) {
+    log(`Loaded ${existingSemanticDedupeKeys.size} cross-source semantic de-duplication keys.`);
   }
   let imagesThisRun = checkpoint?.imagesThisRun || 0;
   let sawListing = false;
@@ -2374,16 +2796,46 @@ async function ingest(options) {
       if (!artwork.downloadUrl && !artwork.imageUrl && !options.dryRun) {
         log(`Skipping artwork without a downloadable image: ${listing.url}`);
         processedSourceUrls.add(listing.url);
-        await writeCheckpoint(options, buildCheckpointState({
+        await writeCheckpoint(
           options,
-          outputPath,
-          rows,
-          evidenceRows,
-          processedSourceUrls,
-          nextNumber,
-          imagesThisRun,
-          uploadFailures,
-        }));
+          buildCheckpointState({
+            options,
+            outputPath,
+            rows,
+            evidenceRows,
+            processedSourceUrls,
+            nextNumber,
+            imagesThisRun,
+            uploadFailures,
+            skippedSemantic,
+          }),
+        );
+        continue;
+      }
+
+      const rawSemanticKey = artworkDedupeKey(artwork.titleEn || artwork.titleCn, artwork.artist);
+      if (
+        rawSemanticKey &&
+        (existingSemanticDedupeKeys.has(rawSemanticKey) ||
+          internalSemanticDedupeKeys.has(rawSemanticKey))
+      ) {
+        skippedSemantic += 1;
+        processedSourceUrls.add(listing.url);
+        log(`Skipping semantic duplicate before image download: ${rawSemanticKey}`);
+        await writeCheckpoint(
+          options,
+          buildCheckpointState({
+            options,
+            outputPath,
+            rows,
+            evidenceRows,
+            processedSourceUrls,
+            nextNumber,
+            imagesThisRun,
+            uploadFailures,
+            skippedSemantic,
+          }),
+        );
         continue;
       }
 
@@ -2407,23 +2859,39 @@ async function ingest(options) {
           log(`Saved image: ${imagePath}`);
         }
         if (cosClient) {
-          const uploadResult = await uploadImageWithRetry(cosClient, options.cosBucket, assetName, image, {
-            maxRetries: options.maxRetries,
-            uploadFn: (client, _bucket, name, imageData) => uploadImageToTencentCos(client, options, name, imageData),
-          });
+          const uploadResult = await uploadImageWithRetry(
+            cosClient,
+            options.cosBucket,
+            assetName,
+            image,
+            {
+              maxRetries: options.maxRetries,
+              uploadFn: (client, _bucket, name, imageData) =>
+                uploadImageToTencentCos(client, options, name, imageData),
+            },
+          );
           storageUploaded = uploadResult.uploaded;
           if (uploadResult.uploaded) {
             publicUrl = uploadResult.publicUrl;
             log(`Uploaded COS image: ${assetName}`);
           } else {
-            uploadFailures.push({ assetName, error: uploadResult.error, sourceUrl: artwork.sourceUrl });
+            uploadFailures.push({
+              assetName,
+              error: uploadResult.error,
+              sourceUrl: artwork.sourceUrl,
+            });
           }
         }
         imagesThisRun += 1;
       }
 
       const csvRow = buildCsvRow(artwork, number, generatedMetadata);
+      const finalSemanticKey = artworkDedupeKey(csvRow.title_en, csvRow.artist);
+      if (!finalSemanticKey) {
+        throw new Error(`Artwork has no usable semantic de-duplication key: ${listing.url}`);
+      }
       rows.push(csvRow);
+      internalSemanticDedupeKeys.add(finalSemanticKey);
       evidenceRows.push(buildRawEvidenceRecord(artwork, csvRow, assetName, imagePath));
 
       if (cloudbaseApp && options.database && (!options.upload || storageUploaded)) {
@@ -2440,63 +2908,101 @@ async function ingest(options) {
       processedSourceUrls.add(listing.url);
       nextNumber += 1;
       progress.update(rows.length, `saved ${csvRow.id}`);
-      await writeCheckpoint(options, buildCheckpointState({
+      await writeCheckpoint(
         options,
-        outputPath,
-        rows,
-        evidenceRows,
-        processedSourceUrls,
-        nextNumber,
-        imagesThisRun,
-        uploadFailures,
-      }));
+        buildCheckpointState({
+          options,
+          outputPath,
+          rows,
+          evidenceRows,
+          processedSourceUrls,
+          nextNumber,
+          imagesThisRun,
+          uploadFailures,
+          skippedSemantic,
+        }),
+      );
     } catch (error) {
       if (/Stop requested by remote status|robots\.txt disallows/i.test(error.message)) throw error;
+      if (isTransientCrawlError(error)) {
+        log(`Pausing at failed artwork ${listing.url}: ${error.message}`);
+        await appendFailure(outputPath, {
+          sourceUrl: listing.url,
+          title: listing.title,
+          error: error.message,
+        });
+        await writeCheckpoint(
+          options,
+          buildCheckpointState({
+            options,
+            outputPath,
+            rows,
+            evidenceRows,
+            processedSourceUrls,
+            nextNumber,
+            imagesThisRun,
+            uploadFailures,
+            skippedSemantic,
+          }),
+        );
+        throw error;
+      }
       log(`Skipping failed artwork ${listing.url}: ${error.message}`);
       await appendFailure(outputPath, {
         sourceUrl: listing.url,
         title: listing.title,
         error: error.message,
       });
-      processedSourceUrls.add(listing.url);
-      await writeCheckpoint(options, buildCheckpointState({
+      // A failed fetch is not a completed artwork. Keep it out of the
+      // de-duplication history so a later checkpoint resume/batch can retry it.
+      await writeCheckpoint(
         options,
-        outputPath,
-        rows,
-        evidenceRows,
-        processedSourceUrls,
-        nextNumber,
-        imagesThisRun,
-        uploadFailures,
-      }));
+        buildCheckpointState({
+          options,
+          outputPath,
+          rows,
+          evidenceRows,
+          processedSourceUrls,
+          nextNumber,
+          imagesThisRun,
+          uploadFailures,
+          skippedSemantic,
+        }),
+      );
       if (rows.length >= options.count) break;
-      }
+    }
   }
 
   if (!sawListing) throw new Error("No Artvee listings were found.");
 
   if (rows.length < options.count) {
-    log(`Requested ${options.count}; imported ${rows.length}. Some listings were skipped or unavailable.`);
+    log(
+      `Requested ${options.count}; imported ${rows.length}. Some listings were skipped or unavailable.`,
+    );
   }
   if (uploadFailures.length > 0) {
     log(`Storage upload failures: ${uploadFailures.length}. CSV rows were kept for later retry.`);
   }
   await writeCsv(outputPath, rows);
   await writeJsonl(evidencePath, evidenceRows);
-  await writeCheckpoint(options, buildCheckpointState({
+  await writeCheckpoint(
     options,
-    outputPath,
-    rows,
-    evidenceRows,
-    processedSourceUrls,
-    nextNumber,
-    imagesThisRun,
-    uploadFailures,
-    status: "completed",
-  }));
+    buildCheckpointState({
+      options,
+      outputPath,
+      rows,
+      evidenceRows,
+      processedSourceUrls,
+      nextNumber,
+      imagesThisRun,
+      uploadFailures,
+      skippedSemantic,
+      status: rows.length >= options.count ? "completed" : "running",
+    }),
+  );
   await writeProcessedSourceHistory(options, processedSourceUrls);
   progress.done(rows.length, "finished");
-  return { outputPath, count: rows.length, uploadFailures };
+  return { outputPath, count: rows.length, uploadFailures, skippedSemantic };
 }
 
 function sleep(ms) {
@@ -2543,7 +3049,7 @@ async function waitForInterval(options, stateKey, label, delay) {
 
 async function waitForRequestBudget(options, kind) {
   const isImage = kind === "image";
-  const crawlDelayMs = isImage ? 0 : (options._robotsCrawlDelayMs || 0);
+  const crawlDelayMs = isImage ? 0 : options._robotsCrawlDelayMs || 0;
   const baseRange = isImage ? options.imageDelayMs : options.pageDelayMs;
   const range = crawlDelayMs
     ? [Math.max(baseRange[0], crawlDelayMs), Math.max(baseRange[1], crawlDelayMs)]
@@ -2559,7 +3065,9 @@ async function waitForRequestBudget(options, kind) {
   const timestamps = (options[timestampsKey] || []).filter((timestamp) => timestamp > hourAgo);
   if (timestamps.length >= limit) {
     const waitMs = timestamps[0] + 60 * 60 * 1000 - now;
-    log(`Hourly ${kind} limit reached (${limit}/hour); waiting ${Math.ceil(waitMs / 1000)} seconds.`);
+    log(
+      `Hourly ${kind} limit reached (${limit}/hour); waiting ${Math.ceil(waitMs / 1000)} seconds.`,
+    );
     await sleep(waitMs);
   }
   options[timestampsKey] = [...timestamps, Date.now()];
@@ -2568,30 +3076,49 @@ async function waitForRequestBudget(options, kind) {
 async function fetchWithRetries(url, init, options) {
   const attempts = Math.max(1, (options.maxRetries || 0) + 1);
   let lastError = null;
+  options._fetchDispatcher ||= new UndiciAgent({
+    connect: {
+      timeout: options.timeoutMs || DEFAULT_TIMEOUT_MS,
+    },
+  });
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), options.timeoutMs || DEFAULT_TIMEOUT_MS);
     try {
-      const response = await fetch(url, { ...init, signal: controller.signal });
+      const response = await undiciFetch(url, {
+        ...init,
+        dispatcher: options._fetchDispatcher,
+        signal: controller.signal,
+      });
       if ([403, 429].includes(response.status)) {
         throw new Error(`Stop requested by remote status ${response.status}: ${url}`);
       }
       if (response.status >= 500 && attempt < attempts) {
-        log(`HTTP ${response.status}; retrying after ${Math.round((options.pageDelayMs?.[1] || 30000) / 1000)} seconds (${attempt}/${attempts - 1}).`);
+        log(
+          `HTTP ${response.status}; retrying after ${Math.round((options.pageDelayMs?.[1] || 30000) / 1000)} seconds (${attempt}/${attempts - 1}).`,
+        );
         await sleep(options.pageDelayMs?.[1] || 30000);
         continue;
       }
       return response;
     } catch (error) {
-      lastError = error;
-      if (attempt >= attempts || /Stop requested/.test(error.message)) throw error;
-      log(`Request failed (${error.message}); retrying (${attempt}/${attempts - 1}).`);
+      const detail = describeFetchError(error);
+      lastError = new Error(detail, { cause: error });
+      if (attempt >= attempts || /Stop requested/.test(detail)) throw lastError;
+      log(`Request failed (${detail}); retrying (${attempt}/${attempts - 1}).`);
       await sleep(options.pageDelayMs?.[1] || 30000);
     } finally {
       clearTimeout(timeout);
     }
   }
   throw lastError || new Error(`Request failed: ${url}`);
+}
+
+export function describeFetchError(error) {
+  const parts = [error?.message, error?.cause?.code, error?.cause?.message]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+  return [...new Set(parts)].join(" | ") || "unknown fetch error";
 }
 
 async function ensureRobotsAllowed(url, options) {
@@ -2603,9 +3130,13 @@ async function ensureRobotsAllowed(url, options) {
     const robotsUrl = `${origin}/robots.txt`;
     let rules = [];
     try {
-      const response = await fetchWithRetries(robotsUrl, {
-        headers: { "user-agent": options.userAgent, accept: "text/plain,*/*" },
-      }, { ...options, robotsTxt: false, maxRetries: 0 });
+      const response = await fetchWithRetries(
+        robotsUrl,
+        {
+          headers: { "user-agent": options.userAgent, accept: "text/plain,*/*" },
+        },
+        { ...options, robotsTxt: false, maxRetries: 0 },
+      );
       rules = response.ok ? parseRobotsTxt(await response.text(), options.userAgent) : [];
     } catch (error) {
       log(`robots.txt check unavailable (${error.message}); continuing cautiously.`);
@@ -2683,7 +3214,9 @@ Options:
   --famous-list <path>               JSON query list for famous mode. Default: ./data/famous-artworks.json
   --artists-url <url>                Artist directory URL. Default: https://artvee.com/artists/
   --artist-priority-list <path>      Ranked artist list for artists-priority. Default: ./data/artist-priority.json
+  --existing-index <path>            Read-only JSON artworks/rows index for cross-source semantic de-duplication
   --artist-start <number>            Artist directory start position, 1-based. Default: 1
+  --scan-artist-start <number>       Resume scanning at this artist without changing checkpoint identity
   --per-artist <number>              Optional cap per directory artist. Default: 0, unlimited
   --max-artist-per-run <number>      Famous mode artist cap. Default: 3
   --max-series-per-run <number>      Famous mode title-series cap. Default: 2
@@ -2721,7 +3254,13 @@ Options:
 `.trim();
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+const invokedScriptPath = process.argv[1] ? path.resolve(process.argv[1]) : "";
+const currentModulePath = fileURLToPath(import.meta.url);
+const isDirectInvocation =
+  invokedScriptPath &&
+  path.basename(invokedScriptPath).toLowerCase() === path.basename(currentModulePath).toLowerCase();
+
+if (isDirectInvocation) {
   try {
     await loadEnvironment();
     const options = parseArgs(process.argv.slice(2));

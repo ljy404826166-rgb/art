@@ -76,7 +76,9 @@ async function listStorage(supabase) {
 }
 
 function summarizeRanges(ids) {
-  const nums = sortIds(ids).map(numericId).filter((value) => Number.isInteger(value));
+  const nums = sortIds(ids)
+    .map(numericId)
+    .filter((value) => Number.isInteger(value));
   if (!nums.length) return [];
   const ranges = [];
   let start = nums[0];
@@ -86,7 +88,9 @@ function summarizeRanges(ids) {
       previous = current;
       continue;
     }
-    ranges.push(start === previous ? `${start}_standard` : `${start}_standard..${previous}_standard`);
+    ranges.push(
+      start === previous ? `${start}_standard` : `${start}_standard..${previous}_standard`,
+    );
     start = current;
     previous = current;
   }
@@ -133,11 +137,18 @@ async function main() {
     .map((row) => ({ image_id: row.image_id, artwork_id: row.artwork_id }));
 
   const paintingDisplayUrlMismatches = paintings
-    .filter((row) => numericId(row.id) && !urlMatchesExpected(row.display_url, expectedUrl(supabaseUrl, row.id)))
+    .filter(
+      (row) =>
+        numericId(row.id) && !urlMatchesExpected(row.display_url, expectedUrl(supabaseUrl, row.id)),
+    )
     .map((row) => ({ id: row.id, display_url: row.display_url || "" }));
 
   const imageDisplayUrlMismatches = artworkImages
-    .filter((row) => numericId(row.image_id) && !urlMatchesExpected(row.display_url, expectedUrl(supabaseUrl, row.image_id)))
+    .filter(
+      (row) =>
+        numericId(row.image_id) &&
+        !urlMatchesExpected(row.display_url, expectedUrl(supabaseUrl, row.image_id)),
+    )
     .map((row) => ({ image_id: row.image_id, display_url: row.display_url || "" }));
 
   const duplicatePaintings = Object.entries(

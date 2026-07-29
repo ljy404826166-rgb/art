@@ -1,0 +1,48 @@
+<view class="account-data-page">
+  <view class="intro">
+    <text class="intro-kicker">ACCOUNT & DATA</text>
+    <text class="intro-title">当前设备</text>
+  </view>
+
+  <view class="section">
+    <text class="section-title">清除数据</text>
+    <view class="action-card">
+      <view class="action-copy">
+        <text class="action-title">清除本机个人数据</text>
+        <text class="action-description">清除账号与成就缓存、收藏、关注和历史；保留云端数据、下载记录及系统相册图片。</text>
+      </view>
+      <button
+        class="action-button"
+        loading="{{busyAction === 'local'}}"
+        disabled="{{!!busyAction}}"
+        bindtap="clearLocalPersonalData"
+      >清除</button>
+    </view>
+  </view>
+
+  <view class="section danger-section">
+    <text class="section-title">账号注销</text>
+    <view class="danger-card">
+      <view class="danger-heading">
+        <image class="danger-icon" src="/assets/icons/lucide/svg/triangle-alert.svg" mode="aspectFit" />
+        <view class="danger-content">
+          <text class="danger-title">{{accountDeactivated ? '账号已注销' : '注销账号'}}</text>
+          <text class="danger-description">
+            {{accountDeactivated ? '当前微信账号的云端个人数据已不可读取' : '再次登录需重新注册'}}
+          </text>
+        </view>
+      </view>
+      <button
+        class="danger-button"
+        loading="{{busyAction === 'deactivate'}}"
+        disabled="{{!!busyAction || accountDeactivated}}"
+        bindtap="deactivateCloudAccount"
+      >{{accountDeactivated ? '已注销' : '注销'}}</button>
+      <image
+        class="danger-watermark"
+        src="/assets/icons/lucide/svg/x.svg"
+        mode="aspectFit"
+      />
+    </view>
+  </view>
+</view>

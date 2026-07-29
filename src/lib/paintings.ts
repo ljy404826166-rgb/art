@@ -74,7 +74,8 @@ const previewPaintings: Painting[] = [
     year_and_place: "c. 1665, Delft",
     medium: "Oil on canvas",
     dimensions: "44.5 x 39 cm",
-    description: "A compact preview record so the gallery remains usable without a remote database.",
+    description:
+      "A compact preview record so the gallery remains usable without a remote database.",
     tags: ["Dutch Golden Age", "Portrait"],
     display_url:
       "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d7/Meisje_met_de_parel.jpg/640px-Meisje_met_de_parel.jpg",
@@ -97,7 +98,8 @@ const previewPaintings: Painting[] = [
       "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0a/The_Great_Wave_off_Kanagawa.jpg/640px-The_Great_Wave_off_Kanagawa.jpg",
     thumbnail_url:
       "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0a/The_Great_Wave_off_Kanagawa.jpg/320px-The_Great_Wave_off_Kanagawa.jpg",
-    download_url: "https://upload.wikimedia.org/wikipedia/commons/0/0a/The_Great_Wave_off_Kanagawa.jpg",
+    download_url:
+      "https://upload.wikimedia.org/wikipedia/commons/0/0a/The_Great_Wave_off_Kanagawa.jpg",
   },
 ];
 
@@ -126,7 +128,11 @@ function errorMessage(error: unknown): string {
 
 function isNetworkFailure(error: unknown): boolean {
   const message = errorMessage(error).toLowerCase();
-  return message.includes("failed to fetch") || message.includes("network") || message.includes("timed out");
+  return (
+    message.includes("failed to fetch") ||
+    message.includes("network") ||
+    message.includes("timed out")
+  );
 }
 
 function isOffline(): boolean {
@@ -153,7 +159,9 @@ async function retryRead<TValue>(operation: () => Promise<TValue>): Promise<TVal
   throw lastError;
 }
 
-async function fetchPaintingsPageUncached(options: ArtworkPageOptions = {}): Promise<PaintingsPageResult> {
+async function fetchPaintingsPageUncached(
+  options: ArtworkPageOptions = {},
+): Promise<PaintingsPageResult> {
   const cacheKey = artworkPageCacheKey(options);
   try {
     const page = await retryRead(() => fetchArtworksPage(options));
@@ -203,7 +211,9 @@ async function fetchPaintingsPageUncached(options: ArtworkPageOptions = {}): Pro
   }
 }
 
-export async function fetchPaintingsPage(options: ArtworkPageOptions = {}): Promise<PaintingsPageResult> {
+export async function fetchPaintingsPage(
+  options: ArtworkPageOptions = {},
+): Promise<PaintingsPageResult> {
   const cacheKey = artworkPageCacheKey(options);
   const pending = pageRequests.get(cacheKey);
   if (pending) return pending;

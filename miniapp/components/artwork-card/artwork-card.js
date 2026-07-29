@@ -20,11 +20,13 @@ Component({
       value: "grid",
       observer(value) {
         const item = this.properties.artwork || {};
-        const initialRatio = value === "row"
-          ? (item.homeCardClass === "is-wide" ? 1.36 : 0.72)
-          : (this.data.imageRatio || 0.8);
+        const initialRatio =
+          value === "row"
+            ? item.homeCardClass === "is-wide"
+              ? 1.36
+              : 0.72
+            : this.data.imageRatio || 0.8;
         this.updateLayout(initialRatio);
-        if (value === "row") this.measureRowImage(item);
       },
     },
   },
@@ -47,6 +49,8 @@ Component({
   methods: {
     getInitialRatio(item) {
       if (this.properties.variant !== "row") return 0.8;
+      const src = resolveRowArtworkMeasureSrc(item || {});
+      if (src && rowImageRatioCache[src]) return rowImageRatioCache[src];
       if (item && item.homeCardClass === "is-wide") return 1.36;
       return 0.72;
     },
@@ -61,7 +65,6 @@ Component({
         displayArtist: item.artist || "Unknown artist",
       });
       this.updateLayout(initialRatio);
-      this.measureRowImage(item);
     },
 
     handleImageLoad(event) {
@@ -72,44 +75,6 @@ Component({
       const ratio = width / height;
       if (detail.src) rowImageRatioCache[detail.src] = ratio;
       this.updateLayout(ratio);
-    },
-
-    measureRowImage(item) {
-      if (this.properties.variant !== "row") return;
-
-      const src = resolveRowArtworkMeasureSrc(item || {});
-      if (!src) return;
-
-      const cachedRatio = rowImageRatioCache[src];
-      if (cachedRatio) {
-        this.updateLayout(cachedRatio);
-        return;
-      }
-
-      if (this.pendingRowMeasureSrc === src) return;
-      if (typeof wx === "undefined" || !wx.getImageInfo) return;
-
-      this.pendingRowMeasureSrc = src;
-      wx.getImageInfo({
-        src,
-        success: (result) => {
-          if (this.pendingRowMeasureSrc !== src) return;
-          this.pendingRowMeasureSrc = "";
-
-          const width = Number(result && result.width);
-          const height = Number(result && result.height);
-          if (!width || !height) return;
-
-          const ratio = width / height;
-          rowImageRatioCache[src] = ratio;
-          this.updateLayout(ratio);
-        },
-        fail: () => {
-          if (this.pendingRowMeasureSrc === src) {
-            this.pendingRowMeasureSrc = "";
-          }
-        },
-      });
     },
 
     updateLayout(ratio) {

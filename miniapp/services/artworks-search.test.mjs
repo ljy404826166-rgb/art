@@ -15,17 +15,23 @@ function loadCommonJsModule(filePath, extraContext = {}) {
   };
   const localRequire = (id) => {
     if (id === "../data/fallback-artworks") return fallback;
-    if (id === "./search-engine") return loadCommonJsModule(new URL("./search-engine.js", import.meta.url));
+    if (id === "./search-engine")
+      return loadCommonJsModule(new URL("./search-engine.js", import.meta.url));
+    if (id === "./search-terms")
+      return loadCommonJsModule(new URL("./search-terms.js", import.meta.url));
     return require(id);
   };
-  vm.runInNewContext(source, { module, exports: module.exports, require: localRequire, ...extraContext }, { filename });
+  vm.runInNewContext(
+    source,
+    { module, exports: module.exports, require: localRequire, ...extraContext },
+    { filename },
+  );
   return module.exports;
 }
 
-const {
-  expandSearchQueries,
-  normalizeSearchText,
-} = loadCommonJsModule(new URL("./artworks.js", import.meta.url));
+const { expandSearchQueries, normalizeSearchText } = loadCommonJsModule(
+  new URL("./artworks.js", import.meta.url),
+);
 
 test("expandSearchQueries expands da Vinci queries for cloud search", () => {
   const queries = expandSearchQueries("达芬奇");
@@ -115,6 +121,7 @@ function createFakeDatabase(rows, counters) {
       },
     },
     RegExp(options) {
+      counters.regexp = Number(counters.regexp || 0) + 1;
       return options;
     },
     collection() {
@@ -123,36 +130,74 @@ function createFakeDatabase(rows, counters) {
   };
 }
 
-test("searchArtworks queries candidates by keyword instead of loading the full corpus", async () => {
-  const counters = { get: 0, count: 0 };
-  const fakeDb = createFakeDatabase([
-    { _id: "title", status: "published", title_cn: "梵高研究", artist: "其他画家" },
-    { _id: "artist", status: "published", title_cn: "星夜", artist: "文森特·梵高" },
-    { _id: "description", status: "published", title_cn: "艺术笔记", artist: "其他画家", description: "简介内容提到梵高。" },
-    { _id: "other", status: "published", title_cn: "睡莲", artist: "克洛德·莫奈" },
-  ], counters);
+test("searchArtworks queries indexed terms instead of loading the full corpus or using regexp", async () => {
+  const counters = { get: 0, count: 0, regexp: 0 };
+  const fakeDb = createFakeDatabase(
+    [
+      {
+        _id: "title",
+        status: "published",
+        title_cn: "梵高研究",
+        artist: "其他画家",
+        search_terms: ["梵高"],
+      },
+      {
+        _id: "artist",
+        status: "published",
+        title_cn: "星夜",
+        artist: "文森特·梵高",
+        search_terms: ["梵高"],
+      },
+      {
+        _id: "description",
+        status: "published",
+        title_cn: "艺术笔记",
+        artist: "其他画家",
+        description: "简介内容提到梵高。",
+        search_terms: ["梵高"],
+      },
+      {
+        _id: "other",
+        status: "published",
+        title_cn: "睡莲",
+        artist: "克洛德·莫奈",
+        search_terms: ["莫奈"],
+      },
+    ],
+    counters,
+  );
   const { searchArtworks } = loadCommonJsModule(new URL("./artworks.js", import.meta.url), {
     wx: { cloud: { database: () => fakeDb } },
   });
 
   const results = await searchArtworks("梵高", { pageSize: 20 });
 
-  assert.equal(JSON.stringify(results.map((item) => item._id)), JSON.stringify(["title", "artist", "description"]));
+  assert.equal(
+    JSON.stringify(results.map((item) => item._id)),
+    JSON.stringify(["title", "artist", "description"]),
+  );
   assert.ok(counters.get > 0);
   assert.equal(counters.count, 0);
+  assert.equal(counters.regexp, 0);
 });
 
 test("fetchArtworksByArtistAliases supports deduped pagination across aliases", async () => {
   const counters = { get: 0, count: 0 };
-  const fakeDb = createFakeDatabase([
-    { _id: "a", status: "published", artist: "Vincent van Gogh" },
-    { _id: "b", status: "published", artist: "Vincent van Gogh" },
-    { _id: "c", status: "published", artist: "Van Gogh" },
-    { _id: "d", status: "published", artist: "Van Gogh" },
-  ], counters);
-  const { fetchArtworksByArtistAliases } = loadCommonJsModule(new URL("./artworks.js", import.meta.url), {
-    wx: { cloud: { database: () => fakeDb } },
-  });
+  const fakeDb = createFakeDatabase(
+    [
+      { _id: "a", status: "published", artist: "Vincent van Gogh" },
+      { _id: "b", status: "published", artist: "Vincent van Gogh" },
+      { _id: "c", status: "published", artist: "Van Gogh" },
+      { _id: "d", status: "published", artist: "Van Gogh" },
+    ],
+    counters,
+  );
+  const { fetchArtworksByArtistAliases } = loadCommonJsModule(
+    new URL("./artworks.js", import.meta.url),
+    {
+      wx: { cloud: { database: () => fakeDb } },
+    },
+  );
 
   const firstPage = await fetchArtworksByArtistAliases(["Vincent van Gogh", "Van Gogh"], {
     pageSize: 2,
@@ -169,14 +214,20 @@ test("fetchArtworksByArtistAliases supports deduped pagination across aliases", 
 
 test("fetchArtworksByArtist prefers tag_keys for stable artist matching", async () => {
   const counters = { get: 0, count: 0 };
-  const fakeDb = createFakeDatabase([
-    { _id: "a", status: "published", artist: "Claude Monet", tag_keys: ["克洛德·莫奈"] },
-    { _id: "b", status: "published", artist: "Other", tag_keys: ["克洛德·莫奈"] },
-    { _id: "c", status: "published", artist: "Other", tag_keys: ["其他画家"] },
-  ], counters);
-  const { fetchArtworksByArtist, countArtworksByArtist } = loadCommonJsModule(new URL("./artworks.js", import.meta.url), {
-    wx: { cloud: { database: () => fakeDb } },
-  });
+  const fakeDb = createFakeDatabase(
+    [
+      { _id: "a", status: "published", artist: "Claude Monet", tag_keys: ["克洛德·莫奈"] },
+      { _id: "b", status: "published", artist: "Other", tag_keys: ["克洛德·莫奈"] },
+      { _id: "c", status: "published", artist: "Other", tag_keys: ["其他画家"] },
+    ],
+    counters,
+  );
+  const { fetchArtworksByArtist, countArtworksByArtist } = loadCommonJsModule(
+    new URL("./artworks.js", import.meta.url),
+    {
+      wx: { cloud: { database: () => fakeDb } },
+    },
+  );
   const artist = {
     nameZh: "克洛德·莫奈",
     aliases: ["Claude Monet", "Monet", "莫奈"],
@@ -191,15 +242,21 @@ test("fetchArtworksByArtist prefers tag_keys for stable artist matching", async 
 
 test("fetchArtworksByArtist combines tag keys and artist aliases", async () => {
   const counters = { get: 0, count: 0 };
-  const fakeDb = createFakeDatabase([
-    { _id: "tag", status: "published", artist: "Other", tag_keys: ["Claude Monet"] },
-    { _id: "name", status: "published", artist: "Claude Monet", tag_keys: ["Other"] },
-    { _id: "alias", status: "published", artist: "Monet", tag_keys: ["Other"] },
-    { _id: "other", status: "published", artist: "Other", tag_keys: ["Other"] },
-  ], counters);
-  const { fetchArtworksByArtist, countArtworksByArtist } = loadCommonJsModule(new URL("./artworks.js", import.meta.url), {
-    wx: { cloud: { database: () => fakeDb } },
-  });
+  const fakeDb = createFakeDatabase(
+    [
+      { _id: "tag", status: "published", artist: "Other", tag_keys: ["Claude Monet"] },
+      { _id: "name", status: "published", artist: "Claude Monet", tag_keys: ["Other"] },
+      { _id: "alias", status: "published", artist: "Monet", tag_keys: ["Other"] },
+      { _id: "other", status: "published", artist: "Other", tag_keys: ["Other"] },
+    ],
+    counters,
+  );
+  const { fetchArtworksByArtist, countArtworksByArtist } = loadCommonJsModule(
+    new URL("./artworks.js", import.meta.url),
+    {
+      wx: { cloud: { database: () => fakeDb } },
+    },
+  );
   const artist = {
     nameZh: "Claude Monet",
     aliases: ["Monet"],
@@ -208,6 +265,53 @@ test("fetchArtworksByArtist combines tag keys and artist aliases", async () => {
   const firstPage = await fetchArtworksByArtist(artist, { pageSize: 8, skip: 0 });
   const total = await countArtworksByArtist(artist);
 
-  assert.equal(JSON.stringify(firstPage.map((item) => item._id)), JSON.stringify(["tag", "name", "alias"]));
+  assert.equal(
+    JSON.stringify(firstPage.map((item) => item._id)),
+    JSON.stringify(["tag", "name", "alias"]),
+  );
   assert.equal(total, 3);
+});
+
+test("typed home sections query artist_ids and classification_ids directly", async () => {
+  const counters = { get: 0, count: 0 };
+  const fakeDb = createFakeDatabase(
+    [
+      {
+        _id: "leonardo",
+        status: "published",
+        artist_ids: ["leonardo-da-vinci"],
+        classification_ids: ["style-renaissance"],
+      },
+      {
+        _id: "munch",
+        status: "published",
+        artist_ids: ["edvard-munch"],
+        classification_ids: ["style-expressionism"],
+      },
+    ],
+    counters,
+  );
+  const { fetchArtworksBySection, countArtworksBySection } = loadCommonJsModule(
+    new URL("./artworks.js", import.meta.url),
+    {
+      wx: { cloud: { database: () => fakeDb } },
+    },
+  );
+
+  const artistRows = await fetchArtworksBySection(
+    {
+      type: "artist",
+      id: "leonardo-da-vinci",
+      label: "列奥纳多·达·芬奇",
+    },
+    { pageSize: 8, skip: 0 },
+  );
+  const expressionismCount = await countArtworksBySection({
+    type: "classification",
+    id: "style-expressionism",
+    label: "表现主义",
+  });
+
+  assert.equal(JSON.stringify(artistRows.map((item) => item._id)), JSON.stringify(["leonardo"]));
+  assert.equal(expressionismCount, 1);
 });

@@ -10,53 +10,55 @@ function loadCommonJsModule(filename) {
   return module.exports;
 }
 
-const {
-  computeDetailHeroFrameStyle,
-  resolveDetailMeasureSrc,
-} = loadCommonJsModule("miniapp/pages/detail/detail-image-layout.js");
+const { computeDetailHeroFrameStyle, resolveDetailMeasureSrc } = loadCommonJsModule(
+  "miniapp/pages/detail/detail-image-layout.js",
+);
 
 test("computeDetailHeroFrameStyle preserves portrait artwork ratio", () => {
-  assert.equal(
-    computeDetailHeroFrameStyle(0.52),
-    "height: 1335rpx; min-height: 1335rpx;",
-  );
+  assert.equal(computeDetailHeroFrameStyle(0.52), "height: 1335rpx; min-height: 1335rpx;");
 });
 
 test("computeDetailHeroFrameStyle preserves landscape artwork ratio", () => {
-  assert.equal(
-    computeDetailHeroFrameStyle(1.79),
-    "height: 388rpx; min-height: 388rpx;",
-  );
+  assert.equal(computeDetailHeroFrameStyle(1.79), "height: 388rpx; min-height: 388rpx;");
 });
 
 test("computeDetailHeroFrameStyle preserves routed artwork ratio", () => {
-  assert.equal(
-    computeDetailHeroFrameStyle(0.72),
-    "height: 964rpx; min-height: 964rpx;",
-  );
+  assert.equal(computeDetailHeroFrameStyle(0.72), "height: 964rpx; min-height: 964rpx;");
 });
 
 test("resolveDetailMeasureSrc does not use download_url for measurement", () => {
-  assert.equal(resolveDetailMeasureSrc({
-    cloud_file_id: "cloud://display",
-    display_url: "display.webp",
-    thumbnail_url: "thumb.webp",
-    download_url: "original.jpg",
-  }), "cloud://display");
+  assert.equal(
+    resolveDetailMeasureSrc({
+      cloud_file_id: "cloud://display",
+      display_url: "display.webp",
+      thumbnail_url: "thumb.webp",
+      download_url: "original.jpg",
+    }),
+    "cloud://display",
+  );
 
-  assert.equal(resolveDetailMeasureSrc({
-    display_url: "display.webp",
-    thumbnail_url: "thumb.webp",
-    download_url: "original.jpg",
-  }), "display.webp");
+  assert.equal(
+    resolveDetailMeasureSrc({
+      display_url: "display.webp",
+      thumbnail_url: "thumb.webp",
+      download_url: "original.jpg",
+    }),
+    "display.webp",
+  );
 
-  assert.equal(resolveDetailMeasureSrc({
-    thumbnail_url: "thumb.webp",
-    download_url: "original.jpg",
-  }), "thumb.webp");
+  assert.equal(
+    resolveDetailMeasureSrc({
+      thumbnail_url: "thumb.webp",
+      download_url: "original.jpg",
+    }),
+    "thumb.webp",
+  );
 
-  assert.equal(resolveDetailMeasureSrc({
-    imageSrc: "original.jpg",
-    download_url: "original.jpg",
-  }), "");
+  assert.equal(
+    resolveDetailMeasureSrc({
+      imageSrc: "original.jpg",
+      download_url: "original.jpg",
+    }),
+    "",
+  );
 });

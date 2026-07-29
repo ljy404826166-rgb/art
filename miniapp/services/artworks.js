@@ -4,35 +4,69 @@ const {
   normalizeSearchText,
   searchArtworks: searchIndexedArtworks,
 } = require("./search-engine");
+const { buildSearchQueryTerms } = require("./search-terms");
 
 const PAGE_SIZE = 20;
 const SEARCH_CORPUS_BATCH_SIZE = 20;
 const SEARCH_CORPUS_MAX_ROWS = 5000;
-const SEARCH_CANDIDATE_FIELDS = [
-  "title_cn",
-  "title_en",
-  "artist",
-  "tags_text",
-  "medium",
-  "year_and_place",
-  "location",
-  "description",
-];
 const SEARCH_CANDIDATE_PAGE_COUNT = 3;
 const SEARCH_CANDIDATE_CONCURRENCY = 6;
+const RANDOM_ARTWORK_CONCURRENCY = 2;
+const RANDOM_SECTION_CONCURRENCY = 3;
+const SECTION_COUNT_CACHE_TTL_MS = 5 * 60 * 1000;
 let searchCorpusCache = null;
 let searchCorpusPromise = null;
 let searchCandidateCache = {};
+let sectionCountCache = {};
 
-function shuffleItems(items) {
+function shuffleItems(items, random = Math.random) {
   const shuffled = items.slice();
   for (let index = shuffled.length - 1; index > 0; index -= 1) {
-    const swapIndex = Math.floor(Math.random() * (index + 1));
+    const swapIndex = Math.floor(random() * (index + 1));
     const current = shuffled[index];
     shuffled[index] = shuffled[swapIndex];
     shuffled[swapIndex] = current;
   }
   return shuffled;
+}
+
+function getArtworkArtistKey(item) {
+  const artistIds = Array.isArray(item && item.artist_ids) ? item.artist_ids.filter(Boolean) : [];
+  return String(
+    artistIds[0] ||
+      (item && (item.artist_id || item.artistId || item.artist)) ||
+      `unknown:${getArtworkKey(item) || ""}`,
+  )
+    .trim()
+    .toLowerCase();
+}
+
+function diversifyArtworksByArtist(items, options = {}) {
+  const random = typeof options.random === "function" ? options.random : Math.random;
+  const groups = [];
+  const groupsByArtist = {};
+
+  shuffleItems(items || [], random).forEach((item) => {
+    const artistKey = getArtworkArtistKey(item);
+    if (!groupsByArtist[artistKey]) {
+      groupsByArtist[artistKey] = { artistKey, items: [] };
+      groups.push(groupsByArtist[artistKey]);
+    }
+    groupsByArtist[artistKey].items.push(item);
+  });
+
+  const diversified = [];
+  let activeGroups = shuffleItems(groups, random);
+  while (activeGroups.length) {
+    const nextGroups = [];
+    activeGroups.forEach((group) => {
+      const item = group.items.shift();
+      if (item) diversified.push(item);
+      if (group.items.length) nextGroups.push(group);
+    });
+    activeGroups = shuffleItems(nextGroups, random);
+  }
+  return diversified;
 }
 
 function cloudAvailable() {
@@ -68,10 +102,6 @@ function addUniqueNormalizedArtworks(target, incoming, seen, limit) {
     seen[id] = true;
     target.push(normalized);
   });
-}
-
-function matchesSearchQuery(item, query) {
-  return searchIndexedArtworks([item], query).length > 0;
 }
 
 async function runLimited(tasks, concurrency) {
@@ -111,6 +141,18 @@ async function countPublishedArtworks() {
   return Number(result.total || 0);
 }
 
+async function countRecommendationEligibleArtworks() {
+  const db = database();
+  const result = await db
+    .collection("artworks")
+    .where({
+      status: "published",
+      recommendation_status: "eligible",
+    })
+    .count();
+  return Number(result.total || 0);
+}
+
 function searchCorpusFields() {
   return {
     _id: true,
@@ -127,6 +169,7 @@ function searchCorpusFields() {
     tags: true,
     tags_text: true,
     tag_keys: true,
+    search_terms: true,
     source_name: true,
     source_url: true,
     image_id: true,
@@ -180,31 +223,55 @@ async function fetchSearchCorpus(options) {
 async function fetchRandomArtworks(options) {
   const pageSize = (options && options.pageSize) || 96;
   const batchSize = (options && options.batchSize) || PAGE_SIZE;
-  const total = await countPublishedArtworks();
+  const requestedConcurrency = Number(
+    (options && options.concurrency) || RANDOM_ARTWORK_CONCURRENCY,
+  );
+  const concurrency =
+    Number.isFinite(requestedConcurrency) && requestedConcurrency > 0
+      ? Math.floor(requestedConcurrency)
+      : RANDOM_ARTWORK_CONCURRENCY;
+  const eligibleTotal = await countRecommendationEligibleArtworks();
+  const usesRecommendationPool = eligibleTotal > 0;
+  const total = usesRecommendationPool ? eligibleTotal : await countPublishedArtworks();
   if (!total) return [];
 
   const db = database();
   const batchCount = Math.max(1, Math.ceil(pageSize / batchSize));
-  const queries = [];
+  const tasks = [];
   const maxSkip = Math.max(0, total - batchSize);
 
   for (let index = 0; index < batchCount; index += 1) {
     const skip = Math.floor(Math.random() * (maxSkip + 1));
-    queries.push(
-      db
-        .collection("artworks")
-        .where({ status: "published" })
-        .orderBy("created_at", "desc")
-        .skip(skip)
-        .limit(batchSize)
-        .get(),
-    );
+    tasks.push(async () => {
+      try {
+        return await db
+          .collection("artworks")
+          .where(
+            usesRecommendationPool
+              ? { status: "published", recommendation_status: "eligible" }
+              : { status: "published" },
+          )
+          .orderBy(usesRecommendationPool ? "random_bucket" : "created_at", "asc")
+          .orderBy("_id", "asc")
+          .skip(skip)
+          .limit(batchSize)
+          .get();
+      } catch (error) {
+        return { data: [], error };
+      }
+    });
   }
 
-  const results = await Promise.all(queries);
+  const results = await runLimited(tasks, concurrency);
+  const successfulResults = results.filter((result) => !(result && result.error));
+  if (!successfulResults.length) {
+    const failedResult = results.find((result) => result && result.error);
+    throw (failedResult && failedResult.error) || new Error("云数据库读取超时");
+  }
+
   const seen = {};
   const artworks = [];
-  results.forEach((result) => {
+  successfulResults.forEach((result) => {
     (result.data || []).forEach((record) => {
       const normalized = normalizeArtwork(record);
       const id = getArtworkKey(normalized);
@@ -215,6 +282,29 @@ async function fetchRandomArtworks(options) {
   });
 
   return shuffleItems(artworks).slice(0, pageSize);
+}
+
+async function fetchRecommendationChannels(options) {
+  const limit = Math.max(1, Math.min(200, Math.floor(Number(options && options.limit) || 180)));
+  const db = database();
+  const rows = [];
+  for (let skip = 0; skip < limit; skip += PAGE_SIZE) {
+    const batchSize = Math.min(PAGE_SIZE, limit - skip);
+    const result = await db
+      .collection("recommendation_channels")
+      .where({
+        channel_status: "published",
+        auto_feature_eligible: true,
+      })
+      .orderBy("priority_score", "desc")
+      .skip(skip)
+      .limit(batchSize)
+      .get();
+    const batch = result.data || [];
+    rows.push(...batch);
+    if (batch.length < batchSize) break;
+  }
+  return rows;
 }
 
 function getTagId(tag) {
@@ -237,11 +327,7 @@ function createArrayContainsWhereClause(db, field, value) {
 }
 
 function getSelectedClassificationIds(filters) {
-  return [
-    filters && filters.style,
-    filters && filters.subject,
-    filters && filters.decade,
-  ]
+  return [filters && filters.style, filters && filters.subject, filters && filters.decade]
     .map((value) => String(value || "").trim())
     .filter(Boolean)
     .filter((value, index, values) => values.indexOf(value) === index);
@@ -278,27 +364,23 @@ async function fetchArtworksByCategoryFilters(filters, options) {
 async function countArtworksByCategoryFilters(filters) {
   const db = database();
   const whereClause = createCategoryWhereClause(db, filters);
-  const result = await db
-    .collection("artworks")
-    .where(whereClause)
-    .count();
+  const result = await db.collection("artworks").where(whereClause).count();
   return Number(result.total || 0);
 }
 
 async function fetchArtworksByTagId(tagId, options) {
   const pageSize = (options && options.pageSize) || PAGE_SIZE;
   const skip = (options && options.skip) || 0;
+  const randomOrder = Boolean(options && options.randomOrder);
   const db = database();
   const whereClause = createArrayContainsWhereClause(db, "tag_ids", String(tagId || "").trim());
   if (!whereClause) return [];
 
-  const result = await db
-    .collection("artworks")
-    .where(whereClause)
-    .orderBy("created_at", "desc")
-    .skip(skip)
-    .limit(pageSize)
-    .get();
+  let query = db.collection("artworks").where(whereClause);
+  query = randomOrder
+    ? query.orderBy("random_bucket", "asc").orderBy("_id", "asc")
+    : query.orderBy("created_at", "desc");
+  const result = await query.skip(skip).limit(pageSize).get();
   return (result.data || []).map(normalizeArtwork);
 }
 
@@ -307,10 +389,7 @@ async function countArtworksByTagId(tagId) {
   const whereClause = createArrayContainsWhereClause(db, "tag_ids", String(tagId || "").trim());
   if (!whereClause) return 0;
 
-  const result = await db
-    .collection("artworks")
-    .where(whereClause)
-    .count();
+  const result = await db.collection("artworks").where(whereClause).count();
   return Number(result.total || 0);
 }
 
@@ -374,6 +453,215 @@ async function countArtworksByTag(tag) {
 
   if (!tagLabel) return 0;
   return countArtworksByTagLabel(tagLabel);
+}
+
+async function fetchArtworksByClassificationId(classificationId, options) {
+  const pageSize = (options && options.pageSize) || PAGE_SIZE;
+  const skip = (options && options.skip) || 0;
+  const db = database();
+  const whereClause = createArrayContainsWhereClause(
+    db,
+    "classification_ids",
+    String(classificationId || "").trim(),
+  );
+  if (!whereClause) return [];
+
+  const result = await db
+    .collection("artworks")
+    .where(whereClause)
+    .orderBy("created_at", "desc")
+    .skip(skip)
+    .limit(pageSize)
+    .get();
+  return (result.data || []).map(normalizeArtwork);
+}
+
+async function countArtworksByClassificationId(classificationId) {
+  const db = database();
+  const whereClause = createArrayContainsWhereClause(
+    db,
+    "classification_ids",
+    String(classificationId || "").trim(),
+  );
+  if (!whereClause) return 0;
+
+  const result = await db.collection("artworks").where(whereClause).count();
+  return Number(result.total || 0);
+}
+
+async function fetchArtworksByRecommendationSignalId(signalId, options) {
+  const pageSize = (options && options.pageSize) || PAGE_SIZE;
+  const skip = (options && options.skip) || 0;
+  const db = database();
+  const whereClause = createArrayContainsWhereClause(
+    db,
+    "recommendation_signal_ids",
+    String(signalId || "").trim(),
+  );
+  if (!whereClause) return [];
+
+  const result = await db
+    .collection("artworks")
+    .where(whereClause)
+    .orderBy("random_bucket", "asc")
+    .orderBy("_id", "asc")
+    .skip(skip)
+    .limit(pageSize)
+    .get();
+  return (result.data || []).map(normalizeArtwork);
+}
+
+async function countArtworksByRecommendationSignalId(signalId) {
+  const db = database();
+  const whereClause = createArrayContainsWhereClause(
+    db,
+    "recommendation_signal_ids",
+    String(signalId || "").trim(),
+  );
+  if (!whereClause) return 0;
+
+  const result = await db.collection("artworks").where(whereClause).count();
+  return Number(result.total || 0);
+}
+
+function normalizeSectionQuery(section) {
+  if (typeof section === "string") {
+    return { type: "tag", id: "", label: section.trim() };
+  }
+  return {
+    type: String((section && section.type) || "tag").trim(),
+    id: String((section && section.id) || "").trim(),
+    label: String((section && section.label) || "").trim(),
+  };
+}
+
+async function fetchArtworksBySection(section, options) {
+  const query = normalizeSectionQuery(section);
+  if (query.type === "artist" && query.id) {
+    return fetchArtworksByArtistId(query.id, options);
+  }
+  if (query.type === "classification" && query.id) {
+    return fetchArtworksByClassificationId(query.id, options);
+  }
+  if (query.type === "signal" && query.id) {
+    const normalizedCount = await countArtworksByRecommendationSignalId(query.id);
+    if (normalizedCount > 0 || !query.label) {
+      return fetchArtworksByRecommendationSignalId(query.id, options);
+    }
+    return fetchArtworksByTagLabel(query.label, options);
+  }
+  return fetchArtworksByTag(query.id ? { id: query.id, label: query.label } : query.label, options);
+}
+
+async function countArtworksBySection(section) {
+  const query = normalizeSectionQuery(section);
+  if (query.type === "artist" && query.id) {
+    return countArtworksByArtistId(query.id);
+  }
+  if (query.type === "classification" && query.id) {
+    return countArtworksByClassificationId(query.id);
+  }
+  if (query.type === "signal" && query.id) {
+    const normalizedCount = await countArtworksByRecommendationSignalId(query.id);
+    if (normalizedCount > 0 || !query.label) return normalizedCount;
+    return countArtworksByTagLabel(query.label);
+  }
+  return countArtworksByTag(query.id ? { id: query.id, label: query.label } : query.label);
+}
+
+function getSectionCountCacheKey(section) {
+  const query = normalizeSectionQuery(section);
+  return `${query.type}:${query.id || query.label}`;
+}
+
+async function getCachedArtworkCountBySection(section, options = {}) {
+  const cacheKey = getSectionCountCacheKey(section);
+  const cached = sectionCountCache[cacheKey];
+  if (!options.forceCount && cached && Date.now() - cached.cachedAt < SECTION_COUNT_CACHE_TTL_MS) {
+    return cached.total;
+  }
+
+  const total = await countArtworksBySection(section);
+  sectionCountCache[cacheKey] = {
+    total,
+    cachedAt: Date.now(),
+  };
+  return total;
+}
+
+async function fetchRandomArtworksBySection(section, options = {}) {
+  const query = normalizeSectionQuery(section);
+  const pageSize = Math.max(1, Math.floor(Number(options.pageSize) || PAGE_SIZE));
+  const random = typeof options.random === "function" ? options.random : Math.random;
+  const excluded = {};
+  (Array.isArray(options.excludeIds) ? options.excludeIds : []).forEach((value) => {
+    const key = String(value || "").trim();
+    if (key) excluded[key] = true;
+  });
+
+  const total = await getCachedArtworkCountBySection(query, options);
+  const excludedCount = Object.keys(excluded).length;
+  const remainingCount = Math.max(0, total - excludedCount);
+  if (!total || !remainingCount) {
+    return {
+      items: [],
+      total,
+      hasMore: false,
+    };
+  }
+
+  const wantedCount = Math.min(pageSize, remainingCount);
+  const batchSize = Math.min(PAGE_SIZE, Math.max(pageSize, 8));
+  const windowCount = Math.max(1, Math.ceil(total / batchSize));
+  const candidateTarget = Math.min(total, Math.max(wantedCount, wantedCount * 3));
+  const initialWindowCount = Math.min(
+    windowCount,
+    Math.max(1, Math.ceil(candidateTarget / batchSize)),
+  );
+  const windowIndexes = shuffleItems(
+    Array.from({ length: windowCount }, (_, index) => index),
+    random,
+  );
+  const firstWindowIndexes = windowIndexes.slice(0, initialWindowCount);
+  const remainingWindowIndexes = windowIndexes.slice(initialWindowCount);
+  const seen = { ...excluded };
+  const candidates = [];
+
+  const collectRows = (rows) => {
+    (rows || []).forEach((item) => {
+      const key = getArtworkKey(item);
+      if (!key || seen[key]) return;
+      seen[key] = true;
+      candidates.push(item);
+    });
+  };
+  const fetchWindow = (windowIndex) =>
+    fetchArtworksBySection(query, {
+      pageSize: batchSize,
+      skip: windowIndex * batchSize,
+      randomOrder: true,
+    });
+
+  const firstResults = await runLimited(
+    firstWindowIndexes.map((windowIndex) => () => fetchWindow(windowIndex)),
+    Math.max(1, Math.floor(Number(options.concurrency) || RANDOM_SECTION_CONCURRENCY)),
+  );
+  firstResults.forEach(collectRows);
+
+  for (
+    let index = 0;
+    index < remainingWindowIndexes.length && candidates.length < wantedCount;
+    index += 1
+  ) {
+    collectRows(await fetchWindow(remainingWindowIndexes[index]));
+  }
+
+  const items = diversifyArtworksByArtist(candidates, { random }).slice(0, wantedCount);
+  return {
+    items,
+    total,
+    hasMore: excludedCount + items.length < total,
+  };
 }
 
 async function fetchArtworksByArtistAliases(aliases, options) {
@@ -443,11 +731,7 @@ function getArtistId(artist) {
 }
 
 function canQueryArtistByTag(db, artist) {
-  return Boolean(
-    getArtistPrimaryTag(artist)
-    && db.command
-    && typeof db.command.all === "function",
-  );
+  return Boolean(getArtistPrimaryTag(artist) && db.command && typeof db.command.all === "function");
 }
 
 function getArtistMatchClauses(db, artist) {
@@ -538,10 +822,7 @@ async function countArtworksByArtist(artist) {
   const whereClause = createArtistWhereClause(db, artist);
 
   if (whereClause) {
-    const result = await db
-      .collection("artworks")
-      .where(whereClause)
-      .count();
+    const result = await db.collection("artworks").where(whereClause).count();
     return Number(result.total || 0);
   }
 
@@ -556,80 +837,68 @@ async function countArtworksByArtist(artist) {
 async function fetchArtworksByArtistId(artistId, options) {
   const pageSize = (options && options.pageSize) || PAGE_SIZE;
   const skip = (options && options.skip) || 0;
+  const randomOrder = Boolean(options && options.randomOrder);
   const db = database();
-  const whereClause = createArrayContainsWhereClause(db, "artist_ids", String(artistId || "").trim());
+  const whereClause = createArrayContainsWhereClause(
+    db,
+    "artist_ids",
+    String(artistId || "").trim(),
+  );
   if (!whereClause) return [];
 
-  const result = await db
-    .collection("artworks")
-    .where(whereClause)
-    .orderBy("created_at", "desc")
-    .skip(skip)
-    .limit(pageSize)
-    .get();
+  let query = db.collection("artworks").where(whereClause);
+  query = randomOrder
+    ? query.orderBy("random_bucket", "asc").orderBy("_id", "asc")
+    : query.orderBy("created_at", "desc");
+  const result = await query.skip(skip).limit(pageSize).get();
   return (result.data || []).map(normalizeArtwork);
 }
 
 async function countArtworksByArtistId(artistId) {
   const db = database();
-  const whereClause = createArrayContainsWhereClause(db, "artist_ids", String(artistId || "").trim());
+  const whereClause = createArrayContainsWhereClause(
+    db,
+    "artist_ids",
+    String(artistId || "").trim(),
+  );
   if (!whereClause) return 0;
 
-  const result = await db
-    .collection("artworks")
-    .where(whereClause)
-    .count();
+  const result = await db.collection("artworks").where(whereClause).count();
   return Number(result.total || 0);
-}
-
-function createSearchFieldRegexp(db, keyword) {
-  return db.RegExp({
-    regexp: escapeRegExp(keyword),
-    options: "i",
-  });
 }
 
 function createSearchCandidateTasks(db, keywords, candidateLimit) {
   const command = db.command;
+  if (!command || typeof command.all !== "function") {
+    throw new Error("当前云数据库不支持数组全量匹配查询");
+  }
+
   const pageCount = Math.max(1, Math.ceil(candidateLimit / PAGE_SIZE));
   const safePageCount = Math.min(pageCount, SEARCH_CANDIDATE_PAGE_COUNT);
   const tasks = [];
+  const seenQueries = {};
 
   keywords.forEach((keyword) => {
-    if (command && typeof command.or === "function") {
-      const clauses = SEARCH_CANDIDATE_FIELDS.map((field) => ({
-        status: "published",
-        [field]: createSearchFieldRegexp(db, keyword),
-      }));
+    const queryTerms = buildSearchQueryTerms(keyword);
+    const queryKey = queryTerms.join("\u0000");
+    if (!queryTerms.length || seenQueries[queryKey]) return;
+    seenQueries[queryKey] = true;
 
-      for (let page = 0; page < safePageCount; page += 1) {
-        const skip = page * PAGE_SIZE;
-        tasks.push(() => db
-          .collection("artworks")
-          .where(command.or(clauses))
-          .orderBy("created_at", "desc")
-          .skip(skip)
-          .limit(PAGE_SIZE)
-          .get());
-      }
-      return;
-    }
-
-    SEARCH_CANDIDATE_FIELDS.forEach((field) => {
-      for (let page = 0; page < Math.min(2, safePageCount); page += 1) {
-        const skip = page * PAGE_SIZE;
-        tasks.push(() => db
+    for (let page = 0; page < safePageCount; page += 1) {
+      const skip = page * PAGE_SIZE;
+      tasks.push(() =>
+        db
           .collection("artworks")
           .where({
             status: "published",
-            [field]: createSearchFieldRegexp(db, keyword),
+            search_terms: command.all(queryTerms),
           })
           .orderBy("created_at", "desc")
           .skip(skip)
           .limit(PAGE_SIZE)
-          .get());
-      }
-    });
+          .get(),
+      );
+    }
   });
 
   return tasks;
@@ -639,7 +908,10 @@ async function fetchSearchCandidates(query, options) {
   const keywords = expandSearchQueries(query);
   if (!keywords.length) return [];
 
-  const candidateLimit = Math.max(Number((options && options.candidateLimit) || 0), PAGE_SIZE * SEARCH_CANDIDATE_PAGE_COUNT);
+  const candidateLimit = Math.max(
+    Number((options && options.candidateLimit) || 0),
+    PAGE_SIZE * SEARCH_CANDIDATE_PAGE_COUNT,
+  );
   const cacheKey = `${normalizeSearchText(query)}:${candidateLimit}`;
   if (searchCandidateCache[cacheKey]) return searchCandidateCache[cacheKey];
 
@@ -662,7 +934,11 @@ async function searchArtworks(query, options) {
 
   const pageSize = (options && options.pageSize) || PAGE_SIZE;
   const skip = (options && options.skip) || 0;
-  const candidateLimit = Math.max(pageSize + skip, pageSize * 3, PAGE_SIZE * SEARCH_CANDIDATE_PAGE_COUNT);
+  const candidateLimit = Math.max(
+    pageSize + skip,
+    pageSize * 3,
+    PAGE_SIZE * SEARCH_CANDIDATE_PAGE_COUNT,
+  );
   const candidates = await fetchSearchCandidates(query, { candidateLimit });
   return searchIndexedArtworks(candidates, query, { limit: pageSize, skip });
 }
@@ -704,7 +980,9 @@ function fallbackArtworkCountByTag(tag) {
 }
 
 function fallbackArtworksByArtistAliases(aliases) {
-  const names = (Array.isArray(aliases) ? aliases : [aliases]).filter(Boolean).map((name) => String(name).toLowerCase());
+  const names = (Array.isArray(aliases) ? aliases : [aliases])
+    .filter(Boolean)
+    .map((name) => String(name).toLowerCase());
   return fallbackArtworks
     .filter((item) => {
       const artist = String(item.artist || "").toLowerCase();
@@ -727,6 +1005,8 @@ module.exports = {
   fetchLatestArtworks,
   fetchRandomArtworks,
   countPublishedArtworks,
+  countRecommendationEligibleArtworks,
+  fetchRecommendationChannels,
   getSelectedClassificationIds,
   fetchArtworksByCategoryFilters,
   countArtworksByCategoryFilters,
@@ -734,6 +1014,13 @@ module.exports = {
   countArtworksByTagId,
   fetchArtworksByTag,
   countArtworksByTag,
+  fetchArtworksByClassificationId,
+  countArtworksByClassificationId,
+  fetchArtworksByRecommendationSignalId,
+  countArtworksByRecommendationSignalId,
+  fetchArtworksBySection,
+  fetchRandomArtworksBySection,
+  countArtworksBySection,
   fetchArtworksByArtistId,
   countArtworksByArtistId,
   fetchArtworksByArtistAliases,
@@ -749,6 +1036,7 @@ module.exports = {
   fallbackSearchArtworks,
   fallbackArtworkById,
   normalizeError,
+  diversifyArtworksByArtist,
   expandSearchQueries,
   normalizeSearchText,
 };

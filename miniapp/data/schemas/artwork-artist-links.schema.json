@@ -20,15 +20,7 @@
     },
     "role": {
       "type": "string",
-      "enum": [
-        "creator",
-        "after",
-        "attributed_to",
-        "workshop",
-        "publisher",
-        "subject",
-        "unknown"
-      ]
+      "enum": ["creator", "after", "attributed_to", "workshop", "publisher", "subject", "unknown"]
     },
     "review_status": {
       "type": "string",

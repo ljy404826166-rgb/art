@@ -1,7 +1,7 @@
 {
   "navigationBarTitleText": "下载管理",
   "usingComponents": {
-    "artwork-card": "/components/artwork-card/artwork-card",
+    "artwork-card": "../../components/artwork-card/artwork-card",
     "empty-state": "/components/empty-state/empty-state"
   }
 }

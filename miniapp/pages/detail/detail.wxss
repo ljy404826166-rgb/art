@@ -150,8 +150,11 @@
 
 .artist-line {
   display: inline-flex;
+  max-width: 100%;
   min-height: 58rpx;
+  box-sizing: border-box;
   align-items: center;
+  overflow: hidden;
   margin-top: 22rpx;
   border-radius: 999rpx;
   padding: 0 28rpx;
@@ -159,6 +162,14 @@
   background: #111111;
   font-size: 26rpx;
   font-weight: 800;
+}
+
+.artist-line text {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .artist-line:active {

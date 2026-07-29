@@ -1,6 +1,6 @@
 <view class="artist-detail-page">
   <view wx:if="{{artist}}" class="artist-hero">
-    <view class="portrait">{{artist.avatarText}}</view>
+    <artist-portrait artist="{{artist}}" size="detail" lazy-load="{{false}}" />
     <text class="artist-name">{{artist.nameZh}}</text>
     <text class="artist-en">{{artist.nameEn}}</text>
     <text class="artist-life">{{artist.nameEn}} ({{artist.lifespan}})</text>
@@ -18,7 +18,7 @@
     </view>
     <view class="info-card">
       <text class="info-label">流派</text>
-      <text class="info-value">{{artist.styles.join('、')}}</text>
+      <text class="info-value">{{artist.stylesText}}</text>
     </view>
     <view class="info-card">
       <text class="info-label">活跃时期</text>
@@ -26,13 +26,13 @@
     </view>
     <view class="info-card">
       <text class="info-label">代表作品</text>
-      <text class="info-value">{{artist.representativeWorks.join('、')}}</text>
+      <text class="info-value">{{artist.representativeWorksText}}</text>
     </view>
   </view>
 
-  <view wx:if="{{artist && artist.tags.length}}" class="tag-row">
-    <block wx:for="{{artist.tags}}" wx:key="*this">
-      <text class="artist-tag">{{item}}</text>
+  <view wx:if="{{artist && artist.tagItems.length}}" class="tag-row">
+    <block wx:for="{{artist.tagItems}}" wx:key="label">
+      <text class="artist-tag" data-tag="{{item.label}}" data-tag-id="{{item.id}}" bindtap="openClassificationTag">{{item.label}}</text>
     </block>
   </view>
 

@@ -1,6 +1,4 @@
-const {
-  normalizeSearchQuery,
-} = require("../../services/search-engine");
+const { normalizeSearchQuery } = require("../../services/search-engine");
 
 function createHomeSearchState(_artworks, query, options) {
   const normalizedQuery = normalizeSearchQuery(query);

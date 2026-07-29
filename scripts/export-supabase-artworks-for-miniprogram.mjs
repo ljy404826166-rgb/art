@@ -104,7 +104,8 @@ function requiredValue(argv, index, flag) {
 
 function parseNonNegativeInteger(value, flag) {
   const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < 0) throw new Error(`${flag} must be a non-negative integer.`);
+  if (!Number.isInteger(parsed) || parsed < 0)
+    throw new Error(`${flag} must be a non-negative integer.`);
   return parsed;
 }
 
@@ -117,7 +118,10 @@ function readEnvFile(filePath) {
     const match = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
     if (!match) continue;
     let value = match[2].trim();
-    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
       value = value.slice(1, -1);
     }
     values[match[1]] = value;
@@ -141,7 +145,8 @@ function resolveSupabaseConfig(env) {
     env.VITE_SUPABASE_PUBLISHABLE_KEY ||
     env.SUPABASE_ANON_KEY;
 
-  if (!url) throw new Error("Missing Supabase URL. Set VITE_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_URL.");
+  if (!url)
+    throw new Error("Missing Supabase URL. Set VITE_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_URL.");
   if (!anonKey) throw new Error("Missing Supabase anon/publishable key.");
 
   return { url, anonKey };
@@ -154,7 +159,11 @@ function nullableString(value) {
 }
 
 function normalizeTags(tags, tagsText) {
-  const raw = Array.isArray(tags) ? tags : typeof tags === "string" ? tags.split(/[,，；、\s]+/u) : [];
+  const raw = Array.isArray(tags)
+    ? tags
+    : typeof tags === "string"
+      ? tags.split(/[,，；、\s]+/u)
+      : [];
   const fromText = typeof tagsText === "string" ? tagsText.split(/[,，；、\s]+/u) : [];
   return [...new Set([...raw, ...fromText].map((tag) => String(tag || "").trim()).filter(Boolean))];
 }
@@ -203,7 +212,8 @@ async function fetchRows(supabase, options) {
   const target = options.limit;
 
   while (target === null || rows.length < target) {
-    const remaining = target === null ? options.batchSize : Math.min(options.batchSize, target - rows.length);
+    const remaining =
+      target === null ? options.batchSize : Math.min(options.batchSize, target - rows.length);
     if (remaining <= 0) break;
 
     const from = offset;
@@ -273,14 +283,20 @@ async function main() {
 
   const rows = await fetchRows(supabase, options);
   const documents = rows.map(toWechatArtwork);
-  const missingImageDocuments = documents.filter((document) => !document.thumbnail_url && !document.display_url);
+  const missingImageDocuments = documents.filter(
+    (document) => !document.thumbnail_url && !document.display_url,
+  );
   const exportDocuments = options.includeMissingImages
     ? documents
     : documents.filter((document) => document.thumbnail_url || document.display_url);
   const validation = validateDocuments(exportDocuments);
   writeJson(options.out, exportDocuments, options.pretty);
   if (missingImageDocuments.length) {
-    writeJson(path.join(path.dirname(options.out), "artworks.missing-images.json"), missingImageDocuments, true);
+    writeJson(
+      path.join(path.dirname(options.out), "artworks.missing-images.json"),
+      missingImageDocuments,
+      true,
+    );
   }
 
   console.log(`Exported ${exportDocuments.length} public artworks to ${options.out}`);

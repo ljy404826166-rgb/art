@@ -9,8 +9,15 @@ const ROW_HEIGHT_RPX = 526;
 function getWindowWidth() {
   if (typeof wx === "undefined") return 375;
   if (wx.getWindowInfo) return wx.getWindowInfo().windowWidth || 375;
-  if (wx.getSystemInfoSync) return wx.getSystemInfoSync().windowWidth || 375;
   return 375;
+}
+
+function afterCurrentRender(callback) {
+  if (typeof wx !== "undefined" && typeof wx.nextTick === "function") {
+    wx.nextTick(callback);
+    return;
+  }
+  setTimeout(callback, 0);
 }
 
 Component({
@@ -22,7 +29,7 @@ Component({
         if (this.shouldResetForItems(items)) {
           this.resetPosition();
         }
-        this.updateMoverWidth(items);
+        this.scheduleMoverWidthUpdate(items);
       },
     },
     sectionIndex: {
@@ -33,7 +40,7 @@ Component({
       type: Boolean,
       value: false,
       observer() {
-        this.updateMoverWidth(this.properties.items);
+        this.scheduleMoverWidthUpdate(this.properties.items);
       },
     },
   },
@@ -45,6 +52,7 @@ Component({
 
   lifetimes: {
     attached() {
+      this.isDetached = false;
       this.currentX = 0;
       this.estimatedMoverWidthRpx = VIEWPORT_WIDTH_RPX;
       this.lastDragAt = 0;
@@ -55,6 +63,11 @@ Component({
       this.firstItemKey = getRowArtworkKey((this.properties.items || [])[0], 0);
       this.itemCount = (this.properties.items || []).length;
       this.rpxToPx = getWindowWidth() / VIEWPORT_WIDTH_RPX;
+      this.scheduleMoverWidthUpdate(this.properties.items);
+    },
+    detached() {
+      this.isDetached = true;
+      this.pendingMoverItems = null;
     },
   },
 
@@ -63,10 +76,10 @@ Component({
       const list = items || [];
       const firstItemKey = getRowArtworkKey(list[0], 0);
       const isAppend = Boolean(
-        this.firstItemKey
-        && firstItemKey
-        && firstItemKey === this.firstItemKey
-        && list.length >= Number(this.itemCount || 0),
+        this.firstItemKey &&
+        firstItemKey &&
+        firstItemKey === this.firstItemKey &&
+        list.length >= Number(this.itemCount || 0),
       );
 
       this.firstItemKey = firstItemKey;
@@ -75,15 +88,33 @@ Component({
       return !isAppend;
     },
 
+    scheduleMoverWidthUpdate(items) {
+      this.pendingMoverItems = items || [];
+      if (this.moverUpdateScheduled) return;
+
+      this.moverUpdateScheduled = true;
+      afterCurrentRender(() => {
+        this.moverUpdateScheduled = false;
+        if (this.isDetached) return;
+
+        const pendingItems = this.pendingMoverItems || this.properties.items || [];
+        this.pendingMoverItems = null;
+        this.updateMoverWidth(pendingItems);
+      });
+    },
+
     updateMoverWidth(items) {
       const moverWidthRpx = estimateRowMoverWidth(items, this.cardWidths || {}, {
         loadingMore: this.properties.loadingMore,
       });
+      const x = this.currentX || 0;
+      const moverStyle = `width: ${moverWidthRpx}rpx; height: ${ROW_HEIGHT_RPX}rpx;`;
       this.estimatedMoverWidthRpx = moverWidthRpx;
-      this.setData({
-        x: this.currentX || 0,
-        moverStyle: `width: ${moverWidthRpx}rpx; height: ${ROW_HEIGHT_RPX}rpx;`,
-      });
+
+      const patch = {};
+      if (Number(this.data.x || 0) !== x) patch.x = x;
+      if (this.data.moverStyle !== moverStyle) patch.moverStyle = moverStyle;
+      if (Object.keys(patch).length) this.setData(patch);
     },
 
     resetPosition() {
@@ -91,7 +122,6 @@ Component({
       this.touchStartX = 0;
       this.movedDuringTouch = false;
       this.lastLowerAt = 0;
-      this.setData({ x: 0 });
     },
 
     maybeTriggerLower(x) {
@@ -150,7 +180,7 @@ Component({
         ...(this.cardWidths || {}),
         [key]: cardWidth,
       };
-      this.updateMoverWidth(this.properties.items);
+      this.scheduleMoverWidthUpdate(this.properties.items);
     },
 
     handleTapCard(event) {

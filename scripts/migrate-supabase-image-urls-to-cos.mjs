@@ -20,7 +20,10 @@ function parseEnvFile(filePath) {
     const match = line.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
     if (!match) continue;
     let value = match[2].trim();
-    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
       value = value.slice(1, -1);
     }
     out[match[1]] = value;
@@ -122,11 +125,15 @@ async function main() {
   const config = env();
   const supabaseUrl = config.SUPABASE_URL || config.VITE_SUPABASE_URL;
   const serviceKey = config.SUPABASE_SERVICE_ROLE_KEY || config.SUPABASE_SERVICE_KEY;
-  if (!supabaseUrl || !serviceKey) throw new Error("Missing SUPABASE_URL/VITE_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.");
+  if (!supabaseUrl || !serviceKey)
+    throw new Error("Missing SUPABASE_URL/VITE_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.");
 
   const idsWithImages = imageIds(options.imageDir);
   fs.mkdirSync(options.reportDir, { recursive: true });
-  const timestamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+  const timestamp = new Date()
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\.\d{3}Z$/, "Z");
   const backupPath = path.join(options.reportDir, `supabase-image-url-backup-${timestamp}.json`);
   const reportPath = path.join(options.reportDir, `supabase-image-url-migration-${timestamp}.json`);
 
@@ -159,9 +166,9 @@ async function main() {
     }))
     .filter(
       (row) =>
-        row.thumbnail_url !== row.next_thumbnail_url
-        || row.display_url !== row.next_display_url
-        || row.download_url !== row.next_download_url,
+        row.thumbnail_url !== row.next_thumbnail_url ||
+        row.display_url !== row.next_display_url ||
+        row.download_url !== row.next_download_url,
     );
 
   const summary = {
@@ -169,14 +176,22 @@ async function main() {
     image_files: idsWithImages.size,
     paintings_total: paintings.length,
     artwork_images_total: imageLinks.length,
-    paintings_old_supabase_urls: paintings.filter((row) => OLD_STORAGE_RE.test(row.display_url || "")).length,
+    paintings_old_supabase_urls: paintings.filter((row) =>
+      OLD_STORAGE_RE.test(row.display_url || ""),
+    ).length,
     artwork_images_old_supabase_urls: imageLinks.filter((row) =>
-      [row.thumbnail_url, row.display_url, row.download_url].some((value) => OLD_STORAGE_RE.test(value || "")),
+      [row.thumbnail_url, row.display_url, row.download_url].some((value) =>
+        OLD_STORAGE_RE.test(value || ""),
+      ),
     ).length,
     paintings_to_update: paintingTargets.length,
     artwork_images_to_update: imageTargets.length,
-    paintings_skipped_no_local_image: paintings.filter((row) => !idsWithImages.has(row.id)).map((row) => row.id),
-    artwork_images_skipped_no_local_image: imageLinks.filter((row) => !idsWithImages.has(row.image_id)).map((row) => row.image_id),
+    paintings_skipped_no_local_image: paintings
+      .filter((row) => !idsWithImages.has(row.id))
+      .map((row) => row.id),
+    artwork_images_skipped_no_local_image: imageLinks
+      .filter((row) => !idsWithImages.has(row.image_id))
+      .map((row) => row.image_id),
     backup_path: backupPath,
     report_path: reportPath,
     failures: [],
@@ -184,11 +199,16 @@ async function main() {
 
   log(`Backup written: ${backupPath}`);
   log(`Paintings to update: ${summary.paintings_to_update}/${summary.paintings_total}`);
-  log(`Artwork image links to update: ${summary.artwork_images_to_update}/${summary.artwork_images_total}`);
+  log(
+    `Artwork image links to update: ${summary.artwork_images_to_update}/${summary.artwork_images_total}`,
+  );
 
   if (options.run) {
     const paintingFailures = await updateInSeries(paintingTargets, async (row) => {
-      const { error } = await supabase.from("paintings").update({ display_url: row.next_display_url }).eq("id", row.id);
+      const { error } = await supabase
+        .from("paintings")
+        .update({ display_url: row.next_display_url })
+        .eq("id", row.id);
       if (error) throw new Error(error.message);
     });
     const imageFailures = await updateInSeries(imageTargets, async (row) => {
@@ -203,8 +223,17 @@ async function main() {
       if (error) throw new Error(error.message);
     });
     summary.failures = [
-      ...paintingFailures.map((failure) => ({ table: "paintings", id: failure.item.id, error: failure.error })),
-      ...imageFailures.map((failure) => ({ table: "artwork_images", id: failure.item.image_id, row_id: failure.item.id, error: failure.error })),
+      ...paintingFailures.map((failure) => ({
+        table: "paintings",
+        id: failure.item.id,
+        error: failure.error,
+      })),
+      ...imageFailures.map((failure) => ({
+        table: "artwork_images",
+        id: failure.item.image_id,
+        row_id: failure.item.id,
+        error: failure.error,
+      })),
     ];
   }
 

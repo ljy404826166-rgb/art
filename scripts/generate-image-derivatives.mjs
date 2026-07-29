@@ -65,7 +65,10 @@ function loadEnvFile(filePath) {
     const match = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
     if (!match) continue;
     let envValue = match[2].trim();
-    if ((envValue.startsWith('"') && envValue.endsWith('"')) || (envValue.startsWith("'") && envValue.endsWith("'"))) {
+    if (
+      (envValue.startsWith('"') && envValue.endsWith('"')) ||
+      (envValue.startsWith("'") && envValue.endsWith("'"))
+    ) {
       envValue = envValue.slice(1, -1);
     }
     env[match[1]] = envValue;
@@ -110,11 +113,11 @@ function isEligible(row) {
   const downloadUrl = String(row.download_url || "").trim();
   return Boolean(
     thumbnailUrl &&
-      displayUrl &&
-      downloadUrl &&
-      thumbnailUrl === displayUrl &&
-      displayUrl === downloadUrl &&
-      isStoragePublicUrl(downloadUrl),
+    displayUrl &&
+    downloadUrl &&
+    thumbnailUrl === displayUrl &&
+    displayUrl === downloadUrl &&
+    isStoragePublicUrl(downloadUrl),
   );
 }
 
@@ -176,13 +179,16 @@ async function loadSharp() {
     const module = await import("sharp");
     return module.default || module;
   } catch (error) {
-    throw new Error("sharp is required for --apply. Install it with: npm.cmd install --save-dev sharp");
+    throw new Error(
+      "sharp is required for --apply. Install it with: npm.cmd install --save-dev sharp",
+    );
   }
 }
 
 async function fetchSourceImage(url) {
   const response = await fetch(url);
-  if (!response.ok) throw new Error(`Source fetch failed (${response.status}) for ${sanitizedUrl(url)}`);
+  if (!response.ok)
+    throw new Error(`Source fetch failed (${response.status}) for ${sanitizedUrl(url)}`);
   const contentType = response.headers.get("content-type") || "";
   if (!contentType.startsWith("image/")) {
     throw new Error(`Source is not an image (${contentType}) for ${sanitizedUrl(url)}`);
@@ -227,12 +233,20 @@ async function validateCurrentArtworkImage(supabase, row) {
 
   if (error) throw new Error(`DB validation failed for ${row.imageId}: ${error.message}`);
   if (!Array.isArray(data) || data.length !== 1) {
-    return { ok: false, reason: "skipped_db_changed", detail: "image_id lookup did not return exactly one row" };
+    return {
+      ok: false,
+      reason: "skipped_db_changed",
+      detail: "image_id lookup did not return exactly one row",
+    };
   }
 
   const current = data[0];
   if (current.id !== row.artworkImageId || !isEligible(current)) {
-    return { ok: false, reason: "skipped_db_changed", detail: "current DB URLs are no longer eligible" };
+    return {
+      ok: false,
+      reason: "skipped_db_changed",
+      detail: "current DB URLs are no longer eligible",
+    };
   }
 
   return { ok: true, current };
@@ -311,14 +325,20 @@ async function main() {
 
   if (!args.apply) {
     writeJson(args.manifest, manifest);
-    console.log(JSON.stringify({
-      mode: "dry-run",
-      manifest: args.manifest,
-      readRows: rows.length,
-      eligibleRows: eligibleRows.length,
-      skippedRows: rows.length - eligibleRows.length,
-      note: "No images downloaded, no files uploaded, no database rows updated.",
-    }, null, 2));
+    console.log(
+      JSON.stringify(
+        {
+          mode: "dry-run",
+          manifest: args.manifest,
+          readRows: rows.length,
+          eligibleRows: eligibleRows.length,
+          skippedRows: rows.length - eligibleRows.length,
+          note: "No images downloaded, no files uploaded, no database rows updated.",
+        },
+        null,
+        2,
+      ),
+    );
     return;
   }
 
@@ -339,16 +359,18 @@ async function main() {
         displayObjectExists: displayExists,
       };
       processedRows.push(skipped);
-      console.log(JSON.stringify({
-        imageId: row.imageId,
-        thumbnailObjectPath: row.thumbnailObjectPath,
-        displayObjectPath: row.displayObjectPath,
-        updated: false,
-        skipped: true,
-        reason: "skipped_object_exists",
-        thumbnailObjectExists: thumbnailExists,
-        displayObjectExists: displayExists,
-      }));
+      console.log(
+        JSON.stringify({
+          imageId: row.imageId,
+          thumbnailObjectPath: row.thumbnailObjectPath,
+          displayObjectPath: row.displayObjectPath,
+          updated: false,
+          skipped: true,
+          reason: "skipped_object_exists",
+          thumbnailObjectExists: thumbnailExists,
+          displayObjectExists: displayExists,
+        }),
+      );
       continue;
     }
 
@@ -367,13 +389,15 @@ async function main() {
         error: error instanceof Error ? error.message : String(error),
       };
       processedRows.push(failed);
-      console.log(JSON.stringify({
-        imageId: row.imageId,
-        updated: false,
-        skipped: true,
-        reason: failed.reason,
-        error: failed.error,
-      }));
+      console.log(
+        JSON.stringify({
+          imageId: row.imageId,
+          updated: false,
+          skipped: true,
+          reason: failed.reason,
+          error: failed.error,
+        }),
+      );
       continue;
     }
 
@@ -391,13 +415,15 @@ async function main() {
         error: error instanceof Error ? error.message : String(error),
       };
       processedRows.push(failed);
-      console.log(JSON.stringify({
-        imageId: row.imageId,
-        updated: false,
-        skipped: true,
-        reason: failed.reason,
-        error: failed.error,
-      }));
+      console.log(
+        JSON.stringify({
+          imageId: row.imageId,
+          updated: false,
+          skipped: true,
+          reason: failed.reason,
+          error: failed.error,
+        }),
+      );
       continue;
     }
 
@@ -413,17 +439,19 @@ async function main() {
       reason: updateResult.reason,
     });
 
-    console.log(JSON.stringify({
-      imageId: row.imageId,
-      sourcePath: row.sourcePath,
-      thumbnailObjectPath: row.thumbnailObjectPath,
-      displayObjectPath: row.displayObjectPath,
-      thumbnailBytes: thumbnailBuffer.length,
-      displayBytes: displayBuffer.length,
-      updated: updateResult.updated,
-      skipped: updateResult.skipped,
-      reason: updateResult.reason,
-    }));
+    console.log(
+      JSON.stringify({
+        imageId: row.imageId,
+        sourcePath: row.sourcePath,
+        thumbnailObjectPath: row.thumbnailObjectPath,
+        displayObjectPath: row.displayObjectPath,
+        thumbnailBytes: thumbnailBuffer.length,
+        displayBytes: displayBuffer.length,
+        updated: updateResult.updated,
+        skipped: updateResult.skipped,
+        reason: updateResult.reason,
+      }),
+    );
   }
 
   writeJson(args.manifest, {
@@ -439,17 +467,23 @@ async function main() {
     rows: rollbackRows,
   });
 
-  console.log(JSON.stringify({
-    mode: "apply",
-    manifest: args.manifest,
-    rollbackManifest: args.rollbackManifest,
-    readRows: rows.length,
-    eligibleRows: eligibleRows.length,
-    uploadedObjects: processedRows.filter((row) => row.updated).length * 2,
-    updatedRows: processedRows.filter((row) => row.updated).length,
-    skippedRows: processedRows.filter((row) => row.skipped).length,
-    note: "download_url preserved; original objects were not deleted or overwritten.",
-  }, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        mode: "apply",
+        manifest: args.manifest,
+        rollbackManifest: args.rollbackManifest,
+        readRows: rows.length,
+        eligibleRows: eligibleRows.length,
+        uploadedObjects: processedRows.filter((row) => row.updated).length * 2,
+        updatedRows: processedRows.filter((row) => row.updated).length,
+        skippedRows: processedRows.filter((row) => row.skipped).length,
+        note: "download_url preserved; original objects were not deleted or overwritten.",
+      },
+      null,
+      2,
+    ),
+  );
 }
 
 main().catch((error) => {

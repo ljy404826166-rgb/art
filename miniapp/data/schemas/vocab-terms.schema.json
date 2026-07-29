@@ -16,7 +16,12 @@
         "style",
         "subject",
         "medium",
+        "technique",
+        "support",
         "period",
+        "format",
+        "series",
+        "rights",
         "region",
         "country",
         "collection",
@@ -30,6 +35,10 @@
     "label_en": {
       "type": "string"
     },
+    "period_kind": {
+      "type": "string",
+      "enum": ["", "decade", "century", "era"]
+    },
     "aliases": {
       "type": "array",
       "items": {
@@ -38,9 +47,42 @@
       },
       "uniqueItems": true
     },
+    "parent_id": {
+      "type": ["string", "null"]
+    },
+    "artist_id": {
+      "type": ["string", "null"]
+    },
     "review_status": {
       "type": "string",
       "enum": ["candidate", "reviewed", "rejected"]
+    },
+    "publish_status": {
+      "type": "string",
+      "enum": ["draft", "published", "archived"]
+    },
+    "display_enabled": {
+      "type": "boolean"
+    },
+    "usage_scopes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["classification_filter", "recommendation", "search", "metadata", "eligibility"]
+      },
+      "uniqueItems": true
+    },
+    "sort_order": {
+      "type": "integer"
+    },
+    "taxonomy_version": {
+      "type": "string"
+    },
+    "target_classification_version": {
+      "type": "string"
+    },
+    "merged_into_term_id": {
+      "type": ["string", "null"]
     },
     "sources": {
       "type": "array",

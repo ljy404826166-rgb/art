@@ -19,42 +19,30 @@
             class="expand-button {{item.expanded ? 'is-expanded' : ''}}"
             data-group="{{item.key}}"
             bindtap="toggleGroup"
+            hover-class="is-pressed"
+            hover-start-time="0"
+            hover-stay-time="80"
           >
             <image class="expand-icon" src="/assets/icons/lucide/svg/chevron-down.svg" mode="aspectFit" />
           </view>
         </view>
 
-        <scroll-view
-          wx:if="{{!item.expanded}}"
-          class="chip-scroll"
-          scroll-x="true"
-          show-scrollbar="false"
-        >
-          <view class="chip-track">
-            <block wx:for="{{item.visibleTags}}" wx:key="id" wx:for-item="tag">
+        <view class="chip-clip" style="{{item.panelStyle}}">
+          <view class="chip-wrap chip-measure">
+            <block wx:for="{{item.tags}}" wx:key="id" wx:for-item="tag">
               <view
                 class="tag-chip {{tag.selected ? 'is-active' : ''}}"
                 bindtap="selectTag"
                 data-group="{{item.key}}"
                 data-tag-id="{{tag.id}}"
+                hover-class="is-pressed"
+                hover-start-time="0"
+                hover-stay-time="80"
               >
                 <text class="tag-label">{{tag.label}}</text>
               </view>
             </block>
           </view>
-        </scroll-view>
-
-        <view wx:else class="chip-wrap">
-          <block wx:for="{{item.visibleTags}}" wx:key="id" wx:for-item="tag">
-            <view
-              class="tag-chip {{tag.selected ? 'is-active' : ''}}"
-              bindtap="selectTag"
-              data-group="{{item.key}}"
-              data-tag-id="{{tag.id}}"
-            >
-              <text class="tag-label">{{tag.label}}</text>
-            </view>
-          </block>
         </view>
       </view>
     </block>
@@ -62,15 +50,14 @@
 
   <view class="result-head">
     <text class="section-title">分类结果</text>
-    <view class="result-meta">
-      <button
-        wx:if="{{hasActiveFilters}}"
+    <view wx:if="{{hasActiveFilters}}" class="result-meta">
+      <view
         class="clear-filter-button"
+        aria-role="button"
         bindtap="clearFilters"
       >
         清除筛选
-      </button>
-      <text class="result-count">{{loading ? '读取中' : resultCountText}}</text>
+      </view>
     </view>
   </view>
 

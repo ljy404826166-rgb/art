@@ -10,15 +10,24 @@ const DEFAULT_OUT_DIR = "D:/art/csv";
 const LEONARDO_TITLES = new Map([
   ["Ginevra de' Benci (obverse)", "吉内芙拉·德·本奇肖像（正面）"],
   ["The Mona Lisa", "蒙娜丽莎"],
-  ["Wreath of Laurel, Palm, and Juniper with a Scroll inscribed Virtutem Forma Decorat", "月桂、棕榈与杜松花环及题铭卷轴"],
+  [
+    "Wreath of Laurel, Palm, and Juniper with a Scroll inscribed Virtutem Forma Decorat",
+    "月桂、棕榈与杜松花环及题铭卷轴",
+  ],
   ["Madonna of the Carnation", "康乃馨圣母"],
-  ["Lady with an Ermine – Portrait of Cecilia Gallerani (ca.1473–1536)", "抱银貂的女子：切奇莉娅·加莱拉尼肖像"],
+  [
+    "Lady with an Ermine – Portrait of Cecilia Gallerani (ca.1473–1536)",
+    "抱银貂的女子：切奇莉娅·加莱拉尼肖像",
+  ],
   ["Virgin and Child", "圣母子"],
   ["The Virgin of the Rocks", "岩间圣母"],
   ["Salvator Mundi", "救世主"],
   ["The Virgin and Child with St. Anne", "圣母子与圣安妮"],
   ["Study of a Madonna (verso)", "圣母习作（背面）"],
-  ["Compositional Sketches for the Virgin Adoring the Christ Child, with and without the Infant St. John the Baptist; Diagram of a Perspectival Projection", "圣母敬拜圣婴构图习作及透视投影图"],
+  [
+    "Compositional Sketches for the Virgin Adoring the Christ Child, with and without the Infant St. John the Baptist; Diagram of a Perspectival Projection",
+    "圣母敬拜圣婴构图习作及透视投影图",
+  ],
   ["The Head of the Virgin in Three-Quarter View Facing Right", "圣母头像，四分之三侧面向右"],
   ["Caricature of a Man with Bushy Hair", "蓬发男子讽刺头像"],
   ["Studies for the Christ Child with a Lamb", "圣婴与羔羊习作"],
@@ -30,9 +39,15 @@ const LEONARDO_TITLES = new Map([
 const LOCATION_BY_TITLE = new Map([
   ["Ginevra de' Benci (obverse)", "美国华盛顿国家美术馆 (National Gallery of Art, Washington)"],
   ["The Mona Lisa", "法国巴黎卢浮宫 (Musée du Louvre)"],
-  ["Wreath of Laurel, Palm, and Juniper with a Scroll inscribed Virtutem Forma Decorat", "美国华盛顿国家美术馆 (National Gallery of Art, Washington)（推测）"],
+  [
+    "Wreath of Laurel, Palm, and Juniper with a Scroll inscribed Virtutem Forma Decorat",
+    "美国华盛顿国家美术馆 (National Gallery of Art, Washington)（推测）",
+  ],
   ["Madonna of the Carnation", "德国慕尼黑老绘画陈列馆 (Alte Pinakothek, Munich)"],
-  ["Lady with an Ermine – Portrait of Cecilia Gallerani (ca.1473–1536)", "波兰克拉科夫恰尔托雷斯基博物馆 (Czartoryski Museum, Kraków)"],
+  [
+    "Lady with an Ermine – Portrait of Cecilia Gallerani (ca.1473–1536)",
+    "波兰克拉科夫恰尔托雷斯基博物馆 (Czartoryski Museum, Kraków)",
+  ],
   ["Salvator Mundi", "私人收藏 (Private Collection)（推测）"],
   ["The Virgin and Child with St. Anne", "法国巴黎卢浮宫 (Musée du Louvre)"],
 ]);
@@ -40,9 +55,15 @@ const LOCATION_BY_TITLE = new Map([
 const MEDIUM_BY_TITLE = new Map([
   ["Ginevra de' Benci (obverse)", "木板油画 (Oil on panel)"],
   ["The Mona Lisa", "杨木板油画 (Oil on poplar panel)"],
-  ["Wreath of Laurel, Palm, and Juniper with a Scroll inscribed Virtutem Forma Decorat", "木板蛋彩与油彩（推测）"],
+  [
+    "Wreath of Laurel, Palm, and Juniper with a Scroll inscribed Virtutem Forma Decorat",
+    "木板蛋彩与油彩（推测）",
+  ],
   ["Madonna of the Carnation", "木板油画 (Oil on panel)"],
-  ["Lady with an Ermine – Portrait of Cecilia Gallerani (ca.1473–1536)", "木板油画 (Oil on walnut panel)"],
+  [
+    "Lady with an Ermine – Portrait of Cecilia Gallerani (ca.1473–1536)",
+    "木板油画 (Oil on walnut panel)",
+  ],
   ["The Virgin and Child with St. Anne", "木板油画 (Oil on panel)"],
   ["Salvator Mundi", "木板油画 (Oil on walnut panel)（推测）"],
 ]);
@@ -52,11 +73,16 @@ function sleep(ms) {
 }
 
 function csvTimestamp() {
-  return new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+  return new Date()
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\.\d{3}Z$/, "Z");
 }
 
 function clean(value) {
-  return String(value || "").replace(/\s+/g, " ").trim();
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function normalizeYear(value) {
@@ -78,7 +104,8 @@ function locationFor(artwork) {
 function mediumFor(artwork) {
   if (MEDIUM_BY_TITLE.has(artwork.titleEn)) return MEDIUM_BY_TITLE.get(artwork.titleEn);
   if ((artwork.tags || []).includes("Drawings")) return "纸本素描（推测）";
-  if ((artwork.tags || []).includes("Religion") || (artwork.tags || []).includes("Figurative")) return "木板油画（推测）";
+  if ((artwork.tags || []).includes("Religion") || (artwork.tags || []).includes("Figurative"))
+    return "木板油画（推测）";
   return UNKNOWN;
 }
 
@@ -93,10 +120,12 @@ function yearAndPlaceFor(artwork) {
 
 function subjectFor(artwork) {
   const title = `${artwork.titleEn} ${titleCn(artwork.titleEn)}`.toLowerCase();
-  if (/mona lisa|ginevra|lady|portrait|head|caricature|肖像|头像|女子|男子/.test(title)) return "portrait";
+  if (/mona lisa|ginevra|lady|portrait|head|caricature|肖像|头像|女子|男子/.test(title))
+    return "portrait";
   if (/madonna|virgin|christ|salvator|圣母|圣婴|救世主/.test(title)) return "religion";
   if (/wreath|laurel|scroll|花环|卷轴/.test(title)) return "emblem";
-  if (/machinery|projection|studies|sketches|study|sheet|bear|机械|透视|习作|熊/.test(title)) return "drawing";
+  if (/machinery|projection|studies|sketches|study|sheet|bear|机械|透视|习作|熊/.test(title))
+    return "drawing";
   return "drawing";
 }
 
@@ -137,7 +166,8 @@ async function fetchText(url) {
       accept: "text/html,application/xhtml+xml",
     },
   });
-  if (!response.ok) throw new Error(`Fetch failed ${response.status} ${response.statusText}: ${url}`);
+  if (!response.ok)
+    throw new Error(`Fetch failed ${response.status} ${response.statusText}: ${url}`);
   return response.text();
 }
 
@@ -174,18 +204,24 @@ async function main() {
   const badDescriptions = rows
     .filter((row) => row.description.length < 250 || row.description.length > 400)
     .map((row) => ({ id: row.id, length: row.description.length }));
-  console.log(JSON.stringify({
-    artistUrl,
-    outputPath,
-    rows: rows.length,
-    badDescriptions,
-    unresolved: {
-      location: rows.filter((row) => row.location === UNKNOWN).length,
-      dimensions: rows.filter((row) => row.dimensions === UNKNOWN).length,
-      medium: rows.filter((row) => row.medium === UNKNOWN).length,
-      year_and_place: rows.filter((row) => row.year_and_place === UNKNOWN).length,
-    },
-  }, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        artistUrl,
+        outputPath,
+        rows: rows.length,
+        badDescriptions,
+        unresolved: {
+          location: rows.filter((row) => row.location === UNKNOWN).length,
+          dimensions: rows.filter((row) => row.dimensions === UNKNOWN).length,
+          medium: rows.filter((row) => row.medium === UNKNOWN).length,
+          year_and_place: rows.filter((row) => row.year_and_place === UNKNOWN).length,
+        },
+      },
+      null,
+      2,
+    ),
+  );
 }
 
 await main();

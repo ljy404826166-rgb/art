@@ -1,3 +1,5 @@
+const { buildClassificationTagItems } = require("./classification-tags");
+
 const fallbackArtworks = [
   {
     _id: "artwork_starry_night",
@@ -138,7 +140,9 @@ function normalizeYear(value) {
   const text = String(value || "").trim();
   if (!text) return "年代暂未收录";
 
-  const match = text.match(/(约|大约|约公元|公元|c\.|ca\.|circa)?\s*(\d{3,4})(?:\s*[–—-]\s*(\d{2,4}))?\s*年?/i);
+  const match = text.match(
+    /(约|大约|约公元|公元|c\.|ca\.|circa)?\s*(\d{3,4})(?:\s*[–—-]\s*(\d{2,4}))?\s*年?/i,
+  );
   if (!match) return text.split(/[，,；;]/)[0].trim() || "年代暂未收录";
 
   const prefix = /^(约|大约)$/i.test(match[1] || "") ? "约" : "";
@@ -167,9 +171,16 @@ function normalizeMedium(medium) {
 function normalizeArtwork(record) {
   const item = record || {};
   const id = item._id || (item.supabase_id ? `artwork_${item.supabase_id}` : "");
-  const tags = Array.isArray(item.tag_keys) ? item.tag_keys : Array.isArray(item.tags) ? item.tags : [];
+  const tags = Array.isArray(item.tag_keys)
+    ? item.tag_keys
+    : Array.isArray(item.tags)
+      ? item.tags
+      : [];
   const title = item.title_cn || item.title || "未命名作品";
   const sourceName = item.source_name || "";
+  const classificationIds = Array.isArray(item.classification_ids)
+    ? item.classification_ids.slice()
+    : [];
 
   return {
     _id: id,
@@ -186,6 +197,11 @@ function normalizeArtwork(record) {
     description: item.description || "这条作品资料仍在完善。",
     tags,
     tag_keys: tags,
+    tag_ids: Array.isArray(item.tag_ids) ? item.tag_ids.slice() : [],
+    artist_ids: Array.isArray(item.artist_ids) ? item.artist_ids.slice() : [],
+    artist_labels: Array.isArray(item.artist_labels) ? item.artist_labels.slice() : [],
+    classification_ids: classificationIds,
+    classificationTags: buildClassificationTagItems(classificationIds),
     cloud_file_id: item.cloud_file_id || "",
     display_url: item.display_url || "",
     download_url: item.download_url || "",
@@ -200,7 +216,14 @@ function normalizeArtwork(record) {
 
 function fallbackById(id) {
   const wanted = String(id || "");
-  return fallbackArtworks.find((item) => item._id === wanted || item.supabase_id === wanted || `artwork_${item.supabase_id}` === wanted) || null;
+  return (
+    fallbackArtworks.find(
+      (item) =>
+        item._id === wanted ||
+        item.supabase_id === wanted ||
+        `artwork_${item.supabase_id}` === wanted,
+    ) || null
+  );
 }
 
 module.exports = {

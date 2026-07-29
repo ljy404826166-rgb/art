@@ -1,10 +1,37 @@
 <view class="profile-page">
-  <view class="profile-hero">
-    <view class="avatar">{{user.avatarText}}</view>
+  <view class="profile-hero {{user.loading ? 'is-loading' : ''}}">
+    <view class="avatar">
+      <image
+        wx:if="{{user.avatarUrl}}"
+        class="avatar-image"
+        src="{{user.avatarUrl}}"
+        mode="aspectFill"
+      />
+      <text wx:else>{{user.avatarText}}</text>
+    </view>
     <view class="profile-copy">
-      <text class="profile-kicker">PRIVATE ROOM</text>
+      <view
+        class="profile-title-link profile-kicker {{user.isDefaultAchievementTitle ? 'is-default' : 'is-earned'}}"
+        aria-label="当前佩戴头衔：{{user.achievementTitle}}，查看我的成就"
+        aria-role="button"
+        bindtap="openAchievements"
+        hover-class="profile-title-hover"
+      >
+        <text class="profile-kicker-text">{{user.achievementTitle}}</text>
+      </view>
       <text class="profile-name">{{user.name}}</text>
-      <text class="profile-role">{{user.role}}</text>
+      <text wx:if="{{user.role}}" class="profile-role">{{user.role}}</text>
+    </view>
+    <view class="profile-state">
+      <text class="profile-state-label">{{user.statusLabel}}</text>
+      <button
+        wx:if="{{user.showRetry}}"
+        class="profile-retry"
+        disabled="{{user.loading}}"
+        bindtap="retryAccount"
+      >
+        重试
+      </button>
     </view>
   </view>
 
@@ -33,16 +60,17 @@
                 <image class="menu-icon" src="{{menuItem.icon}}" mode="aspectFit" />
                 <text class="menu-label">{{menuItem.label}}</text>
               </view>
-              <text class="menu-arrow">›</text>
+              <text wx:if="{{menuItem.disabled}}" class="menu-status">{{menuItem.status}}</text>
+              <image
+                wx:else
+                class="menu-arrow"
+                src="/assets/icons/lucide/svg/chevron-right.svg"
+                mode="aspectFit"
+              />
             </view>
           </block>
         </view>
       </view>
     </block>
   </view>
-
-  <button class="logout-button" bindtap="handleLogout">
-    <image class="logout-icon" src="/assets/icons/lucide/svg/log-out.svg" mode="aspectFit" />
-    <text>退出登录</text>
-  </button>
 </view>

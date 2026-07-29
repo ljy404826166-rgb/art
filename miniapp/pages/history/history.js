@@ -1,7 +1,5 @@
-const {
-  clearHistoryArtworks,
-  getHistoryArtworks,
-} = require("../../services/local-library");
+const { clearLocalHistoryArtworks, getHistoryArtworks } = require("../../services/local-library");
+const { suspendLibrarySyncForSession } = require("../../services/user-library-sync");
 
 Page({
   data: {
@@ -22,12 +20,14 @@ Page({
     if (this.data.artworks.length === 0) return;
     wx.showModal({
       title: "清空浏览历史",
-      content: "清空后，本机浏览历史将无法恢复。",
+      content:
+        "只清除当前设备上的浏览历史，不影响云端、其他设备或下载图片。重新进入小程序并同步后，云端历史可能恢复。",
       confirmText: "清空",
       confirmColor: "#111111",
       success: (result) => {
         if (!result.confirm) return;
-        clearHistoryArtworks();
+        suspendLibrarySyncForSession();
+        clearLocalHistoryArtworks();
         this.refreshHistory();
       },
     });

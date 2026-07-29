@@ -1,26 +1,31 @@
+const artworkService = require("../../services/artworks");
 const {
   fetchRandomArtworks,
-  fetchArtworksByTag,
+  fetchRandomArtworksBySection,
+  diversifyArtworksByArtist,
   searchArtworks: searchCloudArtworks,
   fallbackSearchArtworks,
   fallbackLatestArtworks,
   normalizeError,
-} = require("../../services/artworks");
+} = artworkService;
+const fetchRecommendationChannels =
+  artworkService.fetchRecommendationChannels || (() => Promise.resolve([]));
 const {
   createPaginatedSection,
   getArtworkKey,
   getFreshArtworkBatch,
 } = require("./home-pagination");
-const {
-  createHomeSearchState,
-} = require("./home-search");
+const { createHomeSearchState } = require("./home-search");
+const { DEFAULT_SEARCH_PLACEHOLDER, pickRandomArtworkTitle } = require("./home-placeholder");
+const { getHomeSectionQuery, resolveHomeSectionQuery } = require("./home-sections");
 
 const SECTION_LIMIT = 8;
 const SECTION_APPEND_LIMIT = 4;
 const ROW_LIMIT = 8;
-const HOME_SAMPLE_SIZE = 120;
+const HOME_SAMPLE_SIZE = 60;
 const SEARCH_PAGE_SIZE = 20;
 const SEARCH_DEBOUNCE_MS = 250;
+const SECTION_HYDRATE_CONCURRENCY = 2;
 
 function shuffleItems(items) {
   const shuffled = items.slice();
@@ -36,7 +41,8 @@ function shuffleItems(items) {
 function withCardClass(items, startIndex = 0) {
   return items.map((item, index) => ({
     ...item,
-    homeCardClass: (startIndex + index) % 5 === 1 || (startIndex + index) % 5 === 4 ? "is-wide" : "is-compact",
+    homeCardClass:
+      (startIndex + index) % 5 === 1 || (startIndex + index) % 5 === 4 ? "is-wide" : "is-compact",
   }));
 }
 
@@ -54,45 +60,150 @@ function artworkHasTag(item, tag) {
   return Boolean(tag && (item.tags || item.tag_keys || []).includes(tag));
 }
 
+function channelQuery(channel) {
+  if (!channel) return { type: "tag", id: "", label: "" };
+  if (channel.kind === "artist") {
+    return { type: "artist", id: channel.query_value, label: channel.title };
+  }
+  if (channel.kind === "signal") {
+    return { type: "signal", id: channel.query_value, label: channel.title };
+  }
+  if (channel.query_field === "classification_ids") {
+    return { type: "classification", id: channel.query_value, label: channel.title };
+  }
+  return { type: "tag", id: channel.query_value, label: channel.title };
+}
+
+function artworkMatchesChannel(item, channel) {
+  const query = channelQuery(channel);
+  if (!query.id) return artworkHasTag(item, query.label);
+  const field = {
+    artist: "artist_ids",
+    signal: "recommendation_signal_ids",
+    classification: "classification_ids",
+    tag: "tag_ids",
+  }[query.type];
+  return Array.isArray(item && item[field]) && item[field].includes(query.id);
+}
+
+function createChannelSection(channel, artworks, index) {
+  const query = channelQuery(channel);
+  const items = withCardClass(
+    diversifyArtworksByArtist(
+      (artworks || []).filter((item) => artworkMatchesChannel(item, channel)),
+    ).slice(0, ROW_LIMIT),
+  );
+  return createPaginatedSection(
+    {
+      key: channel.channel_key || `channel:${index}`,
+      title: channel.title,
+      tag: channel.title,
+      targetTag: channel.title,
+      queryType: query.type,
+      queryId: query.id,
+      queryLabel: query.label,
+      moreUrl: `/pages/tag/tag?tag=${encodeURIComponent(channel.title || "")}`,
+      scrollLeft: 0,
+      hydrated: false,
+      skip: 0,
+      hasMore: true,
+      showMore: true,
+      items,
+    },
+    { rowLimit: ROW_LIMIT },
+  );
+}
+
+function buildChannelSections(artworks, channels) {
+  const recommendation = createPaginatedSection(
+    {
+      key: "recommendation",
+      title: "推荐",
+      items: withCardClass(diversifyArtworksByArtist(artworks || []).slice(0, ROW_LIMIT)),
+      isRecommendation: true,
+      scrollLeft: 0,
+      hasMore: true,
+      showMore: false,
+      targetTag: "",
+    },
+    { rowLimit: ROW_LIMIT },
+  );
+  return [
+    recommendation,
+    ...(channels || [])
+      .slice(0, SECTION_LIMIT)
+      .map((channel, index) => createChannelSection(channel, artworks, index)),
+  ];
+}
+
+function buildAppendChannelSections(channels, artworks, start, limit) {
+  return (channels || [])
+    .slice(start, start + limit)
+    .map((channel, index) => createChannelSection(channel, artworks, start + index));
+}
+
 function buildSections(artworks, sectionLimit = SECTION_LIMIT) {
-  const shuffled = withCardClass(shuffleItems(artworks));
-  const recommendationItems = shuffled.slice(0, ROW_LIMIT);
+  const shuffled = shuffleItems(artworks);
+  const recommendationItems = withCardClass(
+    diversifyArtworksByArtist(shuffled).slice(0, ROW_LIMIT),
+  );
   const usedInRecommendation = {};
   recommendationItems.forEach((item) => {
     usedInRecommendation[item._id || item.id] = true;
   });
 
   const sections = [
-    createPaginatedSection({
-      key: "recommendation",
-      title: "推荐",
-      items: recommendationItems,
-      isRecommendation: true,
-      scrollLeft: 0,
-      hasMore: true,
-      showMore: false,
-      targetTag: "",
-    }, { rowLimit: ROW_LIMIT }),
+    createPaginatedSection(
+      {
+        key: "recommendation",
+        title: "推荐",
+        items: recommendationItems,
+        isRecommendation: true,
+        scrollLeft: 0,
+        hasMore: true,
+        showMore: false,
+        targetTag: "",
+      },
+      { rowLimit: ROW_LIMIT },
+    ),
   ];
 
   uniqueTags(shuffled)
     .slice(0, sectionLimit)
     .forEach((tag) => {
-      const candidates = shuffled.filter((item) => (item.tags || item.tag_keys || []).includes(tag));
+      const candidates = shuffled.filter((item) =>
+        (item.tags || item.tag_keys || []).includes(tag),
+      );
       const freshItems = candidates.filter((item) => !usedInRecommendation[item._id || item.id]);
-      const items = withCardClass((freshItems.length >= 3 ? freshItems : candidates).slice(0, ROW_LIMIT));
+      const items = withCardClass(
+        diversifyArtworksByArtist(freshItems.length >= 3 ? freshItems : candidates).slice(
+          0,
+          ROW_LIMIT,
+        ),
+      );
       if (items.length) {
-        sections.push(createPaginatedSection({
-          key: `tag:${tag}`,
-          title: tag,
-          tag,
-          targetTag: tag,
-          moreUrl: `/pages/tag/tag?tag=${encodeURIComponent(tag)}`,
-          scrollLeft: 0,
-          hasMore: true,
-          showMore: true,
-          items,
-        }, { rowLimit: ROW_LIMIT }));
+        const query = resolveHomeSectionQuery(tag, candidates);
+        sections.push(
+          createPaginatedSection(
+            {
+              key: `tag:${tag}`,
+              title: tag,
+              tag,
+              targetTag: tag,
+              queryType: query.type,
+              queryId: query.id,
+              queryLabel: query.label,
+              moreUrl: `/pages/tag/tag?tag=${encodeURIComponent(tag)}`,
+              scrollLeft: 0,
+              hydrated: false,
+              skip: 0,
+              hasMore: true,
+              showMore: true,
+              items,
+            },
+            { rowLimit: ROW_LIMIT },
+          ),
+        );
       }
     });
 
@@ -129,7 +240,7 @@ function getNewUniqueArtworks(existing, incoming) {
 }
 
 function buildAppendSections(artworks, existingSections, batchIndex) {
-  const shuffled = withCardClass(shuffleItems(artworks));
+  const shuffled = shuffleItems(artworks);
   const existingTags = {};
   (existingSections || []).forEach((section) => {
     if (section && section.tag) existingTags[section.tag] = true;
@@ -138,35 +249,53 @@ function buildAppendSections(artworks, existingSections, batchIndex) {
   const preferredTags = uniqueTags(shuffled).filter((tag) => !existingTags[tag]);
   const fallbackTags = uniqueTags(shuffled).filter((tag) => existingTags[tag]);
   const tags = preferredTags.concat(fallbackTags).slice(0, SECTION_APPEND_LIMIT);
-  const sections = tags.map((tag, index) => {
-    const candidates = shuffled.filter((item) => (item.tags || item.tag_keys || []).includes(tag));
-    return createPaginatedSection({
-      key: `tag:${tag}:batch:${batchIndex}:${index}`,
-      title: tag,
-      tag,
-      targetTag: tag,
-      moreUrl: `/pages/tag/tag?tag=${encodeURIComponent(tag)}`,
-      scrollLeft: 0,
-      hasMore: true,
-      showMore: true,
-      items: withCardClass(candidates.slice(0, ROW_LIMIT)),
-    }, { rowLimit: ROW_LIMIT });
-  }).filter((section) => section.items.length);
+  const sections = tags
+    .map((tag, index) => {
+      const candidates = shuffled.filter((item) =>
+        (item.tags || item.tag_keys || []).includes(tag),
+      );
+      const query = resolveHomeSectionQuery(tag, candidates);
+      return createPaginatedSection(
+        {
+          key: `tag:${tag}:batch:${batchIndex}:${index}`,
+          title: tag,
+          tag,
+          targetTag: tag,
+          queryType: query.type,
+          queryId: query.id,
+          queryLabel: query.label,
+          moreUrl: `/pages/tag/tag?tag=${encodeURIComponent(tag)}`,
+          scrollLeft: 0,
+          hydrated: false,
+          skip: 0,
+          hasMore: true,
+          showMore: true,
+          items: withCardClass(diversifyArtworksByArtist(candidates).slice(0, ROW_LIMIT)),
+        },
+        { rowLimit: ROW_LIMIT },
+      );
+    })
+    .filter((section) => section.items.length);
 
   if (sections.length) return sections;
 
-  const items = withCardClass(shuffled.slice(0, ROW_LIMIT));
+  const items = withCardClass(diversifyArtworksByArtist(shuffled).slice(0, ROW_LIMIT));
   return items.length
-    ? [createPaginatedSection({
-      key: `more:${batchIndex}`,
-      title: "更多推荐",
-      items,
-      isRecommendation: true,
-      scrollLeft: 0,
-      hasMore: true,
-      showMore: false,
-      targetTag: "",
-    }, { rowLimit: ROW_LIMIT })]
+    ? [
+        createPaginatedSection(
+          {
+            key: `more:${batchIndex}`,
+            title: "更多推荐",
+            items,
+            isRecommendation: true,
+            scrollLeft: 0,
+            hasMore: true,
+            showMore: false,
+            targetTag: "",
+          },
+          { rowLimit: ROW_LIMIT },
+        ),
+      ]
     : [];
 }
 
@@ -182,6 +311,7 @@ Page({
     artworks: [],
     sections: [],
     searchQuery: "",
+    searchPlaceholder: DEFAULT_SEARCH_PLACEHOLDER,
     searchMode: false,
     searchResults: [],
     searchTotal: 0,
@@ -196,6 +326,8 @@ Page({
     loadBatch: 0,
     error: "",
     usingFallback: false,
+    channelCatalog: [],
+    channelCursor: 0,
   },
 
   onLoad() {
@@ -204,6 +336,7 @@ Page({
 
   onUnload() {
     if (this.searchTimer) clearTimeout(this.searchTimer);
+    this.homeLoadToken = (this.homeLoadToken || 0) + 1;
   },
 
   onPullDownRefresh() {
@@ -219,22 +352,44 @@ Page({
   },
 
   async loadArtworks(options) {
+    this.homeLoadToken = (this.homeLoadToken || 0) + 1;
+    const loadToken = this.homeLoadToken;
     this.sectionScrollLefts = {};
-    this.setData({ loading: true, loadingMore: false, sectionLimit: SECTION_LIMIT, loadBatch: 0, error: "" });
+    this.setData({
+      loading: true,
+      loadingMore: false,
+      sectionLimit: SECTION_LIMIT,
+      loadBatch: 0,
+      error: "",
+    });
     try {
-      const artworks = await fetchRandomArtworks({ pageSize: HOME_SAMPLE_SIZE, batchSize: 20 });
+      const [artworks, channelRows] = await Promise.all([
+        fetchRandomArtworks({ pageSize: HOME_SAMPLE_SIZE, batchSize: 20 }),
+        fetchRecommendationChannels({ limit: 200 }).catch(() => []),
+      ]);
+      const channelCatalog = shuffleItems(channelRows);
+      const sections = channelCatalog.length
+        ? buildChannelSections(artworks, channelCatalog)
+        : buildSections(artworks, SECTION_LIMIT);
       this.setData({
         artworks,
-        sections: buildSections(artworks, SECTION_LIMIT),
+        sections,
+        searchPlaceholder: pickRandomArtworkTitle(artworks),
+        channelCatalog,
+        channelCursor: channelCatalog.length ? SECTION_LIMIT : 0,
         ...createHomeSearchState([], this.data.searchQuery, { results: this.data.searchResults }),
         loading: false,
         usingFallback: false,
       });
+      this.sectionHydrationPromise = this.hydrateSectionRows(loadToken);
     } catch (error) {
       const fallback = fallbackLatestArtworks();
       this.setData({
         artworks: fallback,
         sections: buildSections(fallback, SECTION_LIMIT),
+        searchPlaceholder: pickRandomArtworkTitle(fallback),
+        channelCatalog: [],
+        channelCursor: 0,
         ...createHomeSearchState([], this.data.searchQuery, { results: this.data.searchResults }),
         loading: false,
         error: normalizeError(error),
@@ -255,14 +410,32 @@ Page({
       const newArtworks = getNewUniqueArtworks(this.data.artworks, nextArtworks);
       const artworks = mergeUniqueArtworks(this.data.artworks, nextArtworks);
       const loadBatch = this.data.loadBatch + 1;
-      const appendedSections = buildAppendSections(newArtworks.length ? newArtworks : nextArtworks, this.data.sections, loadBatch);
+      const channelCatalog = this.data.channelCatalog || [];
+      const channelCursor = Number(this.data.channelCursor || 0);
+      const appendedSections =
+        channelCatalog.length && channelCursor < channelCatalog.length
+          ? buildAppendChannelSections(
+              channelCatalog,
+              newArtworks.length ? newArtworks : nextArtworks,
+              channelCursor,
+              SECTION_APPEND_LIMIT,
+            )
+          : buildAppendSections(
+              newArtworks.length ? newArtworks : nextArtworks,
+              this.data.sections,
+              loadBatch,
+            );
       this.setData({
         artworks,
         loadBatch,
+        channelCursor: channelCatalog.length
+          ? Math.min(channelCatalog.length, channelCursor + appendedSections.length)
+          : 0,
         ...appendSectionsPatch(this.data.sections.length, appendedSections),
         loadingMore: false,
         usingFallback: false,
       });
+      this.sectionHydrationPromise = this.hydrateSectionRows(this.homeLoadToken);
     } catch (error) {
       this.setData({
         loadingMore: false,
@@ -277,12 +450,12 @@ Page({
     const sectionIndex = Number(detail.sectionIndex ?? dataset.sectionIndex);
     const section = (this.data.sections || [])[sectionIndex];
     if (
-      !Number.isFinite(sectionIndex)
-      || !section
-      || section.loadingMore
-      || section.hasMore === false
-      || this.data.loading
-      || this.data.searchMode
+      !Number.isFinite(sectionIndex) ||
+      !section ||
+      section.loadingMore ||
+      section.hasMore === false ||
+      this.data.loading ||
+      this.data.searchMode
     ) {
       return;
     }
@@ -318,8 +491,8 @@ Page({
   },
 
   async loadTagRowMore(section) {
-    const tag = section.tag || section.targetTag;
-    if (!tag) {
+    const query = getHomeSectionQuery(section);
+    if (!query.label && !query.id) {
       return { items: [], fetchedCount: 0, hasMore: false };
     }
 
@@ -327,22 +500,85 @@ Page({
       return this.getFallbackRowItems(section);
     }
 
-    const items = await fetchArtworksByTag(tag, {
+    const result = await fetchRandomArtworksBySection(query, {
       pageSize: ROW_LIMIT,
-      skip: Number(section.skip || 0),
+      excludeIds: (section.items || []).map(getArtworkKey).filter(Boolean),
     });
     return {
-      items,
-      fetchedCount: items.length,
-      hasMore: items.length >= ROW_LIMIT,
+      items: result.items,
+      fetchedCount: result.items.length,
+      hasMore: result.hasMore,
+      total: result.total,
     };
+  },
+
+  async hydrateSectionRows(loadToken) {
+    const indexes = (this.data.sections || [])
+      .map((section, index) => ({ section, index }))
+      .filter(
+        ({ section }) =>
+          section &&
+          !section.isRecommendation &&
+          !section.hydrated &&
+          (section.items || []).length < ROW_LIMIT,
+      )
+      .map(({ index }) => index);
+    let cursor = 0;
+
+    const worker = async () => {
+      while (cursor < indexes.length) {
+        const current = cursor;
+        cursor += 1;
+        await this.hydrateSectionRow(indexes[current], loadToken);
+      }
+    };
+
+    const workers = Array.from(
+      { length: Math.min(SECTION_HYDRATE_CONCURRENCY, indexes.length) },
+      worker,
+    );
+    await Promise.all(workers);
+  },
+
+  async hydrateSectionRow(sectionIndex, loadToken) {
+    if (loadToken !== this.homeLoadToken) return;
+    const section = (this.data.sections || [])[sectionIndex];
+    if (!section || section.isRecommendation || section.hydrated) return;
+
+    try {
+      const existingItems = section.items || [];
+      const result = await fetchRandomArtworksBySection(getHomeSectionQuery(section), {
+        pageSize: Math.max(1, ROW_LIMIT - existingItems.length),
+        excludeIds: existingItems.map(getArtworkKey).filter(Boolean),
+      });
+      if (loadToken !== this.homeLoadToken) return;
+
+      const merged = mergeUniqueArtworks(existingItems, result.items).slice(0, ROW_LIMIT);
+      const items = withCardClass(merged);
+      this.setData({
+        artworks: mergeUniqueArtworks(this.data.artworks, result.items),
+        [`sections[${sectionIndex}].items`]: items,
+        [`sections[${sectionIndex}].skip`]: items.length,
+        [`sections[${sectionIndex}].hasMore`]: result.hasMore,
+        [`sections[${sectionIndex}].randomTotal`]: result.total,
+        [`sections[${sectionIndex}].hydrated`]: true,
+        [`sections[${sectionIndex}].sectionError`]: "",
+      });
+    } catch (error) {
+      if (loadToken !== this.homeLoadToken) return;
+      this.setData({
+        [`sections[${sectionIndex}].sectionError`]: normalizeError(error),
+      });
+    }
   },
 
   getFallbackRowItems(section) {
     const tag = section.tag || section.targetTag;
-    const source = tag
-      ? (this.data.artworks || []).filter((item) => artworkHasTag(item, tag))
-      : (this.data.artworks || []);
+    const source = diversifyArtworksByArtist(
+      tag
+        ? (this.data.artworks || []).filter((item) => artworkHasTag(item, tag))
+        : this.data.artworks || [],
+    );
     const fresh = getFreshArtworkBatch(section.items, source, ROW_LIMIT);
     const remaining = getFreshArtworkBatch((section.items || []).concat(fresh), source, 1);
     return {
@@ -360,7 +596,9 @@ Page({
     const fresh = getFreshArtworkBatch(section.items, incoming, ROW_LIMIT);
     const decoratedFresh = withCardClass(fresh, (section.items || []).length);
     const items = (section.items || []).concat(decoratedFresh);
-    const fetchedCount = Number((result && result.fetchedCount) || incoming.length || fresh.length || 0);
+    const fetchedCount = Number(
+      (result && result.fetchedCount) || incoming.length || fresh.length || 0,
+    );
     const hasMore = Boolean(result && result.hasMore && fresh.length > 0);
 
     this.setData({
@@ -407,7 +645,12 @@ Page({
     this.searchRequestId = (this.searchRequestId || 0) + 1;
     const requestId = this.searchRequestId;
     if (!normalizedQuery) {
-      this.setData({ searching: false, searchLoading: false, searchLoadingMore: false, searchHasMore: false });
+      this.setData({
+        searching: false,
+        searchLoading: false,
+        searchLoadingMore: false,
+        searchHasMore: false,
+      });
       return;
     }
     this.searchTimer = setTimeout(() => {
@@ -424,7 +667,13 @@ Page({
       this.clearSearch();
       return;
     }
-    this.setData({ searching: true, searchError: "", searchLoading: true, searchLoadingMore: false, searchHasMore: false });
+    this.setData({
+      searching: true,
+      searchError: "",
+      searchLoading: true,
+      searchLoadingMore: false,
+      searchHasMore: false,
+    });
     this.runCloudSearch(normalizedQuery, requestId);
   },
 
@@ -432,7 +681,10 @@ Page({
     const normalizedQuery = String(query || "").trim();
     if (!normalizedQuery) return;
     try {
-      const results = await searchCloudArtworks(normalizedQuery, { pageSize: SEARCH_PAGE_SIZE, skip: 0 });
+      const results = await searchCloudArtworks(normalizedQuery, {
+        pageSize: SEARCH_PAGE_SIZE,
+        skip: 0,
+      });
       if (requestId !== this.searchRequestId || !this.data.searchMode) return;
       this.setData({
         searchResults: results,
@@ -461,12 +713,12 @@ Page({
   async loadMoreSearchResults() {
     const normalizedQuery = String(this.data.searchQuery || "").trim();
     if (
-      !this.data.searchMode
-      || !normalizedQuery
-      || this.data.searching
-      || this.data.searchLoading
-      || this.data.searchLoadingMore
-      || !this.data.searchHasMore
+      !this.data.searchMode ||
+      !normalizedQuery ||
+      this.data.searching ||
+      this.data.searchLoading ||
+      this.data.searchLoadingMore ||
+      !this.data.searchHasMore
     ) {
       return;
     }
@@ -476,11 +728,14 @@ Page({
     this.setData({ searchLoadingMore: true, searchError: "" });
 
     try {
-      const results = await searchCloudArtworks(normalizedQuery, { pageSize: SEARCH_PAGE_SIZE, skip });
+      const results = await searchCloudArtworks(normalizedQuery, {
+        pageSize: SEARCH_PAGE_SIZE,
+        skip,
+      });
       if (
-        requestId !== this.searchRequestId
-        || !this.data.searchMode
-        || normalizedQuery !== String(this.data.searchQuery || "").trim()
+        requestId !== this.searchRequestId ||
+        !this.data.searchMode ||
+        normalizedQuery !== String(this.data.searchQuery || "").trim()
       ) {
         return;
       }
@@ -541,10 +796,17 @@ Page({
 
   openTagDetail(event) {
     const dataset = event.currentTarget.dataset || {};
-    const tag = dataset.tag || dataset.title;
-    if (!tag) return;
+    const label = dataset.queryLabel || dataset.tag || dataset.title;
+    const queryType = dataset.queryType || "tag";
+    const queryId = dataset.queryId || "";
+    if (!label && !queryId) return;
+    const queryParams = [
+      `tag=${encodeURIComponent(label)}`,
+      `queryType=${encodeURIComponent(queryType)}`,
+    ];
+    if (queryId) queryParams.push(`queryId=${encodeURIComponent(queryId)}`);
     wx.navigateTo({
-      url: `/pages/tag/tag?tag=${encodeURIComponent(tag)}`,
+      url: `/pages/tag/tag?${queryParams.join("&")}`,
     });
   },
 });

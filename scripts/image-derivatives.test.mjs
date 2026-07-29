@@ -29,7 +29,9 @@ test("derivativeObjectPaths uses new derivative paths", () => {
 
 test("sanitizedUrlPath strips query and origin details to safe path", () => {
   assert.equal(
-    sanitizedUrlPath("https://example.supabase.co/storage/v1/object/public/artwork/1504_standard.jpg?token=secret"),
+    sanitizedUrlPath(
+      "https://example.supabase.co/storage/v1/object/public/artwork/1504_standard.jpg?token=secret",
+    ),
     "/storage/v1/object/public/artwork/1504_standard.jpg",
   );
 });

@@ -52,7 +52,7 @@
       </view>
 
       <view class="artist-line" bindtap="openArtistFromArtwork">
-        <text>{{artwork.artist}}</text>
+        <text>{{artistButtonText || artwork.artist}}</text>
       </view>
 
       <view class="meta-grid">
@@ -82,9 +82,9 @@
         <text class="detail-description">{{artwork.description}}</text>
       </view>
 
-      <view class="tag-row" wx:if="{{artwork.tags.length}}">
-        <block wx:for="{{artwork.tags}}" wx:key="*this">
-          <text class="detail-tag" data-tag="{{item}}" bindtap="openTag">{{item}}</text>
+      <view class="tag-row" wx:if="{{artwork.classificationTags.length}}">
+        <block wx:for="{{artwork.classificationTags}}" wx:key="id">
+          <text class="detail-tag" data-tag="{{item.label}}" data-tag-id="{{item.id}}" bindtap="openClassificationTag">{{item.label}}</text>
         </block>
       </view>
     </view>

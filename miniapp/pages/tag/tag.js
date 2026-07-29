@@ -1,6 +1,8 @@
 const {
   fetchArtworksByTag,
   countArtworksByTag,
+  fetchArtworksBySection,
+  countArtworksBySection,
   fallbackArtworksByTag,
   fallbackArtworkCountByTag,
   normalizeError,
@@ -12,9 +14,10 @@ Page({
   data: {
     tag: "",
     tagId: "",
+    queryType: "tag",
+    queryId: "",
     artworks: [],
     totalCount: 0,
-    resultCountText: "0件作品",
     skip: 0,
     hasMore: true,
     loading: true,
@@ -26,8 +29,10 @@ Page({
   onLoad(options) {
     const tag = decodeURIComponent((options && options.tag) || "");
     const tagId = decodeURIComponent((options && (options.tagId || options.tag_id)) || "");
+    const queryType = decodeURIComponent((options && options.queryType) || "tag");
+    const queryId = decodeURIComponent((options && options.queryId) || "");
     wx.setNavigationBarTitle({ title: "标签" });
-    this.setData({ tag, tagId });
+    this.setData({ tag, tagId, queryType, queryId });
     if (tag) {
       return this.loadTag(tag);
     } else {
@@ -52,11 +57,36 @@ Page({
     };
   },
 
+  getSectionQuery() {
+    return {
+      type: this.data.queryType || "tag",
+      id: this.data.queryId || this.data.tagId,
+      label: this.data.tag,
+    };
+  },
+
+  usesTypedSectionQuery() {
+    return this.data.queryType !== "tag" || Boolean(this.data.queryId);
+  },
+
+  fetchSectionPage(options) {
+    if (this.usesTypedSectionQuery()) {
+      return fetchArtworksBySection(this.getSectionQuery(), options);
+    }
+    return fetchArtworksByTag(this.getTagQuery(), options);
+  },
+
+  countSectionArtworks() {
+    if (this.usesTypedSectionQuery()) {
+      return countArtworksBySection(this.getSectionQuery());
+    }
+    return countArtworksByTag(this.getTagQuery());
+  },
+
   async loadTag(tag) {
     this.setData({
       artworks: [],
       totalCount: 0,
-      resultCountText: "读取中",
       skip: 0,
       hasMore: true,
       loading: true,
@@ -66,15 +96,13 @@ Page({
     });
 
     try {
-      const tagQuery = this.getTagQuery();
       const [totalCount, artworks] = await Promise.all([
-        countArtworksByTag(tagQuery),
-        fetchArtworksByTag(tagQuery, { pageSize: PAGE_SIZE, skip: 0 }),
+        this.countSectionArtworks(),
+        this.fetchSectionPage({ pageSize: PAGE_SIZE, skip: 0 }),
       ]);
       this.setData({
         artworks,
         totalCount,
-        resultCountText: `${totalCount}件作品`,
         skip: artworks.length,
         hasMore: artworks.length < totalCount,
         loading: false,
@@ -85,7 +113,6 @@ Page({
       this.setData({
         artworks: fallback,
         totalCount,
-        resultCountText: `${totalCount}件作品`,
         skip: fallback.length,
         hasMore: false,
         loading: false,
@@ -96,10 +123,11 @@ Page({
   },
 
   async loadMore() {
-    if (this.data.loading || this.data.loadingMore || !this.data.hasMore || this.data.usingFallback) return;
+    if (this.data.loading || this.data.loadingMore || !this.data.hasMore || this.data.usingFallback)
+      return;
     this.setData({ loadingMore: true });
     try {
-      const nextPage = await fetchArtworksByTag(this.getTagQuery(), {
+      const nextPage = await this.fetchSectionPage({
         pageSize: PAGE_SIZE,
         skip: this.data.skip,
       });

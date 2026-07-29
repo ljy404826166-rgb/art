@@ -1,7 +1,4 @@
-const {
-  clearDownloadArtworks,
-  getDownloadArtworks,
-} = require("../../services/local-library");
+const { clearDownloadArtworks, getDownloadArtworks } = require("../../services/local-library");
 
 Page({
   data: {

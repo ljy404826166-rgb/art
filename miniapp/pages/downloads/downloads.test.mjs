@@ -6,22 +6,26 @@ import vm from "node:vm";
 function loadDownloadsPage({ wxMock, libraryMock }) {
   let pageDefinition;
   const source = readFileSync("miniapp/pages/downloads/downloads.js", "utf8");
-  vm.runInNewContext(source, {
-    module: { exports: {} },
-    exports: {},
-    require(request) {
-      if (request === "../../services/local-library") {
-        return libraryMock;
-      }
-      throw new Error(`Unexpected require: ${request}`);
+  vm.runInNewContext(
+    source,
+    {
+      module: { exports: {} },
+      exports: {},
+      require(request) {
+        if (request === "../../services/local-library") {
+          return libraryMock;
+        }
+        throw new Error(`Unexpected require: ${request}`);
+      },
+      Page(definition) {
+        pageDefinition = definition;
+      },
+      wx: wxMock,
     },
-    Page(definition) {
-      pageDefinition = definition;
+    {
+      filename: "miniapp/pages/downloads/downloads.js",
     },
-    wx: wxMock,
-  }, {
-    filename: "miniapp/pages/downloads/downloads.js",
-  });
+  );
   return pageDefinition;
 }
 

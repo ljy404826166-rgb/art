@@ -47,19 +47,6 @@
   opacity: 0.86;
 }
 
-.artist-avatar {
-  display: flex;
-  width: 92rpx;
-  height: 92rpx;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999rpx;
-  color: #5b3129;
-  background: #eee7df;
-  font-size: 36rpx;
-  font-weight: 950;
-}
-
 .artist-name {
   margin-top: 18rpx;
   color: #111111;

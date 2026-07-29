@@ -14,7 +14,7 @@
   <view wx:else class="artist-grid">
     <block wx:for="{{artists}}" wx:key="id">
       <view class="artist-card" data-id="{{item.id}}" bindtap="openArtist">
-        <view class="artist-avatar">{{item.avatarText}}</view>
+        <artist-portrait artist="{{item}}" size="followed" lazy-load="{{true}}" />
         <text class="artist-name">{{item.nameZh}}</text>
         <text class="artist-en">{{item.nameEn}}</text>
         <text class="artist-meta">{{item.country}} · {{item.lifespan}}</text>

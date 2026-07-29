@@ -1,0 +1,204 @@
+name: Formal release gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact package version to release
+        required: true
+        type: string
+      changelog_path:
+        description: Repository-relative changelog path
+        required: true
+        default: CHANGELOG.md
+        type: string
+      rollback_manifest:
+        description: Repository-relative production rollback manifest
+        required: true
+        type: string
+      production_env_id:
+        description: Exact production CloudBase environment ID
+        required: true
+        type: string
+      confirmation:
+        description: Enter READ_ONLY_RELEASE_GATE
+        required: true
+        type: string
+      android_approved:
+        description: Android acceptance has been signed off
+        required: true
+        default: false
+        type: boolean
+      ios_approved:
+        description: iOS acceptance has been signed off
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: formal-release-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  validate-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    environment: production-readonly
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install locked dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts
+      - name: Validate version, changelog, rollback, confirmation, and mobile approvals
+        run: >-
+          node scripts/ci/validate-release-gate.mjs
+          --version "${{ inputs.version }}"
+          --changelog "${{ inputs.changelog_path }}"
+          --rollback "${{ inputs.rollback_manifest }}"
+          --environment "${{ inputs.production_env_id }}"
+          --confirmation "${{ inputs.confirmation }}"
+          --android-approved "${{ inputs.android_approved }}"
+          --ios-approved "${{ inputs.ios_approved }}"
+      - name: Install Chromium for release regression
+        run: npx playwright install --with-deps chromium
+      - name: Reproduce the complete quality gate
+        run: |
+          mkdir -p artifacts/release/quality
+          set -o pipefail
+          npm run ci:pr 2>&1 | tee artifacts/release/quality/ci-pr.log
+      - name: Archive release quality evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-quality-${{ inputs.version }}-${{ github.run_attempt }}
+          path: |
+            artifacts/release/quality/
+            playwright-report/
+            test-results/
+            dist/
+          if-no-files-found: ignore
+          retention-days: 90
+
+  production-readonly-audit:
+    needs: validate-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: production-readonly
+    env:
+      CLOUDBASE_ENV_ID: ${{ inputs.production_env_id }}
+      TENCENT_SECRET_ID: ${{ secrets.PRODUCTION_READONLY_TENCENT_SECRET_ID }}
+      TENCENT_SECRET_KEY: ${{ secrets.PRODUCTION_READONLY_TENCENT_SECRET_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Require production read-only credentials
+        shell: bash
+        run: |
+          test -n "$CLOUDBASE_ENV_ID"
+          test -n "$TENCENT_SECRET_ID"
+          test -n "$TENCENT_SECRET_KEY"
+      - name: Install locked dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts
+      - name: Run production read-only audits
+        run: |
+          mkdir -p artifacts/release/cloudbase
+          node scripts/cloudbase-audit-artworks.mjs \
+            --env-id "$CLOUDBASE_ENV_ID" \
+            --report-dir artifacts/release/cloudbase \
+            --sample-head 10 \
+            --max-attempts 4 \
+            --head-concurrency 4
+          npm run recommendation:audit
+          npm run recommendation:smoke
+      - name: Archive production audit evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-production-audit-${{ inputs.version }}-${{ github.run_attempt }}
+          path: |
+            artifacts/release/cloudbase/
+            outputs/recommendation-system/task-06/
+          if-no-files-found: ignore
+          retention-days: 90
+
+  miniapp-preview:
+    needs:
+      - validate-release
+      - production-readonly-audit
+    runs-on:
+      - self-hosted
+      - windows
+      - wechat-devtools
+    timeout-minutes: 30
+    environment: production-readonly
+    env:
+      WECHAT_AUTOMATOR_ENDPOINT: ws://127.0.0.1:9420
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install locked dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts
+      - name: Compile, automate, and preview the miniapp without uploading
+        shell: pwsh
+        timeout-minutes: 12
+        env:
+          WECHAT_DEVTOOLS_CLI: ${{ vars.WECHAT_DEVTOOLS_CLI }}
+          WECHAT_DEVTOOLS_PORT: ${{ vars.WECHAT_DEVTOOLS_PORT }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WECHAT_DEVTOOLS_CLI)) {
+            throw "WECHAT_DEVTOOLS_CLI repository variable is required."
+          }
+          $servicePort = if ($env:WECHAT_DEVTOOLS_PORT) {
+            [int]$env:WECHAT_DEVTOOLS_PORT
+          } else {
+            32070
+          }
+          $projectPath = Join-Path $env:GITHUB_WORKSPACE "miniapp"
+          $artifactPath = Join-Path $env:GITHUB_WORKSPACE "artifacts\release\miniapp"
+          New-Item -ItemType Directory -Force -Path $artifactPath | Out-Null
+          $automationReady = Test-NetConnection `
+            -ComputerName 127.0.0.1 `
+            -Port 9420 `
+            -InformationLevel Quiet
+          if (-not $automationReady) {
+            & $env:WECHAT_DEVTOOLS_CLI auto `
+              --project $projectPath `
+              --port $servicePort `
+              --auto-port 9420 `
+              --trust-project
+            if ($LASTEXITCODE -ne 0) {
+              throw "WeChat DevTools automation failed to start."
+            }
+          }
+          npm run recommendation:devtools-smoke
+          & $env:WECHAT_DEVTOOLS_CLI preview `
+            --project $projectPath `
+            --port $servicePort `
+            --qr-format image `
+            --qr-output (Join-Path $artifactPath "preview.png") `
+            --info-output (Join-Path $artifactPath "preview.json")
+          if ($LASTEXITCODE -ne 0) {
+            throw "WeChat DevTools preview failed."
+          }
+      - name: Archive miniapp preview
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-miniapp-preview-${{ inputs.version }}-${{ github.run_attempt }}
+          path: |
+            artifacts/release/miniapp/
+            outputs/recommendation-system/task-06/devtools/
+          if-no-files-found: error
+          retention-days: 90

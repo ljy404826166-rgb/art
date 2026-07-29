@@ -24,7 +24,10 @@ export async function readRemoteUserSettings(userId: string): Promise<RemoteSett
   };
 }
 
-export async function saveRemoteUserSettings(userId: string, settings: AppSettings): Promise<RemoteSettingsResult> {
+export async function saveRemoteUserSettings(
+  userId: string,
+  settings: AppSettings,
+): Promise<RemoteSettingsResult> {
   const normalized = normalizeSettings(settings);
   const { error } = await supabase.from("user_settings").upsert(
     {

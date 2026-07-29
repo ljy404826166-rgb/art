@@ -6,7 +6,7 @@
 
 .library-head {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: 24rpx;
   margin-bottom: 30rpx;
@@ -14,6 +14,8 @@
 
 .library-title-wrap {
   display: grid;
+  flex: 1 1 auto;
+  min-width: 0;
   gap: 6rpx;
 }
 
@@ -32,21 +34,22 @@
 
 .clear-button {
   display: flex;
+  flex: 0 0 108rpx;
+  box-sizing: border-box;
+  width: 108rpx;
   min-width: 108rpx;
+  max-width: 108rpx;
   height: 58rpx;
   align-items: center;
   justify-content: center;
+  margin: 0 0 0 auto;
   border-radius: 999rpx;
-  padding: 0 24rpx;
+  padding: 0;
   color: #5f5a55;
   background: #efede9;
   font-size: 24rpx;
   font-weight: 850;
-  line-height: 58rpx;
-}
-
-.clear-button::after {
-  border: 0;
+  line-height: 32rpx;
 }
 
 .library-grid {

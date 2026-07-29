@@ -12,18 +12,19 @@ function loadCommonJsModule(filePath) {
   return module.exports;
 }
 
-const {
-  createPaginatedSection,
-  getFreshArtworkBatch,
-  getArtworkKey,
-} = loadCommonJsModule(new URL("./home-pagination.js", import.meta.url));
+const { createPaginatedSection, getFreshArtworkBatch, getArtworkKey } = loadCommonJsModule(
+  new URL("./home-pagination.js", import.meta.url),
+);
 
 test("createPaginatedSection keeps only the first row batch and initializes pagination state", () => {
-  const section = createPaginatedSection({
-    key: "tag:portrait",
-    tag: "portrait",
-    items: Array.from({ length: 10 }, (_, index) => ({ id: `art-${index}` })),
-  }, { rowLimit: 8 });
+  const section = createPaginatedSection(
+    {
+      key: "tag:portrait",
+      tag: "portrait",
+      items: Array.from({ length: 10 }, (_, index) => ({ id: `art-${index}` })),
+    },
+    { rowLimit: 8 },
+  );
 
   assert.equal(section.items.length, 8);
   assert.equal(section.skip, 8);
@@ -33,12 +34,7 @@ test("createPaginatedSection keeps only the first row batch and initializes pagi
 
 test("getFreshArtworkBatch appends only unseen artworks up to the row limit", () => {
   const existing = [{ id: "a" }, { _id: "b" }];
-  const incoming = [
-    { id: "a" },
-    { id: "c" },
-    { _id: "d" },
-    { source_id: "e" },
-  ];
+  const incoming = [{ id: "a" }, { id: "c" }, { _id: "d" }, { source_id: "e" }];
 
   const keys = Array.from(getFreshArtworkBatch(existing, incoming, 2), getArtworkKey);
   assert.deepEqual(keys, ["c", "d"]);

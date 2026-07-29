@@ -21,7 +21,11 @@ function parseEnvFile(filePath) {
     const match = line.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
     if (!match) continue;
     let value = match[2].trim();
-    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1, -1);
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    )
+      value = value.slice(1, -1);
     out[match[1]] = value;
   }
   return out;
@@ -45,12 +49,15 @@ function parseArgs(argv) {
     if (arg === "--run") options.run = true;
     else if (arg === "--env-id") options.envId = required(argv, (index += 1), arg);
     else if (arg === "--collection") options.collection = required(argv, (index += 1), arg);
-    else if (arg === "--report-dir") options.reportDir = path.resolve(required(argv, (index += 1), arg));
-    else if (arg === "--batch-size") options.batchSize = positiveInt(required(argv, (index += 1), arg), arg);
+    else if (arg === "--report-dir")
+      options.reportDir = path.resolve(required(argv, (index += 1), arg));
+    else if (arg === "--batch-size")
+      options.batchSize = positiveInt(required(argv, (index += 1), arg), arg);
     else if (arg === "--limit") options.limit = positiveInt(required(argv, (index += 1), arg), arg);
     else throw new Error(`Unknown argument: ${arg}`);
   }
-  if (options.batchSize > 50) throw new Error("--batch-size must be <= 50 to keep CloudBase commands small.");
+  if (options.batchSize > 50)
+    throw new Error("--batch-size must be <= 50 to keep CloudBase commands small.");
   return options;
 }
 
@@ -62,14 +69,18 @@ function required(argv, index, flag) {
 
 function positiveInt(value, flag) {
   const number = Number(value);
-  if (!Number.isSafeInteger(number) || number < 1) throw new Error(`${flag} must be a positive integer.`);
+  if (!Number.isSafeInteger(number) || number < 1)
+    throw new Error(`${flag} must be a positive integer.`);
   return number;
 }
 
 function createClient(options, config) {
-  const secretId = config.TENCENT_SECRET_ID || config.TENCENTCLOUD_SECRETID || config.TENCENT_CLOUD_SECRET_ID;
-  const secretKey = config.TENCENT_SECRET_KEY || config.TENCENTCLOUD_SECRETKEY || config.TENCENT_CLOUD_SECRET_KEY;
-  if (!secretId || !secretKey) throw new Error("Missing Tencent credentials. Set TENCENT_SECRET_ID and TENCENT_SECRET_KEY.");
+  const secretId =
+    config.TENCENT_SECRET_ID || config.TENCENTCLOUD_SECRETID || config.TENCENT_CLOUD_SECRET_ID;
+  const secretKey =
+    config.TENCENT_SECRET_KEY || config.TENCENTCLOUD_SECRETKEY || config.TENCENT_CLOUD_SECRET_KEY;
+  if (!secretId || !secretKey)
+    throw new Error("Missing Tencent credentials. Set TENCENT_SECRET_ID and TENCENT_SECRET_KEY.");
   return CloudBase.init({ envId: options.envId, secretId, secretKey });
 }
 
@@ -83,17 +94,19 @@ async function queryAll(database, collection, limit) {
   const pageSize = 1000;
   for (let skip = 0; ; skip += pageSize) {
     const result = await database.runCommands({
-      MgoCommands: [{
-        TableName: collection,
-        CommandType: "QUERY",
-        Command: JSON.stringify({
-          find: collection,
-          filter: {},
-          projection: { _id: 1, image_id: 1, thumbnail_url: 1, display_url: 1, download_url: 1 },
-          skip,
-          limit: pageSize,
-        }),
-      }],
+      MgoCommands: [
+        {
+          TableName: collection,
+          CommandType: "QUERY",
+          Command: JSON.stringify({
+            find: collection,
+            filter: {},
+            projection: { _id: 1, image_id: 1, thumbnail_url: 1, display_url: 1, download_url: 1 },
+            skip,
+            limit: pageSize,
+          }),
+        },
+      ],
     });
     const batch = parseCommandRows(result.Data?.[0]);
     rows.push(...batch);
@@ -129,9 +142,10 @@ function derivativeUrl(baseUrl, kind) {
   const url = new URL(baseUrl);
   const imageId = imageIdFromBaseUrl(baseUrl);
   url.search = "";
-  url.pathname = kind === "thumb"
-    ? `${THUMB_PATH_PREFIX}${imageId}.webp`
-    : `${DISPLAY_PATH_PREFIX}${imageId}.webp`;
+  url.pathname =
+    kind === "thumb"
+      ? `${THUMB_PATH_PREFIX}${imageId}.webp`
+      : `${DISPLAY_PATH_PREFIX}${imageId}.webp`;
   return url.toString();
 }
 
@@ -154,28 +168,35 @@ function optimizeRow(row) {
     },
   };
   const unchanged =
-    row.thumbnail_url === patch.thumbnail_url
-    && row.display_url === patch.display_url
-    && row.download_url === patch.download_url;
+    row.thumbnail_url === patch.thumbnail_url &&
+    row.display_url === patch.display_url &&
+    row.download_url === patch.download_url;
   return unchanged ? null : { _id: row._id, image_id: row.image_id, patch };
 }
 
 function chunk(items, size) {
   const chunks = [];
-  for (let index = 0; index < items.length; index += size) chunks.push(items.slice(index, index + size));
+  for (let index = 0; index < items.length; index += size)
+    chunks.push(items.slice(index, index + size));
   return chunks;
 }
 
 async function updateBatch(database, collection, updates) {
   return database.runCommands({
-    MgoCommands: [{
-      TableName: collection,
-      CommandType: "UPDATE",
-      Command: JSON.stringify({
-        update: collection,
-        updates: updates.map((item) => ({ q: { _id: item._id }, u: { $set: item.patch }, upsert: false })),
-      }),
-    }],
+    MgoCommands: [
+      {
+        TableName: collection,
+        CommandType: "UPDATE",
+        Command: JSON.stringify({
+          update: collection,
+          updates: updates.map((item) => ({
+            q: { _id: item._id },
+            u: { $set: item.patch },
+            upsert: false,
+          })),
+        }),
+      },
+    ],
   });
 }
 
@@ -186,7 +207,10 @@ function log(message) {
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   fs.mkdirSync(options.reportDir, { recursive: true });
-  const timestamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+  const timestamp = new Date()
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\.\d{3}Z$/, "Z");
   const reportPath = path.join(options.reportDir, `cloudbase-image-optimize-${timestamp}.json`);
   const app = createClient(options, env());
   const rows = await queryAll(app.database, options.collection, options.limit);
@@ -200,17 +224,25 @@ async function main() {
     batches: Math.ceil(updates.length / options.batchSize),
     updated_batches: 0,
     failures: [],
-    sample: updates.slice(0, 5).map((item) => ({ _id: item._id, image_id: item.image_id, ...item.patch })),
+    sample: updates
+      .slice(0, 5)
+      .map((item) => ({ _id: item._id, image_id: item.image_id, ...item.patch })),
   };
 
-  log(`${options.run ? "Run" : "Dry-run"}: ${updates.length}/${rows.length} records need optimized image URLs`);
+  log(
+    `${options.run ? "Run" : "Dry-run"}: ${updates.length}/${rows.length} records need optimized image URLs`,
+  );
   if (options.run) {
     for (const updateChunk of chunk(updates, options.batchSize)) {
       try {
         await updateBatch(app.database, options.collection, updateChunk);
         summary.updated_batches += 1;
       } catch (error) {
-        summary.failures.push({ first_id: updateChunk[0]?._id, count: updateChunk.length, error: error.message });
+        summary.failures.push({
+          first_id: updateChunk[0]?._id,
+          count: updateChunk.length,
+          error: error.message,
+        });
       }
     }
   }

@@ -10,7 +10,7 @@
   box-shadow: 0 16rpx 42rpx rgba(30, 28, 25, 0.05);
 }
 
-.error-state-panel button::after {
+.retry-button::after {
   border: 0;
 }
 

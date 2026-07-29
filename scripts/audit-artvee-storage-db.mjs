@@ -53,7 +53,9 @@ function parseCsv(text) {
 function csvRows(csvPath) {
   const table = parseCsv(fs.readFileSync(csvPath, "utf8").replace(/^\uFEFF/, ""));
   const header = table[0] || [];
-  return table.slice(1).map((cells) => Object.fromEntries(header.map((key, index) => [key, cells[index] ?? ""])));
+  return table
+    .slice(1)
+    .map((cells) => Object.fromEntries(header.map((key, index) => [key, cells[index] ?? ""])));
 }
 
 function numericId(id) {
@@ -88,7 +90,8 @@ async function headOk(url, retries = 2) {
       return { ok: response.ok, status: response.status };
     } catch (error) {
       lastError = error;
-      if (attempt < retries) await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
+      if (attempt < retries)
+        await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
     }
   }
   return { ok: false, status: 0, error: lastError?.message || String(lastError) };
@@ -104,7 +107,12 @@ async function listStorageIds(supabase) {
     });
     if (error) throw error;
     if (!data?.length) break;
-    ids.push(...data.map((item) => item.name).filter((name) => /^\d+_standard\.jpg$/.test(name)).map((name) => name.replace(/\.jpg$/, "")));
+    ids.push(
+      ...data
+        .map((item) => item.name)
+        .filter((name) => /^\d+_standard\.jpg$/.test(name))
+        .map((name) => name.replace(/\.jpg$/, "")),
+    );
     if (data.length < 1000) break;
   }
   return ids;
@@ -129,7 +137,9 @@ async function main() {
   if (!supabaseUrl) throw new Error("Missing SUPABASE_URL");
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY");
 
-  const supabase = createClient(supabaseUrl, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+  const supabase = createClient(supabaseUrl, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false },
+  });
   const rows = csvPath ? csvRows(csvPath) : [];
   const ids = mode === "batch" ? rows.map((row) => row.id) : await listStorageIds(supabase);
 
@@ -159,7 +169,16 @@ async function main() {
   for (const id of ids) storageChecks.push({ id, ...(await headOk(expectedUrl(supabaseUrl, id))) });
 
   const unresolved = {};
-  for (const key of ["title_cn", "title_en", "location", "year_and_place", "medium", "dimensions", "description", "tags"]) {
+  for (const key of [
+    "title_cn",
+    "title_en",
+    "location",
+    "year_and_place",
+    "medium",
+    "dimensions",
+    "description",
+    "tags",
+  ]) {
     unresolved[key] = (paintings || []).filter((row) => !row[key] || row[key] === UNKNOWN).length;
   }
 
@@ -168,21 +187,34 @@ async function main() {
     csvPath: csvPath || null,
     ids: ids.length,
     firstId: ids.slice().sort((a, b) => numericId(a) - numericId(b))[0] || null,
-    lastId: ids.slice().sort((a, b) => numericId(a) - numericId(b)).at(-1) || null,
+    lastId:
+      ids
+        .slice()
+        .sort((a, b) => numericId(a) - numericId(b))
+        .at(-1) || null,
     paintingsFound: paintings?.length || 0,
     missingPaintings: ids.filter((id) => !paintingById.has(id)),
     artworkImageLinksFound: links?.length || 0,
     missingArtworkImageLinks: ids.filter((id) => !linkById.has(id)),
     storageOk: storageChecks.filter((item) => item.ok).length,
     storageMissing: storageChecks.filter((item) => !item.ok),
-    paintingDisplayUrlMismatches: (paintings || []).filter((row) => !urlMatchesExpected(row.display_url, expectedUrl(supabaseUrl, row.id))).map((row) => row.id),
-    imageLinkUrlMismatches: (links || []).filter((row) => !urlMatchesExpected(row.display_url, expectedUrl(supabaseUrl, row.image_id))).map((row) => row.image_id),
+    paintingDisplayUrlMismatches: (paintings || [])
+      .filter((row) => !urlMatchesExpected(row.display_url, expectedUrl(supabaseUrl, row.id)))
+      .map((row) => row.id),
+    imageLinkUrlMismatches: (links || [])
+      .filter((row) => !urlMatchesExpected(row.display_url, expectedUrl(supabaseUrl, row.image_id)))
+      .map((row) => row.image_id),
     nonArtveeArtworkSources: (links || [])
-      .map((link) => ({ image_id: link.image_id, source_url: artworkById.get(link.artwork_id)?.source_url || "" }))
+      .map((link) => ({
+        image_id: link.image_id,
+        source_url: artworkById.get(link.artwork_id)?.source_url || "",
+      }))
       .filter((row) => row.source_url && !row.source_url.startsWith("https://artvee.com/")),
     unresolved,
     badDescriptionLengths: (paintings || [])
-      .filter((row) => !row.description || row.description.length < 250 || row.description.length > 400)
+      .filter(
+        (row) => !row.description || row.description.length < 250 || row.description.length > 400,
+      )
       .map((row) => row.id),
   };
 

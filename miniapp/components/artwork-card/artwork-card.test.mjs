@@ -34,3 +34,10 @@ test("artwork-card uses ArtworkImage in card mode for list thumbnails", () => {
   assert.match(artworkImageJs, /artwork\.thumbnail_url/);
   assert.doesNotMatch(artworkImageJs, /artwork\.download_url/);
 });
+
+test("artwork-card relies on the rendered image load event instead of probing every image twice", () => {
+  const js = readLocal("./artwork-card.js");
+
+  assert.match(js, /handleImageLoad\(event\)/);
+  assert.doesNotMatch(js, /wx\.getImageInfo/);
+});

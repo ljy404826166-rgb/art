@@ -9,7 +9,10 @@ function readEnvFile(filePath) {
     const match = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
     if (!match) continue;
     let value = match[2].trim();
-    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
       value = value.slice(1, -1);
     }
     values[match[1]] = value;
@@ -29,7 +32,9 @@ let hasError = false;
 for (const key of requiredKeys) {
   const value = String(env[key] || "");
   const present = value.length > 0;
-  console.log(`${key}: ${present ? "present" : "missing"}${present ? ` (${value.length} chars)` : ""}`);
+  console.log(
+    `${key}: ${present ? "present" : "missing"}${present ? ` (${value.length} chars)` : ""}`,
+  );
   if (!present) hasError = true;
 }
 
@@ -38,6 +43,8 @@ if (env.SUPABASE_SERVICE_ROLE_KEY && env.VITE_SUPABASE_SERVICE_ROLE_KEY) {
 }
 
 if (hasError) {
-  console.error("Missing required Supabase environment variables. Copy .env.local.example to .env.local and fill local values.");
+  console.error(
+    "Missing required Supabase environment variables. Copy .env.local.example to .env.local and fill local values.",
+  );
   process.exit(1);
 }

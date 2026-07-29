@@ -1,0 +1,23 @@
+<view class="legal-page">
+  <view class="document-header">
+    <text class="document-title" user-select="true">{{document.title}}</text>
+    <view class="document-meta">
+      <text class="document-meta-line" user-select="true">版本：{{document.version}}</text>
+      <text class="document-meta-line" user-select="true">更新日期：{{document.updatedAt}}</text>
+      <text class="document-meta-line" user-select="true">生效日期：{{document.effectiveAt}}</text>
+    </view>
+  </view>
+
+  <view class="document-body">
+    <block wx:for="{{sections}}" wx:key="id" wx:for-item="section">
+      <view class="legal-section">
+        <text class="section-title" user-select="true">{{section.index}}、{{section.title}}</text>
+        <view class="section-copy">
+          <block wx:for="{{section.paragraphs}}" wx:key="*this" wx:for-item="paragraph">
+            <text class="section-paragraph" user-select="true">{{paragraph}}</text>
+          </block>
+        </view>
+      </view>
+    </block>
+  </view>
+</view>

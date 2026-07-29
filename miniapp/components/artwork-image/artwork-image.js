@@ -104,11 +104,13 @@ Component({
     },
 
     resolveText(artwork) {
-      return this.properties.fallbackText
-        || artwork.title
-        || artwork.titleCn
-        || artwork.title_cn
-        || "未命名作品";
+      return (
+        this.properties.fallbackText ||
+        artwork.title ||
+        artwork.titleCn ||
+        artwork.title_cn ||
+        "未命名作品"
+      );
     },
 
     prepareImage() {
@@ -116,7 +118,11 @@ Component({
       const usage = this.properties.usage || "card";
       const candidates = this.resolveCandidates(artwork, usage);
       const currentSrc = candidates[0] || "";
-      const isSameLoadedImage = currentSrc && currentSrc === this.data.currentSrc && !this.data.loading && !this.data.failed;
+      const isSameLoadedImage =
+        currentSrc &&
+        currentSrc === this.data.currentSrc &&
+        !this.data.loading &&
+        !this.data.failed;
       this.setData({
         candidates,
         candidateIndex: 0,

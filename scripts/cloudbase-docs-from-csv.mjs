@@ -2,6 +2,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { buildArtworkSearchTerms } from "./cloudbase/artwork-search-terms.mjs";
 
 const DEFAULT_OUTPUT = path.resolve(process.cwd(), "miniapp", "data", "artworks.from-csv.json");
 const DEFAULT_COS_DOMAIN = "https://masterpiece-1437223579.cos.ap-beijing.myqcloud.com";
@@ -82,14 +83,18 @@ function parseCsv(text) {
 
   const [rawHeaders, ...body] = rows;
   const headers = (rawHeaders || []).map((header, index) => {
-    const normalized = String(header ?? "").replace(/^\uFEFF/, "").trim();
+    const normalized = String(header ?? "")
+      .replace(/^\uFEFF/, "")
+      .trim();
     return normalized || `__empty_${index}`;
   });
   if (!headers.length) return [];
 
   return body
     .filter((values) => values.some((value) => String(value || "").trim()))
-    .map((values) => Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ""])));
+    .map((values) =>
+      Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ""])),
+    );
 }
 
 function nullableString(value) {
@@ -99,10 +104,14 @@ function nullableString(value) {
 }
 
 function tagList(value) {
-  return [...new Set(String(value || "")
-    .split(/[,，;；、\s]+/u)
-    .map((tag) => tag.trim())
-    .filter(Boolean))];
+  return [
+    ...new Set(
+      String(value || "")
+        .split(/[,，;；、\s]+/u)
+        .map((tag) => tag.trim())
+        .filter(Boolean),
+    ),
+  ];
 }
 
 function imageUrl(id, options) {
@@ -128,7 +137,7 @@ function toDocument(row, options, batchId, rowNumber) {
   const now = new Date().toISOString();
   const sourceUrl = nullableString(row.source_url) || options.sourceUrl;
 
-  return {
+  const document = {
     _id: `artwork_${id}`,
     supabase_id: id,
     source_record_id: id,
@@ -158,6 +167,9 @@ function toDocument(row, options, batchId, rowNumber) {
     migration_batch: batchId,
     sync_target: "cloudbase",
   };
+  document.search_terms = buildArtworkSearchTerms(document);
+  document.search_terms_version = "search-terms-v1";
+  return document;
 }
 
 function main() {
@@ -166,8 +178,18 @@ function main() {
   const batchId = `csv-cloudbase-${new Date().toISOString().slice(0, 10)}`;
   const docs = rows.map((row, index) => toDocument(row, options, batchId, index + 2));
   fs.mkdirSync(path.dirname(options.output), { recursive: true });
-  fs.writeFileSync(options.output, `${JSON.stringify(docs, null, options.pretty ? 2 : 0)}\n`, "utf8");
-  console.log(JSON.stringify({ input: options.input, output: options.output, rows: rows.length, documents: docs.length }, null, 2));
+  fs.writeFileSync(
+    options.output,
+    `${JSON.stringify(docs, null, options.pretty ? 2 : 0)}\n`,
+    "utf8",
+  );
+  console.log(
+    JSON.stringify(
+      { input: options.input, output: options.output, rows: rows.length, documents: docs.length },
+      null,
+      2,
+    ),
+  );
 }
 
 main();

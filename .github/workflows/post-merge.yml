@@ -1,0 +1,115 @@
+name: Post-merge staging gate
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: post-merge-staging
+  cancel-in-progress: false
+
+jobs:
+  staging-cloudbase-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: staging-readonly
+    env:
+      CLOUDBASE_ENV_ID: ${{ vars.STAGING_CLOUDBASE_ENV_ID }}
+      TENCENT_SECRET_ID: ${{ secrets.STAGING_READONLY_TENCENT_SECRET_ID }}
+      TENCENT_SECRET_KEY: ${{ secrets.STAGING_READONLY_TENCENT_SECRET_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Require staging read-only configuration
+        shell: bash
+        run: |
+          test -n "$CLOUDBASE_ENV_ID"
+          test -n "$TENCENT_SECRET_ID"
+          test -n "$TENCENT_SECRET_KEY"
+          test "$CLOUDBASE_ENV_ID" != "cloudbase-d6gvny27ib05e0ede"
+      - name: Install locked dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts
+      - name: Run staging CloudBase audit
+        run: |
+          mkdir -p artifacts/staging/cloudbase
+          node scripts/cloudbase-audit-artworks.mjs \
+            --env-id "$CLOUDBASE_ENV_ID" \
+            --report-dir artifacts/staging/cloudbase \
+            --sample-head 5 \
+            --max-attempts 4 \
+            --head-concurrency 4
+      - name: Archive staging audit
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-cloudbase-audit-${{ github.run_attempt }}
+          path: artifacts/staging/cloudbase/
+          if-no-files-found: error
+          retention-days: 30
+
+  wechat-devtools-smoke:
+    runs-on:
+      - self-hosted
+      - windows
+      - wechat-devtools
+    timeout-minutes: 25
+    environment: staging-readonly
+    env:
+      WECHAT_AUTOMATOR_ENDPOINT: ws://127.0.0.1:9420
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install locked dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts
+      - name: Open the miniapp with local automation only
+        shell: pwsh
+        timeout-minutes: 5
+        env:
+          WECHAT_DEVTOOLS_CLI: ${{ vars.WECHAT_DEVTOOLS_CLI }}
+          WECHAT_DEVTOOLS_PORT: ${{ vars.WECHAT_DEVTOOLS_PORT }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WECHAT_DEVTOOLS_CLI)) {
+            throw "WECHAT_DEVTOOLS_CLI repository variable is required."
+          }
+          $servicePort = if ($env:WECHAT_DEVTOOLS_PORT) {
+            [int]$env:WECHAT_DEVTOOLS_PORT
+          } else {
+            32070
+          }
+          $projectPath = Join-Path $env:GITHUB_WORKSPACE "miniapp"
+          $automationReady = Test-NetConnection `
+            -ComputerName 127.0.0.1 `
+            -Port 9420 `
+            -InformationLevel Quiet
+          if (-not $automationReady) {
+            & $env:WECHAT_DEVTOOLS_CLI auto `
+              --project $projectPath `
+              --port $servicePort `
+              --auto-port 9420 `
+              --trust-project
+            if ($LASTEXITCODE -ne 0) {
+              throw "WeChat DevTools automation failed to start."
+            }
+          }
+      - name: Run miniapp recommendation smoke
+        timeout-minutes: 8
+        run: npm run recommendation:devtools-smoke
+      - name: Archive miniapp smoke evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-miniapp-smoke-${{ github.run_attempt }}
+          path: outputs/recommendation-system/task-06/devtools/
+          if-no-files-found: error
+          retention-days: 30

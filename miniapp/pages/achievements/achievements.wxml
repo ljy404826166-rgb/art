@@ -1,0 +1,116 @@
+<view class="achievements-page">
+  <view wx:if="{{stale}}" class="status-banner" role="alert">
+    <image
+      class="status-icon"
+      src="/assets/icons/lucide/svg/circle-alert.svg"
+      mode="aspectFit"
+    />
+    <text>云端暂不可用，正在显示本机记录</text>
+    <button class="status-action" bindtap="retryLoad">重试</button>
+  </view>
+
+  <block wx:if="{{loading && !hasState}}">
+    <view class="summary-card skeleton-card" aria-label="正在加载成就进度">
+      <view class="skeleton-line is-title"></view>
+      <view class="skeleton-line is-copy"></view>
+      <view class="skeleton-line is-progress"></view>
+    </view>
+    <view class="skeleton-heading"></view>
+    <view class="achievement-list">
+      <view wx:for="{{skeletonItems}}" wx:key="*this" class="achievement-card skeleton-item">
+        <view class="skeleton-icon"></view>
+        <view class="skeleton-copy">
+          <view class="skeleton-line is-card-title"></view>
+          <view class="skeleton-line is-card-copy"></view>
+        </view>
+      </view>
+    </view>
+  </block>
+
+  <block wx:elif="{{hasState}}">
+    <view class="summary-card">
+      <view class="summary-heading">
+        <view class="summary-copy">
+          <text class="summary-title">成就进度</text>
+          <text class="summary-description">集齐名头，点亮艺术人生</text>
+        </view>
+        <view class="summary-count">
+          <text class="summary-count-value">{{summary.countText}}</text>
+          <text class="summary-count-label">已获得</text>
+        </view>
+      </view>
+      <view
+        class="summary-progress"
+        aria-label="{{summary.progressLabel}}"
+        role="progressbar"
+      >
+        <view
+          class="summary-progress-value"
+          style="width: {{summary.progressPercent}}%;"
+        ></view>
+      </view>
+    </view>
+
+    <text class="list-heading">{{sectionTitle}}</text>
+
+    <view class="achievement-list">
+      <view
+        wx:for="{{items}}"
+        wx:key="id"
+        class="achievement-card {{item.stateClass}}"
+        data-achievement-id="{{item.id}}"
+        aria-label="{{item.accessibleLabel}}"
+        aria-role="button"
+        aria-disabled="{{!item.canEquip}}"
+        hover-class="achievement-card-hover"
+        bindtap="selectAchievement"
+      >
+        <view class="achievement-icon-wrap">
+          <image
+            class="achievement-icon"
+            src="{{item.icon}}"
+            mode="aspectFit"
+          />
+        </view>
+
+        <view class="achievement-copy">
+          <view class="achievement-title-row">
+            <text class="achievement-title">{{item.title}}</text>
+            <view
+              wx:if="{{item.statusText}}"
+              class="achievement-status {{item.statusClass}}"
+            >
+              <text class="achievement-status-label">{{item.statusText}}</text>
+            </view>
+          </view>
+          <text class="achievement-requirement">{{item.requirement}}</text>
+          <text wx:if="{{item.actionHint}}" class="achievement-action">
+            {{item.actionHint}}
+          </text>
+        </view>
+
+        <view class="achievement-rate">
+          <text class="achievement-rate-label">已获得人数</text>
+          <text class="achievement-rate-value {{item.rateClass}}">
+            {{item.unlockRate}}
+          </text>
+        </view>
+      </view>
+    </view>
+
+    <text class="statistics-note">
+      获得率按未注销用户统计，数据可能存在短暂延迟
+    </text>
+  </block>
+
+  <view wx:else class="error-state" role="alert">
+    <image
+      class="error-icon"
+      src="/assets/icons/lucide/svg/circle-alert.svg"
+      mode="aspectFit"
+    />
+    <text class="error-title">暂时无法读取成就</text>
+    <text class="error-copy">{{errorMessage}}</text>
+    <button class="retry-button" bindtap="retryLoad">重新加载</button>
+  </view>
+</view>

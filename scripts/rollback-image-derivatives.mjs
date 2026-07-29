@@ -39,7 +39,10 @@ function loadEnvFile(filePath) {
     const match = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
     if (!match) continue;
     let envValue = match[2].trim();
-    if ((envValue.startsWith('"') && envValue.endsWith('"')) || (envValue.startsWith("'") && envValue.endsWith("'"))) {
+    if (
+      (envValue.startsWith('"') && envValue.endsWith('"')) ||
+      (envValue.startsWith("'") && envValue.endsWith("'"))
+    ) {
       envValue = envValue.slice(1, -1);
     }
     env[match[1]] = envValue;
@@ -98,12 +101,18 @@ async function main() {
   const rows = manifest.rows.slice(0, args.limit);
 
   if (!args.apply) {
-    console.log(JSON.stringify({
-      mode: "dry-run",
-      manifest: args.manifest,
-      candidateRows: rows.length,
-      note: "No database rows updated and no Storage objects deleted. Re-run with --apply to restore URLs.",
-    }, null, 2));
+    console.log(
+      JSON.stringify(
+        {
+          mode: "dry-run",
+          manifest: args.manifest,
+          candidateRows: rows.length,
+          note: "No database rows updated and no Storage objects deleted. Re-run with --apply to restore URLs.",
+        },
+        null,
+        2,
+      ),
+    );
     return;
   }
 
@@ -112,19 +121,27 @@ async function main() {
   for (const row of rows) {
     await rollbackRow(supabase, row);
     restoredRows += 1;
-    console.log(JSON.stringify({
-      imageId: row.image_id,
-      artworkImageId: row.artwork_image_id,
-      restored: true,
-    }));
+    console.log(
+      JSON.stringify({
+        imageId: row.image_id,
+        artworkImageId: row.artwork_image_id,
+        restored: true,
+      }),
+    );
   }
 
-  console.log(JSON.stringify({
-    mode: "apply",
-    manifest: args.manifest,
-    restoredRows,
-    note: "Rollback restored database URLs only. Derivative Storage objects were not deleted.",
-  }, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        mode: "apply",
+        manifest: args.manifest,
+        restoredRows,
+        note: "Rollback restored database URLs only. Derivative Storage objects were not deleted.",
+      },
+      null,
+      2,
+    ),
+  );
 }
 
 main().catch((error) => {

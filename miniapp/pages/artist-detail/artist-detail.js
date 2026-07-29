@@ -8,10 +8,7 @@ const {
   fallbackArtworksByArtistAliases,
   normalizeError,
 } = require("../../services/artworks");
-const {
-  isFollowedArtist,
-  toggleFollowedArtist,
-} = require("../../services/local-library");
+const { isFollowedArtist, toggleFollowedArtist } = require("../../services/local-library");
 
 const ARTIST_WORKS_PAGE_SIZE = 8;
 
@@ -181,7 +178,8 @@ Page({
   },
 
   async loadMore() {
-    if (this.data.loading || this.data.loadingMore || !this.data.hasMore || this.data.usingFallback) return;
+    if (this.data.loading || this.data.loadingMore || !this.data.hasMore || this.data.usingFallback)
+      return;
     const artist = this.data.artist;
     if (!artist) return;
 
@@ -252,6 +250,14 @@ Page({
     const ratioParam = ratioValue > 0 ? `&ratio=${encodeURIComponent(ratioValue)}` : "";
     wx.navigateTo({
       url: `/pages/detail/detail?id=${encodeURIComponent(id)}${ratioParam}`,
+    });
+  },
+
+  openClassificationTag(event) {
+    const { tag, tagId } = event.currentTarget.dataset || {};
+    if (!tag || !tagId) return;
+    wx.navigateTo({
+      url: `/pages/tag/tag?tag=${encodeURIComponent(tag)}&queryType=classification&queryId=${encodeURIComponent(tagId)}`,
     });
   },
 });

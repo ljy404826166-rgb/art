@@ -11,6 +11,8 @@ csv/
 data/
 test-results/
 playwright-report/
+outputs/
+recovery/
 image-derivatives-manifest*.json
 image-derivatives-upload-result*.json
 image-derivatives-rollback*.json

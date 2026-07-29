@@ -139,7 +139,11 @@ const mockArtists = [
 
 const artistFilterGroups = [
   { name: "地区", key: "region", tags: ["全部", "欧洲", "亚洲", "北美", "拉丁美洲"] },
-  { name: "流派", key: "style", tags: ["全部", "印象派", "文艺复兴", "表现主义", "巴洛克", "浮世绘", "现代主义"] },
+  {
+    name: "流派",
+    key: "style",
+    tags: ["全部", "印象派", "文艺复兴", "表现主义", "巴洛克", "浮世绘", "现代主义"],
+  },
   { name: "年代", key: "period", tags: ["全部", "15世纪", "17世纪", "19世纪", "20世纪初"] },
 ];
 

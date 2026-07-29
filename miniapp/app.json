@@ -10,6 +10,13 @@
     "pages/history/history",
     "pages/downloads/downloads",
     "pages/followed-artists/followed-artists",
+    "pages/achievements/achievements",
+    "pages/profile-edit/profile-edit",
+    "pages/privacy/privacy",
+    "pages/account-data/account-data",
+    "pages/help/help",
+    "pages/legal/legal",
+    "pages/about/about",
     "pages/profile/profile"
   ],
   "window": {
@@ -52,8 +59,9 @@
     ]
   },
   "usingComponents": {
-    "artwork-card": "/components/artwork-card/artwork-card"
+    "artwork-card": "components/artwork-card/artwork-card"
   },
   "style": "v2",
+  "__usePrivacyCheck__": true,
   "sitemapLocation": "sitemap.json"
 }

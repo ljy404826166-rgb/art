@@ -44,11 +44,19 @@ async function fetchBuffer(url) {
 
 async function fetchArtworkExpected(sourceUrl) {
   if (!sourceUrl) return { sourceUrl, error: "missing source_url" };
-  const response = await fetch(sourceUrl, { headers: { "user-agent": "ArtArchiveDataBuilder/0.1", accept: "text/html" } });
+  const response = await fetch(sourceUrl, {
+    headers: { "user-agent": "ArtArchiveDataBuilder/0.1", accept: "text/html" },
+  });
   if (!response.ok) return { sourceUrl, error: `source page HTTP ${response.status}` };
   const artwork = parseArtworkPage(await response.text(), sourceUrl);
   const imageUrl = artwork.downloadUrl || artwork.imageUrl;
-  if (!imageUrl) return { sourceUrl, title: artwork.titleEn, artist: artwork.artist, error: "missing Artvee image URL" };
+  if (!imageUrl)
+    return {
+      sourceUrl,
+      title: artwork.titleEn,
+      artist: artwork.artist,
+      error: "missing Artvee image URL",
+    };
   try {
     return {
       sourceUrl,
@@ -58,7 +66,13 @@ async function fetchArtworkExpected(sourceUrl) {
       expected: await fetchBuffer(imageUrl),
     };
   } catch (error) {
-    return { sourceUrl, title: artwork.titleEn, artist: artwork.artist, expectedImageUrl: imageUrl, error: error.message };
+    return {
+      sourceUrl,
+      title: artwork.titleEn,
+      artist: artwork.artist,
+      expectedImageUrl: imageUrl,
+      error: error.message,
+    };
   }
 }
 
@@ -81,13 +95,33 @@ async function main() {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   if (!supabaseUrl) throw new Error("Missing SUPABASE_URL");
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY");
-  const supabase = createClient(supabaseUrl, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+  const supabase = createClient(supabaseUrl, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false },
+  });
 
-  const paintings = await selectInChunks(supabase, "paintings", "id,title_cn,title_en,artist,display_url", "id", ids);
-  const links = await selectInChunks(supabase, "artwork_images", "image_id,artwork_id,display_url,download_url", "image_id", ids);
+  const paintings = await selectInChunks(
+    supabase,
+    "paintings",
+    "id,title_cn,title_en,artist,display_url",
+    "id",
+    ids,
+  );
+  const links = await selectInChunks(
+    supabase,
+    "artwork_images",
+    "image_id,artwork_id,display_url,download_url",
+    "image_id",
+    ids,
+  );
   const artworkIds = [...new Set(links.map((row) => row.artwork_id).filter(Boolean))];
   const artworks = artworkIds.length
-    ? await selectInChunks(supabase, "artworks", "id,title,artist_display,source_url,source_payload", "id", artworkIds)
+    ? await selectInChunks(
+        supabase,
+        "artworks",
+        "id,title,artist_display,source_url,source_payload",
+        "id",
+        artworkIds,
+      )
     : [];
   const paintingById = new Map(paintings.map((row) => [row.id, row]));
   const linkById = new Map(links.map((row) => [row.image_id, row]));
@@ -119,20 +153,32 @@ async function main() {
       expectedArtist: expected.artist || "",
       expectedError: expected.error || "",
       storageMatchesLocal: Boolean(storage.hash && local.hash && storage.hash === local.hash),
-      storageMatchesExpected: Boolean(storage.hash && expected.expected?.hash && storage.hash === expected.expected.hash),
-      localMatchesExpected: Boolean(local.hash && expected.expected?.hash && local.hash === expected.expected.hash),
+      storageMatchesExpected: Boolean(
+        storage.hash && expected.expected?.hash && storage.hash === expected.expected.hash,
+      ),
+      localMatchesExpected: Boolean(
+        local.hash && expected.expected?.hash && local.hash === expected.expected.hash,
+      ),
     });
   }
 
-  console.log(JSON.stringify({
-    range: `${start}_standard..${end}_standard`,
-    count: results.length,
-    storageMatchesExpected: results.filter((row) => row.storageMatchesExpected).length,
-    storageMismatchesExpected: results.filter((row) => !row.storageMatchesExpected).map((row) => row.id),
-    storageMatchesLocal: results.filter((row) => row.storageMatchesLocal).length,
-    localMatchesExpected: results.filter((row) => row.localMatchesExpected).length,
-    sample: results.slice(0, 10),
-  }, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        range: `${start}_standard..${end}_standard`,
+        count: results.length,
+        storageMatchesExpected: results.filter((row) => row.storageMatchesExpected).length,
+        storageMismatchesExpected: results
+          .filter((row) => !row.storageMatchesExpected)
+          .map((row) => row.id),
+        storageMatchesLocal: results.filter((row) => row.storageMatchesLocal).length,
+        localMatchesExpected: results.filter((row) => row.localMatchesExpected).length,
+        sample: results.slice(0, 10),
+      },
+      null,
+      2,
+    ),
+  );
 }
 
 main().catch((error) => {

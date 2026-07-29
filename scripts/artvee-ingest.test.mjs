@@ -21,6 +21,7 @@ import {
   formatProgressLine,
   formatAssetName,
   isRetriableGeminiStatus,
+  isArtveeMaintenancePage,
   mergeProcessedSourceUrls,
   nextStorageNumberFromMaxes,
   normalizeGeneratedMetadata,
@@ -29,11 +30,28 @@ import {
   parseArtworkPage,
   resolveGeminiApiKey,
   shouldPauseBeforeAi,
+  shouldTreatArtistPageErrorAsEnd,
   tencentCosObjectKey,
   tencentCosPublicUrl,
   uploadImageWithRetry,
   toCsv,
 } from "./artvee-ingest.mjs";
+
+test("artist pagination ends only on explicit 404 responses", () => {
+  assert.equal(shouldTreatArtistPageErrorAsEnd(new Error("Fetch failed 404 Not Found"), 1), true);
+  assert.equal(shouldTreatArtistPageErrorAsEnd(new Error("fetch failed"), 8), false);
+  assert.equal(shouldTreatArtistPageErrorAsEnd(new Error("UND_ERR_CONNECT_TIMEOUT"), 2), false);
+  assert.equal(shouldTreatArtistPageErrorAsEnd(new Error("This operation was aborted"), 1), false);
+});
+
+test("maintenance HTML is rejected instead of being cached as artwork metadata", () => {
+  assert.equal(isArtveeMaintenancePage("<title>Site Under Maintenance</title>"), true);
+  assert.equal(
+    isArtveeMaintenancePage("Our website is currently undergoing scheduled maintenance."),
+    true,
+  );
+  assert.equal(isArtveeMaintenancePage("<title>Margate - Artvee</title>"), false);
+});
 
 test("parseArgs supports random, search, and popular count commands", () => {
   const random = parseArgs(["random", "5"]);
@@ -47,7 +65,7 @@ test("parseArgs supports random, search, and popular count commands", () => {
   assert.equal(random.htmlLimitPerHour, 180);
   assert.equal(random.imageLimitPerHour, 0);
   assert.equal(random.maxArtworkPagesPerRun, 70);
-  assert.equal(random.maxImagesPerRun, 100);
+  assert.equal(random.maxImagesPerRun, 200);
   assert.equal(random.timeoutMs, 15000);
   assert.equal(random.maxRetries, 1);
   assert.equal(random.robotsTxt, true);
@@ -66,7 +84,15 @@ test("parseArgs supports random, search, and popular count commands", () => {
 
   assert.equal(parseArgs(["popular", "15"]).count, 15);
 
-  const openai = parseArgs(["popular", "15", "--with-ai", "--provider", "openai", "--model", "gpt-5.4-mini"]);
+  const openai = parseArgs([
+    "popular",
+    "15",
+    "--with-ai",
+    "--provider",
+    "openai",
+    "--model",
+    "gpt-5.4-mini",
+  ]);
   assert.equal(openai.provider, "openai");
   assert.equal(openai.model, "gpt-5.4-mini");
   assert.equal(openai.useAI, true);
@@ -84,21 +110,22 @@ test("parseArgs supports random, search, and popular count commands", () => {
 
 test("parseArgs rejects direct Tencent COS and CloudBase publishing from ingest", () => {
   assert.throws(
-    () => parseArgs([
-      "search",
-      "monet",
-      "5",
-      "--cos-upload",
-      "--cloudbase-db",
-      "--cos-bucket",
-      "masterpiece-1437223579",
-      "--cos-region",
-      "ap-beijing",
-      "--cos-prefix",
-      "ppaintings",
-      "--cloudbase-env-id",
-      "cloudbase-d6gvny27ib05e0ede",
-    ]),
+    () =>
+      parseArgs([
+        "search",
+        "monet",
+        "5",
+        "--cos-upload",
+        "--cloudbase-db",
+        "--cos-bucket",
+        "masterpiece-1437223579",
+        "--cos-region",
+        "ap-beijing",
+        "--cos-prefix",
+        "ppaintings",
+        "--cloudbase-env-id",
+        "cloudbase-d6gvny27ib05e0ede",
+      ]),
     /reviewed publish step/,
   );
 
@@ -174,9 +201,18 @@ test("CloudBase artwork document uses COS original and derivative URLs", () => {
   assert.equal(doc._id, "artwork_001_standard");
   assert.equal(doc.source_record_id, "80705");
   assert.equal(doc.image_id, "001_standard");
-  assert.equal(doc.thumbnail_url, "https://masterpiece-1437223579.cos.ap-beijing.myqcloud.com/ppaintings/derivatives/thumb/001_standard.webp");
-  assert.equal(doc.display_url, "https://masterpiece-1437223579.cos.ap-beijing.myqcloud.com/ppaintings/derivatives/display/001_standard.webp");
-  assert.equal(doc.download_url, "https://masterpiece-1437223579.cos.ap-beijing.myqcloud.com/ppaintings/001_standard.jpg");
+  assert.equal(
+    doc.thumbnail_url,
+    "https://masterpiece-1437223579.cos.ap-beijing.myqcloud.com/ppaintings/derivatives/thumb/001_standard.webp",
+  );
+  assert.equal(
+    doc.display_url,
+    "https://masterpiece-1437223579.cos.ap-beijing.myqcloud.com/ppaintings/derivatives/display/001_standard.webp",
+  );
+  assert.equal(
+    doc.download_url,
+    "https://masterpiece-1437223579.cos.ap-beijing.myqcloud.com/ppaintings/001_standard.jpg",
+  );
   assert.deepEqual(doc.tag_keys, ["TagA", "TagB", "TagC", "TagD"]);
   assert.equal(doc.sync_target, "cloudbase");
 });
@@ -213,7 +249,10 @@ test("raw evidence record preserves Artvee facts without pretending they are rev
   assert.equal(record.raw.title_en, "Example Work");
   assert.equal(record.raw.image_pixel_dimensions, "1200 x 900 px");
   assert.equal(record.raw.file_format, "JPG");
-  assert.equal(record.raw.page_text_excerpt, "Example Work Example Artist Public domain Illustration");
+  assert.equal(
+    record.raw.page_text_excerpt,
+    "Example Work Example Artist Public domain Illustration",
+  );
   assert.deepEqual(record.verified_sources, []);
   assert.equal(record.image.asset_name, "001_standard.jpg");
   assert.equal(record.image.local_path, "D:\\art\\csv\\images\\001_standard.jpg");
@@ -266,12 +305,15 @@ test("parseArgs supports ranked artist priority commands", () => {
     "20",
     "--artist-start",
     "4",
+    "--scan-artist-start",
+    "19",
     "--per-artist",
     "3",
     "--artist-priority-list",
     "D:\\art\\data\\custom-artists.json",
   ]);
   assert.equal(custom.artistStart, 4);
+  assert.equal(custom.scanArtistStart, 19);
   assert.equal(custom.perArtist, 3);
   assert.equal(custom.artistPriorityList, "D:\\art\\data\\custom-artists.json");
 });
@@ -280,13 +322,21 @@ test("buildArtistPriorityEntries sorts by rank and removes duplicate artist URLs
   const entries = buildArtistPriorityEntries([
     { rank: 2, name: "Vincent van Gogh", slug: "vincent-van-gogh", score: 99 },
     { rank: 1, name: "Leonardo da Vinci", slug: "leonardo-da-vinci", score: 100 },
-    { rank: 3, name: "Duplicate Leonardo", url: "https://artvee.com/artist/leonardo-da-vinci/", score: 1 },
+    {
+      rank: 3,
+      name: "Duplicate Leonardo",
+      url: "https://artvee.com/artist/leonardo-da-vinci/",
+      score: 1,
+    },
   ]);
-  assert.deepEqual(entries.map((entry) => entry.name), ["Leonardo da Vinci", "Vincent van Gogh"]);
-  assert.deepEqual(entries.map((entry) => entry.url), [
-    "https://artvee.com/artist/leonardo-da-vinci/",
-    "https://artvee.com/artist/vincent-van-gogh/",
-  ]);
+  assert.deepEqual(
+    entries.map((entry) => entry.name),
+    ["Leonardo da Vinci", "Vincent van Gogh"],
+  );
+  assert.deepEqual(
+    entries.map((entry) => entry.url),
+    ["https://artvee.com/artist/leonardo-da-vinci/", "https://artvee.com/artist/vincent-van-gogh/"],
+  );
 });
 
 test("parseArgs supports famous cold-start commands", () => {
@@ -398,15 +448,30 @@ test("buildListingUrl matches Artvee list URL patterns", () => {
     "https://artvee.com/page/3/?orderby=popularity&per_page=30",
   );
   assert.equal(
-    buildListingUrl({ command: "famous", keyword: "mona lisa leonardo da vinci", page: 1, perPage: 30 }),
+    buildListingUrl({
+      command: "famous",
+      keyword: "mona lisa leonardo da vinci",
+      page: 1,
+      perPage: 30,
+    }),
     "https://artvee.com/main/?s=mona+lisa+leonardo+da+vinci&per_page=30",
   );
   assert.equal(
-    buildListingUrl({ command: "artist", artistUrl: "https://artvee.com/artist/leonardo-da-vinci/", page: 1, perPage: 30 }),
+    buildListingUrl({
+      command: "artist",
+      artistUrl: "https://artvee.com/artist/leonardo-da-vinci/",
+      page: 1,
+      perPage: 30,
+    }),
     "https://artvee.com/artist/leonardo-da-vinci/?per_page=30",
   );
   assert.equal(
-    buildListingUrl({ command: "artist", artistUrl: "https://artvee.com/artist/leonardo-da-vinci/", page: 2, perPage: 30 }),
+    buildListingUrl({
+      command: "artist",
+      artistUrl: "https://artvee.com/artist/leonardo-da-vinci/",
+      page: 2,
+      perPage: 30,
+    }),
     "https://artvee.com/artist/leonardo-da-vinci/page/2/?per_page=30",
   );
 });
@@ -468,14 +533,54 @@ test("famous search queries preserve curation order for equal priorities", () =>
 
 test("famous candidates limit repeated artists and repeated series in fallback", () => {
   const candidates = [
-    { title: "The Great Wave", artist: "Katsushika Hokusai", url: "https://artvee.com/dl/great-wave/", popularity: 20 },
-    { title: "Album of Sketches by Katsushika Hokusai and His Disciples Pl.20", artist: "Katsushika Hokusai", url: "https://artvee.com/dl/hokusai-20/", popularity: 30 },
-    { title: "Album of Sketches by Katsushika Hokusai and His Disciples Pl.16", artist: "Katsushika Hokusai", url: "https://artvee.com/dl/hokusai-16/", popularity: 30 },
-    { title: "Album of Sketches by Katsushika Hokusai and His Disciples Pl.17", artist: "Katsushika Hokusai", url: "https://artvee.com/dl/hokusai-17/", popularity: 30 },
-    { title: "Mona Lisa", artist: "Leonardo da Vinci", url: "https://artvee.com/dl/mona-lisa/", popularity: 10 },
-    { title: "The Last Supper", artist: "Leonardo da Vinci", url: "https://artvee.com/dl/last-supper/", popularity: 10 },
-    { title: "Vitruvian Man", artist: "Leonardo da Vinci", url: "https://artvee.com/dl/vitruvian-man/", popularity: 10 },
-    { title: "La Gioconda", artist: "Follower of Leonardo da Vinci", url: "https://artvee.com/dl/la-gioconda/", popularity: 10 },
+    {
+      title: "The Great Wave",
+      artist: "Katsushika Hokusai",
+      url: "https://artvee.com/dl/great-wave/",
+      popularity: 20,
+    },
+    {
+      title: "Album of Sketches by Katsushika Hokusai and His Disciples Pl.20",
+      artist: "Katsushika Hokusai",
+      url: "https://artvee.com/dl/hokusai-20/",
+      popularity: 30,
+    },
+    {
+      title: "Album of Sketches by Katsushika Hokusai and His Disciples Pl.16",
+      artist: "Katsushika Hokusai",
+      url: "https://artvee.com/dl/hokusai-16/",
+      popularity: 30,
+    },
+    {
+      title: "Album of Sketches by Katsushika Hokusai and His Disciples Pl.17",
+      artist: "Katsushika Hokusai",
+      url: "https://artvee.com/dl/hokusai-17/",
+      popularity: 30,
+    },
+    {
+      title: "Mona Lisa",
+      artist: "Leonardo da Vinci",
+      url: "https://artvee.com/dl/mona-lisa/",
+      popularity: 10,
+    },
+    {
+      title: "The Last Supper",
+      artist: "Leonardo da Vinci",
+      url: "https://artvee.com/dl/last-supper/",
+      popularity: 10,
+    },
+    {
+      title: "Vitruvian Man",
+      artist: "Leonardo da Vinci",
+      url: "https://artvee.com/dl/vitruvian-man/",
+      popularity: 10,
+    },
+    {
+      title: "La Gioconda",
+      artist: "Follower of Leonardo da Vinci",
+      url: "https://artvee.com/dl/la-gioconda/",
+      popularity: 10,
+    },
   ];
 
   const selected = selectFamousCandidates(candidates, {
@@ -486,44 +591,97 @@ test("famous candidates limit repeated artists and repeated series in fallback",
 
   assert.equal(selected.filter((item) => /Hokusai/i.test(item.artist)).length, 3);
   assert.equal(selected.filter((item) => /Album of Sketches/i.test(item.title)).length, 2);
-  assert.equal(selected.some((item) => item.title === "The Great Wave"), true);
+  assert.equal(
+    selected.some((item) => item.title === "The Great Wave"),
+    true,
+  );
 });
 
 test("famous candidates demote non-original related images behind exact classic matches", () => {
-  const selected = selectFamousCandidates([
-    { title: "Leonardo da Vinci, Mona Lisa", artist: "Cercle Francais d'Art", url: "https://artvee.com/dl/repro/", popularity: 50 },
-    { title: "The Mona Lisa", artist: "Leonardo da Vinci", url: "https://artvee.com/dl/original/", popularity: 1 },
-    { title: "Mona Lisa", artist: "Follower of Leonardo da Vinci", url: "https://artvee.com/dl/follower/", popularity: 30 },
-  ], { query: "mona lisa leonardo da vinci" });
+  const selected = selectFamousCandidates(
+    [
+      {
+        title: "Leonardo da Vinci, Mona Lisa",
+        artist: "Cercle Francais d'Art",
+        url: "https://artvee.com/dl/repro/",
+        popularity: 50,
+      },
+      {
+        title: "The Mona Lisa",
+        artist: "Leonardo da Vinci",
+        url: "https://artvee.com/dl/original/",
+        popularity: 1,
+      },
+      {
+        title: "Mona Lisa",
+        artist: "Follower of Leonardo da Vinci",
+        url: "https://artvee.com/dl/follower/",
+        popularity: 30,
+      },
+    ],
+    { query: "mona lisa leonardo da vinci" },
+  );
 
   assert.equal(selected[0].url, "https://artvee.com/dl/original/");
 });
 
 test("famous candidates skip unrelated fallback when a canonical work phrase is missing", () => {
-  const selected = selectFamousCandidates([
-    { title: "Album of Sketches by Katsushika Hokusai and His Disciples Pl.20", artist: "Katsushika Hokusai", url: "https://artvee.com/dl/hokusai-20/", popularity: 30 },
-  ], { query: "the great wave hokusai" });
+  const selected = selectFamousCandidates(
+    [
+      {
+        title: "Album of Sketches by Katsushika Hokusai and His Disciples Pl.20",
+        artist: "Katsushika Hokusai",
+        url: "https://artvee.com/dl/hokusai-20/",
+        popularity: 30,
+      },
+    ],
+    { query: "the great wave hokusai" },
+  );
 
   assert.equal(selected.length, 0);
 });
 
 test("famous candidates require canonical phrases for specific cold-start works", () => {
-  assert.equal(selectFamousCandidates([
-    { title: "A sculpture of the same man reading, tearing a man in half, and giving another man a coin", artist: "William Henry Walker", url: "x" },
-  ], { query: "vitruvian man leonardo da vinci" }).length, 0);
+  assert.equal(
+    selectFamousCandidates(
+      [
+        {
+          title:
+            "A sculpture of the same man reading, tearing a man in half, and giving another man a coin",
+          artist: "William Henry Walker",
+          url: "x",
+        },
+      ],
+      { query: "vitruvian man leonardo da vinci" },
+    ).length,
+    0,
+  );
 
-  assert.equal(selectFamousCandidates([
-    { title: "Military and Navy; The Constable of the Tower", artist: "Leslie Matthew Ward", url: "x" },
-  ], { query: "the hay wain constable" }).length, 0);
+  assert.equal(
+    selectFamousCandidates(
+      [
+        {
+          title: "Military and Navy; The Constable of the Tower",
+          artist: "Leslie Matthew Ward",
+          url: "x",
+        },
+      ],
+      { query: "the hay wain constable" },
+    ).length,
+    0,
+  );
 
-  assert.equal(selectFamousCandidates([
-    { title: "The Hay Wain", artist: "John Constable", url: "x" },
-  ], { query: "the hay wain constable" }).length, 1);
+  assert.equal(
+    selectFamousCandidates([{ title: "The Hay Wain", artist: "John Constable", url: "x" }], {
+      query: "the hay wain constable",
+    }).length,
+    1,
+  );
 });
 
-test("default crawl cap allows one hundred images per run", () => {
-  const options = parseArgs(["famous", "100"]);
-  assert.equal(options.maxImagesPerRun, 100);
+test("default crawl cap allows two hundred images per run", () => {
+  const options = parseArgs(["famous", "200"]);
+  assert.equal(options.maxImagesPerRun, 200);
 });
 
 test("extractListingsFromHtml reads Artvee product cards", () => {
@@ -589,7 +747,7 @@ test("CSV output keeps the sample column order and escaping", () => {
     {
       id: "136_standard",
       title_cn: "A, B",
-      title_en: "A \"B\"",
+      title_en: 'A "B"',
       artist: "Anon",
       location: "",
       year_and_place: "1900",
@@ -600,7 +758,10 @@ test("CSV output keeps the sample column order and escaping", () => {
     },
   ]);
 
-  assert.match(csv, /^id,title_cn,title_en,artist,location,year_and_place,medium,dimensions,description,tags\r?\n/);
+  assert.match(
+    csv,
+    /^id,title_cn,title_en,artist,location,year_and_place,medium,dimensions,description,tags\r?\n/,
+  );
   assert.match(csv, /"A, B","A ""B"""/);
 });
 
@@ -797,7 +958,12 @@ test("Gemini high-demand and quota responses are retriable", () => {
 });
 
 test("progress line renders a terminal-visible stage and count", () => {
-  const line = formatProgressLine({ current: 12, total: 50, stage: "downloading image", width: 20 });
+  const line = formatProgressLine({
+    current: 12,
+    total: 50,
+    stage: "downloading image",
+    width: 20,
+  });
   assert.match(line, /12\/50/);
   assert.match(line, /24%/);
   assert.match(line, /downloading image/);
@@ -817,7 +983,10 @@ test("checkpoint state preserves output, rows, and processed source urls", () =>
 
   assert.equal(state.outputPath, "D:/art/csv/test.csv");
   assert.equal(state.rows.length, 2);
-  assert.deepEqual(state.processedSourceUrls, ["https://artvee.com/dl/a/", "https://artvee.com/dl/b/"]);
+  assert.deepEqual(state.processedSourceUrls, [
+    "https://artvee.com/dl/a/",
+    "https://artvee.com/dl/b/",
+  ]);
   assert.equal(state.nextNumber, 3);
   assert.equal(state.status, "running");
 });
@@ -827,15 +996,15 @@ test("processed source URL history merges and de-duplicates across runs", () => 
     ["https://artvee.com/dl/a/", "https://artvee.com/dl/b/"],
     new Set(["https://artvee.com/dl/b/", "https://artvee.com/dl/c/"]),
   );
-  assert.deepEqual([...merged], [
-    "https://artvee.com/dl/a/",
-    "https://artvee.com/dl/b/",
-    "https://artvee.com/dl/c/",
-  ]);
+  assert.deepEqual(
+    [...merged],
+    ["https://artvee.com/dl/a/", "https://artvee.com/dl/b/", "https://artvee.com/dl/c/"],
+  );
 });
 
 test("robots parser reads disallow rules and crawl delay for matching agents", () => {
-  const parsed = parseRobotsTxt(`
+  const parsed = parseRobotsTxt(
+    `
     User-agent: other
     Disallow: /other
     Crawl-delay: 99
@@ -843,7 +1012,9 @@ test("robots parser reads disallow rules and crawl delay for matching agents", (
     User-agent: *
     Disallow: /private
     Crawl-delay: 12
-  `, "ArtArchiveDataBuilder/0.1");
+  `,
+    "ArtArchiveDataBuilder/0.1",
+  );
 
   assert.deepEqual(parsed.disallow, ["/private"]);
   assert.equal(parsed.crawlDelayMs, 12000);
@@ -852,16 +1023,22 @@ test("robots parser reads disallow rules and crawl delay for matching agents", (
 test("uploadImageWithRetry retries upload failures and returns a non-throwing result", async () => {
   let attempts = 0;
   const messages = [];
-  const result = await uploadImageWithRetry(null, "artwork", "304_standard.jpg", { buffer: Buffer.from("x") }, {
-    maxRetries: 2,
-    retryDelayMs: 1,
-    uploadFn: async () => {
-      attempts += 1;
-      throw new Error("fetch failed");
+  const result = await uploadImageWithRetry(
+    null,
+    "artwork",
+    "304_standard.jpg",
+    { buffer: Buffer.from("x") },
+    {
+      maxRetries: 2,
+      retryDelayMs: 1,
+      uploadFn: async () => {
+        attempts += 1;
+        throw new Error("fetch failed");
+      },
+      sleepFn: async () => {},
+      logFn: (message) => messages.push(message),
     },
-    sleepFn: async () => {},
-    logFn: (message) => messages.push(message),
-  });
+  );
 
   assert.equal(attempts, 3);
   assert.equal(result.uploaded, false);

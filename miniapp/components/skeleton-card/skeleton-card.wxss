@@ -8,6 +8,11 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.skeleton-list.grid.is-flush {
+  padding-right: 0;
+  padding-left: 0;
+}
+
 .skeleton-list.row {
   display: flex;
   overflow: hidden;
@@ -19,6 +24,10 @@
   border-radius: 24rpx;
   background: #ffffff;
   box-shadow: 0 18rpx 44rpx rgba(30, 24, 18, 0.08);
+}
+
+.skeleton-list.grid .skeleton-card {
+  height: 476rpx;
 }
 
 .skeleton-list.row .skeleton-card {
@@ -39,6 +48,13 @@
   display: grid;
   gap: 12rpx;
   padding: 20rpx 22rpx 22rpx;
+}
+
+.skeleton-list.grid .skeleton-copy {
+  box-sizing: border-box;
+  height: 136rpx;
+  gap: 8rpx;
+  padding: 22rpx 24rpx 26rpx;
 }
 
 .skeleton-line {

@@ -1,19 +1,19 @@
 #!/usr/bin/env node
 
-import CloudBase from '@cloudbase/manager-node';
-import fs from 'node:fs';
-import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import CloudBase from "@cloudbase/manager-node";
+import fs from "node:fs";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 
-const DEFAULT_ENV_ID = 'cloudbase-d6gvny27ib05e0ede';
-const DEFAULT_REPORT_DIR = path.resolve(process.cwd(), 'csv', 'cloudbase');
+const DEFAULT_ENV_ID = "cloudbase-d6gvny27ib05e0ede";
+const DEFAULT_REPORT_DIR = path.resolve(process.cwd(), "csv", "cloudbase");
 
 const DEFAULT_COLLECTIONS = {
-  artworks: 'artworks',
-  artists: 'artists',
-  vocabTerms: 'vocab_terms',
-  artworkArtistLinks: 'artwork_artist_links',
-  artworkTagLinks: 'artwork_tag_links',
+  artworks: "artworks",
+  artists: "artists",
+  vocabTerms: "vocab_terms",
+  artworkArtistLinks: "artwork_artist_links",
+  artworkTagLinks: "artwork_tag_links",
 };
 
 const DEFAULT_THRESHOLDS = {
@@ -24,9 +24,9 @@ const DEFAULT_THRESHOLDS = {
 function parseEnvFile(filePath) {
   if (!fs.existsSync(filePath)) return {};
   const out = {};
-  for (const raw of fs.readFileSync(filePath, 'utf8').split(/\r?\n/)) {
+  for (const raw of fs.readFileSync(filePath, "utf8").split(/\r?\n/)) {
     const line = raw.trim();
-    if (!line || line.startsWith('#')) continue;
+    if (!line || line.startsWith("#")) continue;
     const match = line.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
     if (!match) continue;
     let value = match[2].trim();
@@ -42,12 +42,12 @@ function parseEnvFile(filePath) {
 }
 
 function env() {
-  return { ...parseEnvFile('.env'), ...parseEnvFile('.env.local'), ...process.env };
+  return { ...parseEnvFile(".env"), ...parseEnvFile(".env.local"), ...process.env };
 }
 
 function required(argv, index, flag) {
   const value = argv[index];
-  if (!value || value.startsWith('--')) {
+  if (!value || value.startsWith("--")) {
     throw new Error(`${flag} requires a value.`);
   }
   return value;
@@ -70,7 +70,10 @@ function ratio(value, flag) {
 }
 
 function timestamp() {
-  return new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+  return new Date()
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\.\d{3}Z$/, "Z");
 }
 
 export function parseArgs(argv = []) {
@@ -78,7 +81,7 @@ export function parseArgs(argv = []) {
     envId: process.env.CLOUDBASE_ENV_ID || process.env.TCB_ENV_ID || DEFAULT_ENV_ID,
     collections: { ...DEFAULT_COLLECTIONS },
     reportDir: DEFAULT_REPORT_DIR,
-    out: '',
+    out: "",
     pageSize: 1000,
     sampleSize: 20,
     strict: false,
@@ -88,30 +91,34 @@ export function parseArgs(argv = []) {
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
-    if (arg === '--help' || arg === '-h') options.help = true;
-    else if (arg === '--strict') options.strict = true;
-    else if (arg === '--env-id') options.envId = required(argv, (index += 1), arg);
-    else if (arg === '--artworks') options.collections.artworks = required(argv, (index += 1), arg);
-    else if (arg === '--artists') options.collections.artists = required(argv, (index += 1), arg);
-    else if (arg === '--vocab-terms') options.collections.vocabTerms = required(argv, (index += 1), arg);
-    else if (arg === '--artwork-artist-links') {
+    if (arg === "--help" || arg === "-h") options.help = true;
+    else if (arg === "--strict") options.strict = true;
+    else if (arg === "--env-id") options.envId = required(argv, (index += 1), arg);
+    else if (arg === "--artworks") options.collections.artworks = required(argv, (index += 1), arg);
+    else if (arg === "--artists") options.collections.artists = required(argv, (index += 1), arg);
+    else if (arg === "--vocab-terms")
+      options.collections.vocabTerms = required(argv, (index += 1), arg);
+    else if (arg === "--artwork-artist-links") {
       options.collections.artworkArtistLinks = required(argv, (index += 1), arg);
-    } else if (arg === '--artwork-tag-links') {
+    } else if (arg === "--artwork-tag-links") {
       options.collections.artworkTagLinks = required(argv, (index += 1), arg);
-    } else if (arg === '--report-dir') options.reportDir = path.resolve(required(argv, (index += 1), arg));
-    else if (arg === '--out') options.out = path.resolve(required(argv, (index += 1), arg));
-    else if (arg === '--page-size') options.pageSize = positiveInt(required(argv, (index += 1), arg), arg);
-    else if (arg === '--sample-size') options.sampleSize = positiveInt(required(argv, (index += 1), arg), arg);
-    else if (arg === '--min-artist-coverage') {
+    } else if (arg === "--report-dir")
+      options.reportDir = path.resolve(required(argv, (index += 1), arg));
+    else if (arg === "--out") options.out = path.resolve(required(argv, (index += 1), arg));
+    else if (arg === "--page-size")
+      options.pageSize = positiveInt(required(argv, (index += 1), arg), arg);
+    else if (arg === "--sample-size")
+      options.sampleSize = positiveInt(required(argv, (index += 1), arg), arg);
+    else if (arg === "--min-artist-coverage") {
       options.thresholds.artistCoverage = ratio(required(argv, (index += 1), arg), arg);
-    } else if (arg === '--min-tag-coverage') {
+    } else if (arg === "--min-tag-coverage") {
       options.thresholds.tagCoverage = ratio(required(argv, (index += 1), arg), arg);
     } else {
       throw new Error(`Unknown argument: ${arg}`);
     }
   }
 
-  if (options.pageSize > 1000) throw new Error('--page-size must be <= 1000.');
+  if (options.pageSize > 1000) throw new Error("--page-size must be <= 1000.");
   return options;
 }
 
@@ -142,16 +149,18 @@ This script never writes CloudBase data. It only issues QUERY commands.
 }
 
 function createClient(options, config) {
-  const secretId = config.TENCENT_SECRET_ID || config.TENCENTCLOUD_SECRETID || config.TENCENT_CLOUD_SECRET_ID;
-  const secretKey = config.TENCENT_SECRET_KEY || config.TENCENTCLOUD_SECRETKEY || config.TENCENT_CLOUD_SECRET_KEY;
+  const secretId =
+    config.TENCENT_SECRET_ID || config.TENCENTCLOUD_SECRETID || config.TENCENT_CLOUD_SECRET_ID;
+  const secretKey =
+    config.TENCENT_SECRET_KEY || config.TENCENTCLOUD_SECRETKEY || config.TENCENT_CLOUD_SECRET_KEY;
   if (!secretId || !secretKey) {
-    throw new Error('Missing Tencent credentials. Set TENCENT_SECRET_ID and TENCENT_SECRET_KEY.');
+    throw new Error("Missing Tencent credentials. Set TENCENT_SECRET_ID and TENCENT_SECRET_KEY.");
   }
   return CloudBase.init({ envId: options.envId, secretId, secretKey });
 }
 
 function parseCommandRows(data) {
-  const outer = JSON.parse(data || '[]');
+  const outer = JSON.parse(data || "[]");
   return outer.map((row) => JSON.parse(row));
 }
 
@@ -162,7 +171,7 @@ async function queryCollection(database, collection, { pageSize, projection } = 
       MgoCommands: [
         {
           TableName: collection,
-          CommandType: 'QUERY',
+          CommandType: "QUERY",
           Command: JSON.stringify({
             find: collection,
             filter: {},
@@ -189,7 +198,9 @@ async function queryOptionalCollection(database, collection, options) {
 }
 
 function cleanText(value) {
-  return String(value ?? '').replace(/\s+/g, ' ').trim();
+  return String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function asArray(value) {
@@ -206,7 +217,7 @@ function hasNonEmptyArray(value) {
 
 function isPublishedArtwork(row) {
   const status = cleanText(row?.status || row?.publish_status || row?.review_status).toLowerCase();
-  return status === '' || status === 'published' || status === 'reviewed';
+  return status === "" || status === "published" || status === "reviewed";
 }
 
 function unique(values) {
@@ -214,11 +225,18 @@ function unique(values) {
 }
 
 function firstKnownTitle(row) {
-  return cleanText(row?.title_cn || row?.title_zh || row?.title || row?.title_en || row?.name || row?._id);
+  return cleanText(
+    row?.title_cn || row?.title_zh || row?.title || row?.title_en || row?.name || row?._id,
+  );
 }
 
 function artistText(row) {
-  return cleanText(row?.raw_artist_text || row?.artist || row?.artist_display || asArray(row?.artist_labels).join(' '));
+  return cleanText(
+    row?.raw_artist_text ||
+      row?.artist ||
+      row?.artist_display ||
+      asArray(row?.artist_labels).join(" "),
+  );
 }
 
 function tagTexts(row) {
@@ -236,14 +254,14 @@ function tagTexts(row) {
 
 function groupCount(rows, key) {
   return rows.reduce((acc, row) => {
-    const value = cleanText(row?.[key]) || 'unknown';
+    const value = cleanText(row?.[key]) || "unknown";
     acc[value] = (acc[value] || 0) + 1;
     return acc;
   }, {});
 }
 
 function countByReviewStatus(rows) {
-  return groupCount(rows, 'review_status');
+  return groupCount(rows, "review_status");
 }
 
 function sampleRows(rows, sampleSize, mapper) {
@@ -259,10 +277,17 @@ export function buildAuditReport(
     artworkTagLinks = [],
     collectionErrors = {},
   } = {},
-  { envId = '', collections = DEFAULT_COLLECTIONS, thresholds = DEFAULT_THRESHOLDS, sampleSize = 20 } = {},
+  {
+    envId = "",
+    collections = DEFAULT_COLLECTIONS,
+    thresholds = DEFAULT_THRESHOLDS,
+    sampleSize = 20,
+  } = {},
 ) {
   const publishedArtworks = artworks.filter(isPublishedArtwork);
-  const artworksWithPrimaryArtistId = publishedArtworks.filter((row) => hasText(row.primary_artist_id));
+  const artworksWithPrimaryArtistId = publishedArtworks.filter((row) =>
+    hasText(row.primary_artist_id),
+  );
   const artworksWithArtistIds = publishedArtworks.filter((row) => hasNonEmptyArray(row.artist_ids));
   const artworksWithTagIds = publishedArtworks.filter((row) => hasNonEmptyArray(row.tag_ids));
   const unresolvedArtistRows = publishedArtworks.filter(
@@ -277,26 +302,30 @@ export function buildAuditReport(
       .filter((id, index, ids) => id && ids.indexOf(id) !== index),
   );
 
-  const artistCoverage = publishedArtworks.length ? artworksWithArtistIds.length / publishedArtworks.length : 0;
-  const tagCoverage = publishedArtworks.length ? artworksWithTagIds.length / publishedArtworks.length : 0;
-  const reviewedArtists = artists.filter((row) => row.review_status === 'reviewed');
-  const candidateArtists = artists.filter((row) => row.review_status === 'candidate');
+  const artistCoverage = publishedArtworks.length
+    ? artworksWithArtistIds.length / publishedArtworks.length
+    : 0;
+  const tagCoverage = publishedArtworks.length
+    ? artworksWithTagIds.length / publishedArtworks.length
+    : 0;
+  const reviewedArtists = artists.filter((row) => row.review_status === "reviewed");
+  const candidateArtists = artists.filter((row) => row.review_status === "candidate");
 
   const checks = [
     {
-      id: 'artist_ids_coverage',
+      id: "artist_ids_coverage",
       ok: artistCoverage >= thresholds.artistCoverage,
       actual: Number(artistCoverage.toFixed(4)),
       expected_min: thresholds.artistCoverage,
     },
     {
-      id: 'tag_ids_coverage',
+      id: "tag_ids_coverage",
       ok: tagCoverage >= thresholds.tagCoverage,
       actual: Number(tagCoverage.toFixed(4)),
       expected_min: thresholds.tagCoverage,
     },
     {
-      id: 'duplicate_artwork_ids',
+      id: "duplicate_artwork_ids",
       ok: duplicateArtworkIds.length === 0,
       actual: duplicateArtworkIds.length,
       expected: 0,
@@ -333,9 +362,9 @@ export function buildAuditReport(
       vocab_terms_total: vocabTerms.length,
       vocab_review_status: countByReviewStatus(vocabTerms),
       artwork_artist_links_total: artworkArtistLinks.length,
-      artwork_artist_link_roles: groupCount(artworkArtistLinks, 'role'),
+      artwork_artist_link_roles: groupCount(artworkArtistLinks, "role"),
       artwork_tag_links_total: artworkTagLinks.length,
-      artwork_tag_link_types: groupCount(artworkTagLinks, 'tag_type'),
+      artwork_tag_link_types: groupCount(artworkTagLinks, "tag_type"),
       unresolved_artist_record_count: unresolvedArtistRows.length,
       unresolved_artist_text_count: unique(unresolvedArtistRows.map(artistText)).length,
       unmatched_tag_record_count: unmatchedTagRows.length,
@@ -426,7 +455,7 @@ export async function runCli(argv = process.argv.slice(2)) {
   const outputPath =
     options.out || path.join(options.reportDir, `normalized-cloud-audit-${timestamp()}.json`);
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-  fs.writeFileSync(outputPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
+  fs.writeFileSync(outputPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
   process.stdout.write(`${JSON.stringify({ ...report, report_path: outputPath }, null, 2)}\n`);
 
   if (options.strict && !report.ok) {

@@ -6,9 +6,11 @@ import path from "node:path";
 
 const DEFAULT_INPUT = path.resolve(process.cwd(), "miniapp", "data", "artworks.cloudbase.json");
 const DEFAULT_OUTPUT = path.resolve(process.cwd(), "miniapp", "data", "artists.candidates.jsonl");
-const UNKNOWN_ARTIST_RE = /^(?:未知|暂不明确|作者未明确记载|unknown|unclear|anonymous|佚名)(?:\s*[（(].*[）)])?$/i;
+const UNKNOWN_ARTIST_RE =
+  /^(?:未知|暂不明确|作者未明确记载|unknown|unclear|anonymous|佚名)(?:\s*[（(].*[）)])?$/i;
 const CJK_RE = /[\u3400-\u9fff]/u;
-const PERIOD_RE = /(?:\d{2,4}年代|\d{1,2}世纪|世纪|文艺复兴|巴洛克|印象派|后印象派|表现主义|新艺术运动|浮世绘)/u;
+const PERIOD_RE =
+  /(?:\d{2,4}年代|\d{1,2}世纪|世纪|文艺复兴|巴洛克|印象派|后印象派|表现主义|新艺术运动|浮世绘)/u;
 
 const countryMap = new Map([
   ["american", "美国"],
@@ -165,7 +167,12 @@ function slugify(value, fallbackSource) {
 function avatarText(nameZh, nameEn) {
   const cjk = [...String(nameZh || "")].find((char) => CJK_RE.test(char));
   if (cjk) return cjk;
-  return String(nameEn || "?").trim().slice(0, 1).toUpperCase() || "?";
+  return (
+    String(nameEn || "?")
+      .trim()
+      .slice(0, 1)
+      .toUpperCase() || "?"
+  );
 }
 
 function unique(values) {

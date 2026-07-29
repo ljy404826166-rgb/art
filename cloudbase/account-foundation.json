@@ -1,0 +1,104 @@
+{
+  "version": 2,
+  "function": {
+    "name": "accountProfile",
+    "source": "miniapp/cloudfunctions/accountProfile",
+    "runtime": "Nodejs18.15",
+    "handler": "index.main",
+    "timeout": 20,
+    "memorySize": 256,
+    "environmentVariables": [
+      "ACHIEVEMENT_ADMIN_OPENIDS"
+    ]
+  },
+  "collections": [
+    {
+      "name": "users",
+      "permission": "ADMINONLY",
+      "identityConstraint": "deterministic_document_id_from_openid",
+      "indexes": []
+    },
+    {
+      "name": "user_favorites",
+      "permission": "ADMINONLY",
+      "identityConstraint": "cloud_function_openid_and_artwork_id",
+      "indexes": [
+        {
+          "name": "openid_artwork_unique",
+          "unique": true,
+          "keys": [
+            { "name": "_openid", "direction": "1" },
+            { "name": "artwork_id", "direction": "1" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "user_followed_artists",
+      "permission": "ADMINONLY",
+      "identityConstraint": "cloud_function_openid_and_artist_id",
+      "indexes": [
+        {
+          "name": "openid_artist_unique",
+          "unique": true,
+          "keys": [
+            { "name": "_openid", "direction": "1" },
+            { "name": "artist_id", "direction": "1" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "user_history",
+      "permission": "ADMINONLY",
+      "identityConstraint": "cloud_function_openid_and_artwork_id",
+      "indexes": [
+        {
+          "name": "openid_artwork_unique",
+          "unique": true,
+          "keys": [
+            { "name": "_openid", "direction": "1" },
+            { "name": "artwork_id", "direction": "1" }
+          ]
+        },
+        {
+          "name": "openid_viewed_at",
+          "unique": false,
+          "keys": [
+            { "name": "_openid", "direction": "1" },
+            { "name": "viewed_at_ms", "direction": "-1" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "user_achievements",
+      "permission": "ADMINONLY",
+      "identityConstraint": "cloud_function_openid_and_achievement_id",
+      "indexes": [
+        {
+          "name": "openid_achievement_unique",
+          "unique": true,
+          "keys": [
+            { "name": "_openid", "direction": "1" },
+            { "name": "achievement_id", "direction": "1" }
+          ]
+        },
+        {
+          "name": "achievement_unlocked_at",
+          "unique": false,
+          "keys": [
+            { "name": "achievement_id", "direction": "1" },
+            { "name": "unlocked_at", "direction": "-1" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "achievement_statistics",
+      "permission": "ADMINONLY",
+      "identityConstraint": "fixed_global_document",
+      "indexes": []
+    }
+  ]
+}

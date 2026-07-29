@@ -1,23 +1,27 @@
-import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 
-import { parseArgs, writeJsonLines } from './generate-artist-candidates.mjs';
-import { readJsonRecords } from './validate-reviewed-data.mjs';
+import { parseArgs, writeJsonLines } from "./generate-artist-candidates.mjs";
+import { readJsonRecords } from "./validate-reviewed-data.mjs";
 
-const DEFAULT_ARTWORKS_PATH = path.resolve('miniapp/data/artworks.cloudbase.json');
-const DEFAULT_ARTIST_LINKS_PATH = path.resolve('miniapp/data/review/candidate-artwork-artist-links.jsonl');
-const DEFAULT_TAG_LINKS_PATH = path.resolve('miniapp/data/review/candidate-artwork-tag-links.jsonl');
-const DEFAULT_PATCH_OUT = path.resolve('miniapp/data/review/derived-artworks-patch.jsonl');
-const DEFAULT_ROLLBACK_OUT = path.resolve('miniapp/data/review/derived-artworks-rollback.jsonl');
+const DEFAULT_ARTWORKS_PATH = path.resolve("miniapp/data/artworks.cloudbase.json");
+const DEFAULT_ARTIST_LINKS_PATH = path.resolve(
+  "miniapp/data/review/candidate-artwork-artist-links.jsonl",
+);
+const DEFAULT_TAG_LINKS_PATH = path.resolve(
+  "miniapp/data/review/candidate-artwork-tag-links.jsonl",
+);
+const DEFAULT_PATCH_OUT = path.resolve("miniapp/data/review/derived-artworks-patch.jsonl");
+const DEFAULT_ROLLBACK_OUT = path.resolve("miniapp/data/review/derived-artworks-rollback.jsonl");
 
 const ARTIST_ROLE_PRIORITY = new Map([
-  ['creator', 0],
-  ['attributed_to', 1],
-  ['workshop', 2],
-  ['after', 3],
-  ['publisher', 4],
-  ['subject', 5],
-  ['unknown', 6],
+  ["creator", 0],
+  ["attributed_to", 1],
+  ["workshop", 2],
+  ["after", 3],
+  ["publisher", 4],
+  ["subject", 5],
+  ["unknown", 6],
 ]);
 
 function asArray(value) {
@@ -25,13 +29,13 @@ function asArray(value) {
 }
 
 function isNonEmptyString(value) {
-  return typeof value === 'string' && value.trim().length > 0;
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 function cleanText(value) {
-  return String(value ?? '')
-    .replace(/\uFEFF/g, '')
-    .replace(/\s+/g, ' ')
+  return String(value ?? "")
+    .replace(/\uFEFF/g, "")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
@@ -43,7 +47,13 @@ function uniquePush(target, value) {
 }
 
 function getArtworkId(artwork, index) {
-  return artwork?._id || artwork?.id || artwork?.source_id || artwork?.supabase_id || `artwork-${index + 1}`;
+  return (
+    artwork?._id ||
+    artwork?.id ||
+    artwork?.source_id ||
+    artwork?.supabase_id ||
+    `artwork-${index + 1}`
+  );
 }
 
 function groupByArtworkId(records = []) {
@@ -77,9 +87,9 @@ function sortArtistLinks(links = []) {
 function isUsableArtistLink(link) {
   return (
     link?.matched !== false &&
-    cleanText(link?.artist_id) !== '' &&
-    cleanText(link?.artist_id) !== 'unknown' &&
-    cleanText(link?.role) !== 'unknown'
+    cleanText(link?.artist_id) !== "" &&
+    cleanText(link?.artist_id) !== "unknown" &&
+    cleanText(link?.role) !== "unknown"
   );
 }
 
@@ -121,7 +131,11 @@ function buildTagFields(links = []) {
   };
 }
 
-export function buildDerivedArtworkRecords({ artworks = [], artistLinks = [], tagLinks = [] } = {}) {
+export function buildDerivedArtworkRecords({
+  artworks = [],
+  artistLinks = [],
+  tagLinks = [],
+} = {}) {
   const artistLinksByArtwork = groupByArtworkId(artistLinks);
   const tagLinksByArtwork = groupByArtworkId(tagLinks);
 
@@ -152,7 +166,9 @@ export function buildRollbackRecords(artworks = []) {
 }
 
 export function summarizeDerivedArtworkPatch(records = []) {
-  const artworksWithArtistIds = records.filter((record) => asArray(record.artist_ids).length > 0).length;
+  const artworksWithArtistIds = records.filter(
+    (record) => asArray(record.artist_ids).length > 0,
+  ).length;
   const artworksWithTagIds = records.filter((record) => asArray(record.tag_ids).length > 0).length;
 
   return {
@@ -167,11 +183,13 @@ export function summarizeDerivedArtworkPatch(records = []) {
 
 export function runCli(argv = process.argv.slice(2)) {
   const args = parseArgs(argv);
-  const artworksPath = path.resolve(args.artworks || args.input || args.in || DEFAULT_ARTWORKS_PATH);
-  const artistLinksPath = path.resolve(args['artist-links'] || DEFAULT_ARTIST_LINKS_PATH);
-  const tagLinksPath = path.resolve(args['tag-links'] || DEFAULT_TAG_LINKS_PATH);
+  const artworksPath = path.resolve(
+    args.artworks || args.input || args.in || DEFAULT_ARTWORKS_PATH,
+  );
+  const artistLinksPath = path.resolve(args["artist-links"] || DEFAULT_ARTIST_LINKS_PATH);
+  const tagLinksPath = path.resolve(args["tag-links"] || DEFAULT_TAG_LINKS_PATH);
   const patchOutputPath = path.resolve(args.out || DEFAULT_PATCH_OUT);
-  const rollbackOutputPath = path.resolve(args['rollback-out'] || DEFAULT_ROLLBACK_OUT);
+  const rollbackOutputPath = path.resolve(args["rollback-out"] || DEFAULT_ROLLBACK_OUT);
 
   const artworks = readJsonRecords(artworksPath);
   const artistLinks = readJsonRecords(artistLinksPath);

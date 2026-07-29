@@ -8,6 +8,10 @@ Component({
       type: Number,
       value: 4,
     },
+    inset: {
+      type: Boolean,
+      value: true,
+    },
   },
   data: {
     items: [],

@@ -12,14 +12,29 @@ Mobile-first artwork archive prototype for browsing, saving, downloading, and st
 - PWA build support through `vite-plugin-pwa`.
 - IIIF/image zoom support through `openseadragon` on artwork detail pages.
 
-## Quick Start
+## Canonical Project Entry
 
-```bash
+Run every command from the repository root. The root is the only supported project entry, even when the workspace is reached through a Windows Junction or symbolic link.
+
+```powershell
 npm.cmd install
+npm.cmd run check:entry
 npm.cmd run dev
 ```
 
 Open `http://127.0.0.1:5173/`.
+
+For the native WeChat mini program, import `<repository-root>/miniapp` into WeChat DevTools. This is the only supported WeChat project entry. Keep npm and data commands at the repository root; importing the repository root into DevTools makes it scan unrelated web dependencies and can restore an invalid cached project identity.
+
+DevTools automation uses the same root entry:
+
+```powershell
+cli.bat auto --project .\miniapp --auto-port 9421 --trust-project
+$env:WECHAT_AUTOMATOR_ENDPOINT = "ws://localhost:9421"
+npm.cmd run recommendation:devtools-smoke
+```
+
+`npm.cmd run check:entry` validates that the single WeChat project configuration lives inside `miniapp/`, rejects an accidental root config, and reports the real repository path, so `D:\art` and `E:\CodexProjects\art` cannot silently produce different build settings.
 
 ## Environment
 

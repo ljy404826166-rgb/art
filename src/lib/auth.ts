@@ -62,7 +62,10 @@ export async function getCurrentUserSummary(): Promise<AuthUserSummary | null> {
   return userSummaryFromUser(data.user);
 }
 
-export async function signInWithEmailPassword(email: string, password: string): Promise<AuthResult> {
+export async function signInWithEmailPassword(
+  email: string,
+  password: string,
+): Promise<AuthResult> {
   const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
@@ -74,7 +77,10 @@ export async function signInWithEmailPassword(email: string, password: string): 
   };
 }
 
-export async function signUpWithEmailPassword(email: string, password: string): Promise<AuthResult> {
+export async function signUpWithEmailPassword(
+  email: string,
+  password: string,
+): Promise<AuthResult> {
   const { data, error } = await supabase.auth.signUp({
     email,
     password,

@@ -1,0 +1,49 @@
+<view class="about-page">
+  <view class="brand">
+    <text class="brand-name">{{app.name}}</text>
+    <text class="brand-tagline">传世杰作</text>
+  </view>
+
+  <view class="mission-card">
+    <text class="mission-title">关于我们</text>
+    <text class="mission-copy">
+      Masterpiece 是一座面向日常欣赏与艺术科普的在线画廊。我们通过作品、画家，将分散的艺术信息整理为系统的知识库，为用户提供便捷的艺术欣赏和学习体验。
+    </text>
+  </view>
+
+  <view class="section-divider"></view>
+
+  <view class="legal-section">
+    <view class="legal-list">
+      <block wx:for="{{legalItems}}" wx:key="id">
+        <view
+          class="legal-row"
+          data-id="{{item.id}}"
+          bindtap="openLegalDocument"
+          hover-class="legal-row--pressed"
+          aria-role="button"
+          aria-label="查看{{item.title}}"
+        >
+          <text class="legal-title">{{item.title}}</text>
+          <image
+            class="legal-arrow"
+            src="/assets/icons/lucide/svg/chevron-right.svg"
+            mode="aspectFit"
+          />
+        </view>
+      </block>
+    </view>
+  </view>
+
+  <view class="contact-card">
+    <text class="contact-title">联系我们</text>
+    <text class="contact-copy">
+      如果有任何帮助需求、错误纠正或商务合作意向，请通过邮箱联系我：
+    </text>
+    <text class="contact-email" user-select="true">MasterpieceArt@163.com</text>
+  </view>
+
+  <view class="about-footer">
+    本项目内容仅供艺术欣赏、学习与一般性参考，不构成鉴定、估值、交易、投资、法律或其他专业建议。详细规则请查看上方各项说明。
+  </view>
+</view>

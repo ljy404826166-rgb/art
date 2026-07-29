@@ -1,7 +1,7 @@
 {
   "navigationBarTitleText": "标签",
   "usingComponents": {
-    "artwork-card": "/components/artwork-card/artwork-card",
+    "artwork-card": "../../components/artwork-card/artwork-card",
     "empty-state": "/components/empty-state/empty-state",
     "error-state": "/components/error-state/error-state",
     "loading-more": "/components/loading-more/loading-more",

@@ -10,11 +10,10 @@ function loadCommonJsModule(filename) {
   return module.exports;
 }
 
-const {
-  computeRowArtworkCardWidth,
-  estimateRowMoverWidth,
-  resolveRowArtworkMeasureSrc,
-} = loadCommonJsModule("miniapp/components/horizontal-artwork-row/horizontal-artwork-row-geometry.js");
+const { computeRowArtworkCardWidth, estimateRowMoverWidth, resolveRowArtworkMeasureSrc } =
+  loadCommonJsModule(
+    "miniapp/components/horizontal-artwork-row/horizontal-artwork-row-geometry.js",
+  );
 
 test("computeRowArtworkCardWidth keeps fixed image height without min or max width clamps", () => {
   assert.equal(computeRowArtworkCardWidth(2), 700);
@@ -39,25 +38,37 @@ test("estimateRowMoverWidth uses measured card widths when available", () => {
 });
 
 test("resolveRowArtworkMeasureSrc only uses display-safe image sources", () => {
-  assert.equal(resolveRowArtworkMeasureSrc({
-    cloud_file_id: "cloud://artwork-thumb",
-    thumbnail_url: "thumb.webp",
-    display_url: "display.webp",
-    download_url: "original.jpg",
-  }), "cloud://artwork-thumb");
+  assert.equal(
+    resolveRowArtworkMeasureSrc({
+      cloud_file_id: "cloud://artwork-thumb",
+      thumbnail_url: "thumb.webp",
+      display_url: "display.webp",
+      download_url: "original.jpg",
+    }),
+    "cloud://artwork-thumb",
+  );
 
-  assert.equal(resolveRowArtworkMeasureSrc({
-    thumbnail_url: "thumb.webp",
-    display_url: "display.webp",
-    download_url: "original.jpg",
-  }), "thumb.webp");
+  assert.equal(
+    resolveRowArtworkMeasureSrc({
+      thumbnail_url: "thumb.webp",
+      display_url: "display.webp",
+      download_url: "original.jpg",
+    }),
+    "thumb.webp",
+  );
 
-  assert.equal(resolveRowArtworkMeasureSrc({
-    display_url: "display.webp",
-    download_url: "original.jpg",
-  }), "display.webp");
+  assert.equal(
+    resolveRowArtworkMeasureSrc({
+      display_url: "display.webp",
+      download_url: "original.jpg",
+    }),
+    "display.webp",
+  );
 
-  assert.equal(resolveRowArtworkMeasureSrc({
-    download_url: "original.jpg",
-  }), "");
+  assert.equal(
+    resolveRowArtworkMeasureSrc({
+      download_url: "original.jpg",
+    }),
+    "",
+  );
 });

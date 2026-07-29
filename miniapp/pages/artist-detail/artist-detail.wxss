@@ -14,19 +14,6 @@
   text-align: center;
 }
 
-.portrait {
-  display: flex;
-  width: 168rpx;
-  height: 168rpx;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999rpx;
-  color: #5b3129;
-  background: linear-gradient(135deg, #f4eee8, #ded5cc);
-  font-size: 58rpx;
-  font-weight: 950;
-}
-
 .artist-name {
   margin-top: 26rpx;
   color: #111111;
@@ -128,12 +115,21 @@
 }
 
 .artist-tag {
+  display: inline-flex;
+  min-height: 54rpx;
+  box-sizing: border-box;
+  align-items: center;
   border-radius: 999rpx;
-  padding: 10rpx 22rpx;
+  padding: 12rpx 24rpx;
   color: #5f5a55;
-  background: #f2f0ed;
-  font-size: 23rpx;
-  font-weight: 800;
+  background: #efede9;
+  font-size: 24rpx;
+  font-weight: 750;
+}
+
+.artist-tag:active {
+  color: #ffffff;
+  background: #202124;
 }
 
 .works-head {

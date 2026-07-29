@@ -78,40 +78,93 @@ function loadCategoryPage({
     };
   };
 
-  vm.runInNewContext(source, {
-    module: { exports: {} },
-    exports: {},
-    require(id) {
-      if (id === "../../services/artworks") return normalizedArtworksService;
-      if (id === "../../services/categories") return catalogService;
-      throw new Error(`Unexpected dependency: ${id}`);
+  vm.runInNewContext(
+    source,
+    {
+      module: { exports: {} },
+      exports: {},
+      require(id) {
+        if (id === "../../services/artworks") return normalizedArtworksService;
+        if (id === "../../services/categories") return catalogService;
+        throw new Error(`Unexpected dependency: ${id}`);
+      },
+      Page,
+      wx: {
+        getStorageSync(key) {
+          return storage.get(key);
+        },
+        navigateTo(options) {
+          navigations.push(options);
+        },
+        removeStorageSync(key) {
+          removedStorageKeys.push(key);
+          storage.delete(key);
+        },
+        setNavigationBarTitle() {},
+      },
     },
-    Page,
-    wx: {
-      getStorageSync(key) {
-        return storage.get(key);
-      },
-      navigateTo(options) {
-        navigations.push(options);
-      },
-      removeStorageSync(key) {
-        removedStorageKeys.push(key);
-        storage.delete(key);
-      },
-      setNavigationBarTitle() {},
-    },
-  }, { filename });
+    { filename },
+  );
 
   return { page, source, storage, removedStorageKeys, navigations };
 }
 
-test("category page uses only the cloud catalog and category filter services", () => {
+test("category page uses the fixed catalog and dynamic category result services", () => {
   const { source } = loadCategoryPage();
 
   assert.match(source, /loadCategoryCatalog/);
   assert.match(source, /fetchArtworksByCategoryFilters/);
   assert.match(source, /countArtworksByCategoryFilters/);
   assert.doesNotMatch(source, /fallbackGroups|fallbackArtworksByTag|fetchArtworksByTag/);
+});
+
+test("category result header does not display the artwork count", () => {
+  const template = readFileSync(new URL("./category.wxml", import.meta.url), "utf8");
+  const styles = readFileSync(new URL("./category.wxss", import.meta.url), "utf8");
+
+  assert.doesNotMatch(template, /result-count/);
+  assert.doesNotMatch(template, /resultCountText/);
+  assert.doesNotMatch(styles, /\.result-count/);
+});
+
+test("category filters provide subtle press, selection, and expand motion", () => {
+  const template = readFileSync(new URL("./category.wxml", import.meta.url), "utf8");
+  const styles = readFileSync(new URL("./category.wxss", import.meta.url), "utf8");
+
+  assert.match(template, /class="expand-button[^"]*"[\s\S]*hover-class="is-pressed"/);
+  assert.equal((template.match(/hover-class="is-pressed"/g) || []).length, 2);
+  assert.equal((template.match(/hover-start-time="0"/g) || []).length, 2);
+  assert.equal((template.match(/hover-stay-time="80"/g) || []).length, 2);
+  assert.match(template, /class="chip-clip" style="\{\{item\.panelStyle\}\}"/);
+  assert.match(template, /class="chip-wrap chip-measure"/);
+  assert.match(template, /wx:for="\{\{item\.tags\}\}"/);
+  assert.doesNotMatch(template, /chip-content|visibleTags|<scroll-view/);
+
+  assert.match(
+    styles,
+    /\.expand-icon\s*\{[\s\S]*transition: transform 220ms cubic-bezier\(0\.22, 1, 0\.36, 1\);/,
+  );
+  assert.match(
+    styles,
+    /\.tag-chip\s*\{[\s\S]*transform 180ms cubic-bezier\(0\.22, 1, 0\.36, 1\),[\s\S]*background-color 180ms ease-out,[\s\S]*color 180ms ease-out;/,
+  );
+  assert.match(styles, /\.tag-chip\.is-pressed\s*\{[\s\S]*transform: scale\(0\.96\);/);
+  assert.match(
+    styles,
+    /\.chip-clip\s*\{[\s\S]*transition: height 260ms cubic-bezier\(0\.22, 1, 0\.36, 1\);/,
+  );
+  assert.doesNotMatch(styles, /chip-content-enter|translateY\(8rpx\)/);
+  assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
+});
+
+test("category measures the persistent chip panel for accordion height", () => {
+  const { source } = loadCategoryPage();
+
+  assert.match(source, /groupHeights: \{\}/);
+  assert.match(source, /measureGroupHeights\(\)/);
+  assert.match(source, /\.selectAll\("\.chip-measure"\)/);
+  assert.match(source, /panelStyle: expanded/);
+  assert.match(source, /"height: 54rpx;"/);
 });
 
 test("selects, replaces, cancels, and combines one filter per category group", async () => {
@@ -134,9 +187,9 @@ test("selects, replaces, cancels, and combines one filter per category group", a
     subject: "subject-a",
     decade: "",
   });
-  assert.ok(filtersSeen.some((filters) => (
-    filters.style === "style-a" && filters.subject === "subject-a"
-  )));
+  assert.ok(
+    filtersSeen.some((filters) => filters.style === "style-a" && filters.subject === "subject-a"),
+  );
 
   await page.selectTag({ currentTarget: { dataset: { group: "style", tagId: "style-b" } } });
   assert.equal(page.data.selectedFilters.style, "style-b");
@@ -153,10 +206,7 @@ test("selects, replaces, cancels, and combines one filter per category group", a
     page.data.groupsView[0].tags.some((tag) => tag.selected),
     false,
   );
-  assert.equal(
-    page.data.groupsView[1].tags.find((tag) => tag.id === "subject-a").selected,
-    true,
-  );
+  assert.equal(page.data.groupsView[1].tags.find((tag) => tag.id === "subject-a").selected, true);
 });
 
 test("clearFilters removes every selection and refreshes unfiltered results", async () => {
@@ -214,10 +264,7 @@ test("returning from detail preserves 25 loaded artworks without duplicate reque
       fetchArtworksByCategoryFilters: async (_filters, options) => {
         fetchSkips.push(options.skip);
         const length = options.skip === 0 ? 20 : 5;
-        return Array.from(
-          { length },
-          (_, index) => ({ id: `art-${options.skip + index + 1}` }),
-        );
+        return Array.from({ length }, (_, index) => ({ id: `art-${options.skip + index + 1}` }));
       },
     },
   });
@@ -332,7 +379,10 @@ test("catalog errors are independent from results and retry only the catalog", a
   await page.retryCatalog();
 
   assert.equal(page.data.catalogError, "");
-  assert.deepEqual(page.data.groups.map((group) => group.key), ["style", "subject", "decade"]);
+  assert.deepEqual(
+    page.data.groups.map((group) => group.key),
+    ["style", "subject", "decade"],
+  );
   assert.equal(resultLoads, 1);
 });
 
@@ -359,11 +409,11 @@ test("catalog retry refreshes results only when it invalidates a selection", asy
   catalog = {
     ...catalogFixture(),
     catalogVersion: "classification-v2",
-    groups: catalogFixture().groups.map((group) => (
+    groups: catalogFixture().groups.map((group) =>
       group.key === "style"
         ? { ...group, tags: [{ id: "style-b", label: "流派 B", count: 2 }] }
-        : group
-    )),
+        : group,
+    ),
   };
   await page.retryCatalog();
 
@@ -483,10 +533,7 @@ test("loadMore failure keeps the grid visible and retries from the raw offset", 
         calls.push(options.skip);
         if (options.skip === 20 && failPageTwo) throw new Error("page 2 failed");
         const length = options.skip === 0 ? 20 : 5;
-        return Array.from(
-          { length },
-          (_, index) => ({ id: `art-${options.skip + index + 1}` }),
-        );
+        return Array.from({ length }, (_, index) => ({ id: `art-${options.skip + index + 1}` }));
       },
     },
   });
@@ -547,9 +594,11 @@ test("toggleGroup and openDetail preserve their existing behavior", () => {
   assert.equal(page.data.groupsView[0].expanded, true);
 
   page.openDetail({ detail: { id: "a/b", ratio: 1.5 } });
-  assert.deepEqual(clone(navigations), [{
-    url: "/pages/detail/detail?id=a%2Fb&ratio=1.5",
-  }]);
+  assert.deepEqual(clone(navigations), [
+    {
+      url: "/pages/detail/detail?id=a%2Fb&ratio=1.5",
+    },
+  ]);
 });
 
 test("category template renders catalog tag objects and separate retry states", () => {

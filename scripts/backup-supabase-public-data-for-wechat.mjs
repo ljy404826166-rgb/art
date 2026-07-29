@@ -95,7 +95,8 @@ function requiredValue(argv, index, flag) {
 
 function parsePositiveInteger(value, flag) {
   const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed <= 0) throw new Error(`${flag} must be a positive integer.`);
+  if (!Number.isInteger(parsed) || parsed <= 0)
+    throw new Error(`${flag} must be a positive integer.`);
   return parsed;
 }
 
@@ -108,7 +109,10 @@ function readEnvFile(filePath) {
     const match = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
     if (!match) continue;
     let value = match[2].trim();
-    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
       value = value.slice(1, -1);
     }
     values[match[1]] = value;
@@ -153,7 +157,11 @@ function nullableString(value) {
 }
 
 function normalizeTags(tags, tagsText) {
-  const raw = Array.isArray(tags) ? tags : typeof tags === "string" ? tags.split(/[,，；、\s]+/u) : [];
+  const raw = Array.isArray(tags)
+    ? tags
+    : typeof tags === "string"
+      ? tags.split(/[,，；、\s]+/u)
+      : [];
   const fromText = typeof tagsText === "string" ? tagsText.split(/[,，；、\s]+/u) : [];
   return [...new Set([...raw, ...fromText].map((tag) => String(tag || "").trim()).filter(Boolean))];
 }

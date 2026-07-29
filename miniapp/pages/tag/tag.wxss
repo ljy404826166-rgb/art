@@ -19,13 +19,6 @@
   line-height: 58rpx;
 }
 
-.tag-count {
-  color: #7a736d;
-  font-size: 26rpx;
-  line-height: 38rpx;
-  white-space: nowrap;
-}
-
 .tag-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

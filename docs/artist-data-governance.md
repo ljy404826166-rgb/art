@@ -50,6 +50,14 @@ Each reviewed `artists` document should include:
 - `bio_zh`: short Chinese biography summary.
 - `tags`: compact display/search tags.
 - `avatar_text`: one or two Chinese characters for placeholder avatar display.
+- `portrait_url`: controlled project-hosted URL for an approved portrait.
+- `portrait_source`: the original file description or institution object page.
+- `portrait_license`: normalized license or public-domain statement.
+- `portrait_credit`: the creator or institution credit line required for display.
+- `portrait_kind`: photograph, painted portrait, self-portrait, drawing, print, sculpture, or other.
+- `portrait_artwork_id`: stable project artwork ID when the portrait derives from an existing artwork.
+- `portrait_status`: `approved`, `no_eligible_asset`, `non_person_entity`, `identity_unresolved`, or `rights_blocked`.
+- `portrait_updated_at`: timestamp of the latest approved portrait decision.
 - `authority_ids`: source identifiers, such as `ulan`, `wikidata`, and `viaf`.
 - `sources`: source records with title, URL, and fields verified from that source.
 - `review_status`: `candidate`, `reviewed`, or `rejected`.
@@ -80,6 +88,8 @@ Client-side miniapp code should read reviewed records only. The client must not 
 - Do not import unreviewed local mock data as production data.
 - Keep the reviewed JSON Lines file as the recoverable source artifact.
 - Do not overwrite cloud records without a rollback path.
+- Do not publish `portrait_url` unless `portrait_status` is `approved`.
+- Keep `avatar_text` after portrait approval so image errors and offline states have a deterministic fallback.
 
 ## Frontend Fallback Rule
 

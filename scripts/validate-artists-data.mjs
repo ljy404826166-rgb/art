@@ -29,9 +29,22 @@ const REQUIRED_FIELDS = [
 
 const ARRAY_FIELDS = ["styles", "periods", "representative_works", "aliases", "tags", "sources"];
 const NON_EMPTY_ARRAY_FIELDS = ["styles", "periods", "aliases", "sources"];
-const NON_EMPTY_STRING_FIELDS = ["_id", "name_zh", "name_en", "lifespan_text", "country", "region", "active_period", "bio_zh", "avatar_text", "review_status", "updated_at"];
+const NON_EMPTY_STRING_FIELDS = [
+  "_id",
+  "name_zh",
+  "name_en",
+  "lifespan_text",
+  "country",
+  "region",
+  "active_period",
+  "bio_zh",
+  "avatar_text",
+  "review_status",
+  "updated_at",
+];
 const REVIEW_STATUSES = new Set(["candidate", "reviewed", "rejected"]);
-const LOCAL_SOURCE_RE = /^(?:miniapp\/data\/|\.\/miniapp\/data\/|Current WeChat Cloud artworks export$|Local candidate seed$)/i;
+const LOCAL_SOURCE_RE =
+  /^(?:miniapp\/data\/|\.\/miniapp\/data\/|Current WeChat Cloud artworks export$|Local candidate seed$)/i;
 const LOCAL_URL_RE = /^(?:miniapp\/data\/|\.\/miniapp\/data\/)/i;
 
 const allowedAliasCollisions = new Set([
@@ -156,7 +169,11 @@ function validateFieldTypes(line, artist, errors) {
     }
   }
 
-  if (artist.authority_ids === null || typeof artist.authority_ids !== "object" || Array.isArray(artist.authority_ids)) {
+  if (
+    artist.authority_ids === null ||
+    typeof artist.authority_ids !== "object" ||
+    Array.isArray(artist.authority_ids)
+  ) {
     errors.push({ line, message: '"authority_ids" must be an object' });
   }
 
@@ -182,7 +199,10 @@ function validateSource(line, source, index, errors) {
   if (typeof source.url !== "string" || source.url.trim() === "") {
     errors.push({ line, message: `${label}.url must be a non-empty string` });
   }
-  if (!Array.isArray(source.fields) || source.fields.map((value) => String(value || "").trim()).filter(Boolean).length === 0) {
+  if (
+    !Array.isArray(source.fields) ||
+    source.fields.map((value) => String(value || "").trim()).filter(Boolean).length === 0
+  ) {
     errors.push({ line, message: `${label}.fields must contain at least one value` });
   }
 }
@@ -199,10 +219,15 @@ function validateReviewedSources(line, artist, errors) {
   const hasAuthoritySource = artist.sources.some((source) => {
     const title = String(source?.title || "").trim();
     const url = String(source?.url || "").trim();
-    return url && /^https?:\/\//i.test(url) && !LOCAL_SOURCE_RE.test(title) && !LOCAL_URL_RE.test(url);
+    return (
+      url && /^https?:\/\//i.test(url) && !LOCAL_SOURCE_RE.test(title) && !LOCAL_URL_RE.test(url)
+    );
   });
   if (!hasAuthoritySource) {
-    errors.push({ line, message: "reviewed record must include at least one authority source URL" });
+    errors.push({
+      line,
+      message: "reviewed record must include at least one authority source URL",
+    });
   }
 }
 
@@ -245,7 +270,10 @@ function validateAliases(line, artist, aliases, errors) {
 
     if (aliases.has(alias) && !allowedAliasCollisions.has(alias)) {
       const previous = aliases.get(alias);
-      errors.push({ line, message: `duplicate alias "${rawAlias}" also appears in ${previous.id}` });
+      errors.push({
+        line,
+        message: `duplicate alias "${rawAlias}" also appears in ${previous.id}`,
+      });
     } else {
       aliases.set(alias, { id: artist._id || `line ${line}`, line });
     }

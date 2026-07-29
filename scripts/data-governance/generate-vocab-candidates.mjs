@@ -1,44 +1,64 @@
-import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 
-import { readJsonRecords } from './validate-reviewed-data.mjs';
-import { parseArgs, toCandidateId, uniquePush, writeJsonLines } from './generate-artist-candidates.mjs';
+import { readJsonRecords } from "./validate-reviewed-data.mjs";
+import {
+  parseArgs,
+  toCandidateId,
+  uniquePush,
+  writeJsonLines,
+} from "./generate-artist-candidates.mjs";
 
-const DEFAULT_ARTWORKS_PATH = path.resolve('miniapp/data/artworks.cloudbase.json');
+const DEFAULT_ARTWORKS_PATH = path.resolve("miniapp/data/artworks.cloudbase.json");
 
-const STYLE_SUFFIXES = ['派', '主义', '艺术', '绘', '兴'];
-const MEDIUM_HINTS = ['油画', '水彩', '素描', '版画', '纸本', '石版', '木版', '海报', '插图', '布面'];
-const SUBJECT_HINTS = ['肖像', '风景', '人物', '花园', '静物', '裸体', '宗教', '题材'];
+const STYLE_SUFFIXES = ["派", "主义", "艺术", "绘", "兴"];
+const MEDIUM_HINTS = [
+  "油画",
+  "水彩",
+  "素描",
+  "版画",
+  "纸本",
+  "石版",
+  "木版",
+  "海报",
+  "插图",
+  "布面",
+];
+const SUBJECT_HINTS = ["肖像", "风景", "人物", "花园", "静物", "裸体", "宗教", "题材"];
 
 function asArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
 function normalizeLabel(value) {
-  return String(value ?? '').trim();
+  return String(value ?? "").trim();
 }
 
 export function classifyTag(label) {
   const normalized = normalizeLabel(label);
   if (!normalized) return null;
 
-  if (/^\d{1,2}\s*世纪/u.test(normalized) || /^\d{3,4}\s*年代/u.test(normalized) || /时期$/u.test(normalized)) {
-    return 'period';
+  if (
+    /^\d{1,2}\s*世纪/u.test(normalized) ||
+    /^\d{3,4}\s*年代/u.test(normalized) ||
+    /时期$/u.test(normalized)
+  ) {
+    return "period";
   }
 
   if (MEDIUM_HINTS.some((hint) => normalized.includes(hint))) {
-    return 'medium';
+    return "medium";
   }
 
   if (SUBJECT_HINTS.some((hint) => normalized.includes(hint))) {
-    return 'subject';
+    return "subject";
   }
 
   if (STYLE_SUFFIXES.some((suffix) => normalized.endsWith(suffix))) {
-    return 'style';
+    return "style";
   }
 
-  return 'subject';
+  return "subject";
 }
 
 function getArtworkId(artwork, index) {
@@ -64,7 +84,7 @@ export function generateVocabCandidates(artworks = []) {
         type,
         label_zh: label,
         aliases: [],
-        review_status: 'candidate',
+        review_status: "candidate",
         source_artwork_ids: [],
         artwork_count: 0,
       };

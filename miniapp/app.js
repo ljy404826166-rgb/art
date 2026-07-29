@@ -7,10 +7,17 @@ App({
         env: CLOUD_ENV_ID,
         traceUser: false,
       });
+      try {
+        const { initializeLibrarySync } = require("./services/user-library-sync");
+        initializeLibrarySync();
+      } catch (error) {
+        // Account sync is optional and must never delay public browsing.
+      }
     }
   },
 
   globalData: {
-    appName: "Art Archive",
+    appName: "Masterpiece",
+    appVersion: "0.1.0",
   },
 });

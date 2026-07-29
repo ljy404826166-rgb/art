@@ -4,10 +4,8 @@ const {
   normalizeError,
 } = require("../../services/artworks");
 const { loadArtistByArtworkText } = require("../../services/artists");
-const {
-  computeDetailHeroFrameStyle,
-  resolveDetailMeasureSrc,
-} = require("./detail-image-layout");
+const { computeDetailHeroFrameStyle, resolveDetailMeasureSrc } = require("./detail-image-layout");
+const { formatArtistButtonText } = require("./detail-artist-label");
 const {
   downloadFile,
   getDownloadFailureMessage,
@@ -36,6 +34,7 @@ Page({
     downloading: false,
     resolvedArtistId: "",
     resolvedArtistText: "",
+    artistButtonText: "",
   },
 
   onLoad(options) {
@@ -68,7 +67,8 @@ Page({
   },
 
   applyLoadedArtwork(artwork, options = {}) {
-    const artworkId = artwork && (artwork._id || artwork.id || artwork.source_id || artwork.supabase_id);
+    const artworkId =
+      artwork && (artwork._id || artwork.id || artwork.source_id || artwork.supabase_id);
     if (artwork) {
       recordHistoryArtwork(artwork);
     }
@@ -79,6 +79,7 @@ Page({
       error: options.error || "",
       usingFallback: Boolean(options.usingFallback),
       isFavorite: isFavoriteArtwork(artworkId),
+      artistButtonText: formatArtistButtonText(null, artwork && artwork.artist),
     });
 
     this.measureHeroImage(artwork);
@@ -101,6 +102,7 @@ Page({
       this.setData({
         resolvedArtistId: result.artist.id,
         resolvedArtistText: artistText,
+        artistButtonText: formatArtistButtonText(result.artist, artistText),
       });
     }
   },
@@ -171,9 +173,8 @@ Page({
       return;
     }
 
-    const resolvedArtistId = this.data.resolvedArtistText === artistText
-      ? this.data.resolvedArtistId
-      : "";
+    const resolvedArtistId =
+      this.data.resolvedArtistText === artistText ? this.data.resolvedArtistId : "";
     const query = resolvedArtistId
       ? `id=${encodeURIComponent(resolvedArtistId)}`
       : `artistText=${encodeURIComponent(artistText)}`;
@@ -182,11 +183,11 @@ Page({
     });
   },
 
-  openTag(event) {
-    const { tag } = event.currentTarget.dataset || {};
-    if (!tag) return;
+  openClassificationTag(event) {
+    const { tag, tagId } = event.currentTarget.dataset || {};
+    if (!tag || !tagId) return;
     wx.navigateTo({
-      url: `/pages/tag/tag?tag=${encodeURIComponent(tag)}`,
+      url: `/pages/tag/tag?tag=${encodeURIComponent(tag)}&queryType=classification&queryId=${encodeURIComponent(tagId)}`,
     });
   },
 

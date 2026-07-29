@@ -22,7 +22,10 @@ function fallbackCardWidth(item) {
 }
 
 function getRowArtworkKey(item, index = 0) {
-  return item && (item._id || item.id || item.source_id || item.supabase_id || item.title || `index:${index}`);
+  return (
+    item &&
+    (item._id || item.id || item.source_id || item.supabase_id || item.title || `index:${index}`)
+  );
 }
 
 function estimateRowMoverWidth(items, measuredWidths = {}, options = {}) {
@@ -34,10 +37,7 @@ function estimateRowMoverWidth(items, measuredWidths = {}, options = {}) {
   }, 0);
   const gapWidth = Math.max(0, list.length - 1) * CARD_GAP_RPX;
   const statusWidth = options.loadingMore ? STATUS_WIDTH_RPX + CARD_GAP_RPX : 0;
-  return Math.max(
-    VIEWPORT_WIDTH_RPX,
-    TRACK_PADDING_RPX + cardWidth + gapWidth + statusWidth,
-  );
+  return Math.max(VIEWPORT_WIDTH_RPX, TRACK_PADDING_RPX + cardWidth + gapWidth + statusWidth);
 }
 
 module.exports = {

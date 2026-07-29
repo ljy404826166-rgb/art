@@ -6,13 +6,20 @@
     <input
       class="search-input"
       value="{{searchQuery}}"
-      placeholder="星月夜"
+      placeholder="{{searchPlaceholder}}"
       placeholder-class="search-placeholder"
       confirm-type="search"
       bindconfirm="submitSearch"
       bindinput="handleSearchInput"
     />
-    <button wx:if="{{searchMode}}" class="search-action submit-search-action" bindtap="submitSearch">搜索</button>
+    <view
+      wx:if="{{searchMode}}"
+      class="search-action submit-search-action"
+      aria-role="button"
+      bindtap="submitSearch"
+    >
+      搜索
+    </view>
     <view wx:else class="search-action filter-action" bindtap="openCategory" aria-label="筛选分类">
       <image class="filter-glyph" src="/assets/icons/lucide/svg/sliders-horizontal.svg" mode="aspectFit" />
     </view>
@@ -59,8 +66,16 @@
         <text class="group-title">搜索结果</text>
       </view>
 
-      <view wx:if="{{searchLoading}}" class="search-loading-state">
-        <loading-more text="正在全库搜索..." />
+      <view
+        wx:if="{{searchLoading}}"
+        class="home-brand-loader search-brand-loader"
+        aria-label="正在搜索作品"
+      >
+        <image
+          class="home-brand-loader-image"
+          src="/assets/brand/masterpiece-loading.gif"
+          mode="aspectFit"
+        />
       </view>
 
       <empty-state wx:elif="{{searchResults.length === 0}}" icon="/assets/icons/lucide/svg/search-x.svg" title="没有找到匹配作品" description="换一个画作、艺术家或标签试试。" />
@@ -71,8 +86,16 @@
         </block>
       </view>
 
-      <view wx:if="{{searchLoadingMore}}" class="search-loading-state search-loading-more-state">
-        <loading-more text="正在加载更多..." />
+      <view
+        wx:if="{{searchLoadingMore}}"
+        class="home-brand-loader search-brand-loader search-brand-loader-more"
+        aria-label="正在加载更多搜索结果"
+      >
+        <image
+          class="home-brand-loader-image"
+          src="/assets/brand/masterpiece-loading.gif"
+          mode="aspectFit"
+        />
       </view>
     </view>
   </view>
@@ -87,6 +110,9 @@
             class="section-more"
             data-tag="{{item.targetTag}}"
             data-title="{{item.title}}"
+            data-query-type="{{item.queryType}}"
+            data-query-id="{{item.queryId}}"
+            data-query-label="{{item.queryLabel}}"
             hover-class="section-more-hover"
             bindtap="openTagDetail"
           >
@@ -105,6 +131,12 @@
         />
       </view>
     </block>
-    <loading-more wx:if="{{loadingMore}}" text="继续加载..." />
+    <view wx:if="{{loadingMore}}" class="home-brand-loader" aria-label="正在加载更多推荐">
+      <image
+        class="home-brand-loader-image"
+        src="/assets/brand/masterpiece-loading.gif"
+        mode="aspectFit"
+      />
+    </view>
   </view>
 </view>

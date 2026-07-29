@@ -15,11 +15,18 @@ function loadCommonJsModule(filePath, extraContext = {}) {
   };
   const localRequire = (id) => {
     if (id === "../data/fallback-artworks") return fallback;
-    if (id === "./search-engine") return loadCommonJsModule(new URL("./search-engine.js", import.meta.url));
+    if (id === "./search-engine")
+      return loadCommonJsModule(new URL("./search-engine.js", import.meta.url));
+    if (id === "./search-terms")
+      return loadCommonJsModule(new URL("./search-terms.js", import.meta.url));
     return require(id);
   };
 
-  vm.runInNewContext(source, { module, exports: module.exports, require: localRequire, ...extraContext }, { filename });
+  vm.runInNewContext(
+    source,
+    { module, exports: module.exports, require: localRequire, ...extraContext },
+    { filename },
+  );
   return module.exports;
 }
 
@@ -116,6 +123,254 @@ function loadArtworksService(rows) {
   return { service, counters };
 }
 
+test("fetchRandomArtworks limits concurrent reads and keeps successful batches", async () => {
+  let activeReads = 0;
+  let maxActiveReads = 0;
+  let batchIndex = 0;
+
+  const fakeDb = {
+    collection() {
+      return {
+        where() {
+          return this;
+        },
+        orderBy() {
+          return this;
+        },
+        skip() {
+          return this;
+        },
+        limit() {
+          return this;
+        },
+        async count() {
+          return { total: 60 };
+        },
+        async get() {
+          const currentBatch = batchIndex;
+          batchIndex += 1;
+          activeReads += 1;
+          maxActiveReads = Math.max(maxActiveReads, activeReads);
+          await Promise.resolve();
+          activeReads -= 1;
+
+          if (currentBatch === 1) throw new Error("timeout");
+          return {
+            data: Array.from({ length: 20 }, (_, index) => ({
+              _id: `batch-${currentBatch}-${index}`,
+              status: "published",
+            })),
+          };
+        },
+      };
+    },
+  };
+
+  const service = loadCommonJsModule(new URL("./artworks.js", import.meta.url), {
+    wx: { cloud: { database: () => fakeDb } },
+  });
+  const artworks = await service.fetchRandomArtworks({
+    pageSize: 60,
+    batchSize: 20,
+    concurrency: 2,
+  });
+
+  assert.equal(maxActiveReads, 2);
+  assert.equal(artworks.length, 40);
+});
+
+test("fetchRecommendationChannels reads only published auto-feature channels", async () => {
+  const { service, counters } = loadArtworksService([
+    {
+      _id: "published",
+      channel_status: "published",
+      auto_feature_eligible: true,
+      priority_score: 10,
+    },
+    {
+      _id: "long-tail",
+      channel_status: "long_tail",
+      auto_feature_eligible: false,
+      priority_score: 20,
+    },
+  ]);
+
+  const channels = await service.fetchRecommendationChannels({ limit: 8 });
+  assert.equal(
+    JSON.stringify(Array.from(channels, (channel) => channel._id)),
+    JSON.stringify(["published"]),
+  );
+  assert.ok(counters.where.some((entry) => entry.collectionName === "recommendation_channels"));
+});
+
+test("fetchRecommendationChannels pages past the mini program per-read limit", async () => {
+  const rows = Array.from({ length: 25 }, (_, index) => ({
+    _id: `channel-${index + 1}`,
+    channel_status: "published",
+    auto_feature_eligible: true,
+    priority_score: 100 - index,
+  }));
+  const { service, counters } = loadArtworksService(rows);
+
+  const channels = await service.fetchRecommendationChannels({ limit: 30 });
+
+  assert.equal(channels.length, 25);
+  assert.equal(counters.get, 2);
+});
+
+test("fetchRandomArtworks prefers the normalized recommendation pool", async () => {
+  const { service, counters } = loadArtworksService([
+    {
+      _id: "eligible",
+      status: "published",
+      recommendation_status: "eligible",
+      random_bucket: 12,
+    },
+    {
+      _id: "legacy-only",
+      status: "published",
+      random_bucket: 13,
+    },
+  ]);
+
+  const artworks = await service.fetchRandomArtworks({
+    pageSize: 1,
+    batchSize: 1,
+    concurrency: 1,
+  });
+
+  assert.equal(
+    JSON.stringify(Array.from(artworks, (artwork) => artwork._id)),
+    JSON.stringify(["eligible"]),
+  );
+  assert.ok(
+    counters.where.some(
+      (entry) =>
+        entry.collectionName === "artworks" &&
+        entry.clause.status === "published" &&
+        entry.clause.recommendation_status === "eligible",
+    ),
+  );
+  assert.ok(
+    counters.orderBy.some(
+      (entry) =>
+        entry.collectionName === "artworks" &&
+        entry.field === "random_bucket" &&
+        entry.direction === "asc",
+    ),
+  );
+});
+
+test("fetchRandomArtworksBySection stays inside the tag, skips seen works, and rotates artists", async () => {
+  const oilRows = [
+    ...Array.from({ length: 6 }, (_, index) => ({
+      _id: `van-gogh-${index}`,
+      status: "published",
+      tag_keys: ["油画"],
+      artist_ids: ["vincent-van-gogh"],
+    })),
+    ...Array.from({ length: 6 }, (_, index) => ({
+      _id: `monet-${index}`,
+      status: "published",
+      tag_keys: ["油画"],
+      artist_ids: ["claude-monet"],
+    })),
+    ...Array.from({ length: 6 }, (_, index) => ({
+      _id: `cezanne-${index}`,
+      status: "published",
+      tag_keys: ["油画"],
+      artist_ids: ["paul-cezanne"],
+    })),
+    {
+      _id: "watercolor",
+      status: "published",
+      tag_keys: ["水彩"],
+      artist_ids: ["other"],
+    },
+  ];
+  const { service, counters } = loadArtworksService(oilRows);
+
+  const firstBatch = await service.fetchRandomArtworksBySection(
+    { type: "tag", label: "油画" },
+    {
+      pageSize: 6,
+      excludeIds: ["van-gogh-0"],
+      random: () => 0.999,
+    },
+  );
+
+  assert.equal(firstBatch.total, 18);
+  assert.equal(firstBatch.items.length, 6);
+  assert.equal(firstBatch.hasMore, true);
+  assert.equal(
+    firstBatch.items.every((item) => item.tag_keys.includes("油画")),
+    true,
+  );
+  assert.equal(
+    firstBatch.items.some((item) => item._id === "van-gogh-0"),
+    false,
+  );
+  assert.equal(new Set(firstBatch.items.slice(0, 3).map((item) => item.artist_ids[0])).size, 3);
+
+  const allButTwo = oilRows
+    .filter((item) => item.tag_keys.includes("油画"))
+    .slice(0, 16)
+    .map((item) => item._id);
+  const finalBatch = await service.fetchRandomArtworksBySection(
+    { type: "tag", label: "油画" },
+    {
+      pageSize: 8,
+      excludeIds: allButTwo,
+      random: () => 0.999,
+    },
+  );
+
+  assert.equal(
+    JSON.stringify(Array.from(finalBatch.items, (item) => item._id).sort()),
+    JSON.stringify(["cezanne-4", "cezanne-5"]),
+  );
+  assert.equal(finalBatch.hasMore, false);
+  assert.equal(counters.count, 1);
+});
+
+test("random artist sections use the deployed artist and random-bucket index order", async () => {
+  const { service, counters } = loadArtworksService([
+    {
+      _id: "monet-1",
+      status: "published",
+      artist_ids: ["claude-monet"],
+      random_bucket: 12,
+    },
+    {
+      _id: "monet-2",
+      status: "published",
+      artist_ids: ["claude-monet"],
+      random_bucket: 48,
+    },
+  ]);
+
+  const result = await service.fetchRandomArtworksBySection(
+    { type: "artist", id: "claude-monet", label: "克劳德·莫奈" },
+    { pageSize: 1, random: () => 0.5 },
+  );
+
+  assert.equal(result.items.length, 1);
+  assert.ok(
+    counters.orderBy.some(
+      (entry) =>
+        entry.collectionName === "artworks" &&
+        entry.field === "random_bucket" &&
+        entry.direction === "asc",
+    ),
+  );
+  assert.ok(
+    counters.orderBy.some(
+      (entry) =>
+        entry.collectionName === "artworks" && entry.field === "_id" && entry.direction === "asc",
+    ),
+  );
+});
+
 test("fetchArtworksByArtistId and countArtworksByArtistId query normalized artist_ids", async () => {
   const { service, counters } = loadArtworksService([
     { _id: "a", status: "published", artist_ids: ["claude-monet"], artist: "Other" },
@@ -126,9 +381,14 @@ test("fetchArtworksByArtistId and countArtworksByArtistId query normalized artis
   const page = await service.fetchArtworksByArtistId("claude-monet", { pageSize: 1, skip: 1 });
   const total = await service.countArtworksByArtistId("claude-monet");
 
-  assert.deepEqual(page.map((item) => item._id), ["b"]);
+  assert.deepEqual(
+    page.map((item) => item._id),
+    ["b"],
+  );
   assert.equal(total, 2);
-  assert.ok(counters.where.some((entry) => entry.clause.artist_ids?.__all?.includes("claude-monet")));
+  assert.ok(
+    counters.where.some((entry) => entry.clause.artist_ids?.__all?.includes("claude-monet")),
+  );
 });
 
 test("fetchArtworksByArtist falls back to aliases when normalized artist_ids are not backfilled", async () => {
@@ -138,11 +398,19 @@ test("fetchArtworksByArtist falls back to aliases when normalized artist_ids are
     { _id: "c", status: "published", artist: "Other" },
   ]);
 
-  const artist = { id: "claude-monet", nameZh: "克洛德·莫奈", nameEn: "Claude Monet", aliases: ["Monet"] };
+  const artist = {
+    id: "claude-monet",
+    nameZh: "克洛德·莫奈",
+    nameEn: "Claude Monet",
+    aliases: ["Monet"],
+  };
   const page = await service.fetchArtworksByArtist(artist, { pageSize: 8, skip: 0 });
   const total = await service.countArtworksByArtist(artist);
 
-  assert.deepEqual(page.map((item) => item._id), ["a", "b"]);
+  assert.deepEqual(
+    page.map((item) => item._id),
+    ["a", "b"],
+  );
   assert.equal(total, 2);
 });
 
@@ -156,9 +424,14 @@ test("fetchArtworksByTagId and countArtworksByTagId query normalized tag_ids", a
   const page = await service.fetchArtworksByTagId("style-impressionism", { pageSize: 1, skip: 0 });
   const total = await service.countArtworksByTagId("style-impressionism");
 
-  assert.deepEqual(page.map((item) => item._id), ["a"]);
+  assert.deepEqual(
+    page.map((item) => item._id),
+    ["a"],
+  );
   assert.equal(total, 2);
-  assert.ok(counters.where.some((entry) => entry.clause.tag_ids?.__all?.includes("style-impressionism")));
+  assert.ok(
+    counters.where.some((entry) => entry.clause.tag_ids?.__all?.includes("style-impressionism")),
+  );
 });
 
 test("fetchArtworksByTag accepts tag objects and falls back to tag label when tag_ids are not backfilled", async () => {
@@ -172,20 +445,72 @@ test("fetchArtworksByTag accepts tag objects and falls back to tag label when ta
   const page = await service.fetchArtworksByTag(tag, { pageSize: 20, skip: 0 });
   const total = await service.countArtworksByTag(tag);
 
-  assert.deepEqual(page.map((item) => item._id), ["a", "b"]);
+  assert.deepEqual(
+    page.map((item) => item._id),
+    ["a", "b"],
+  );
   assert.equal(total, 2);
+});
+
+test("recommendation signal sections prefer normalized ids and fall back to legacy labels", async () => {
+  const normalized = loadArtworksService([
+    {
+      _id: "normalized",
+      status: "published",
+      recommendation_signal_ids: ["signal-setting-nature"],
+      tag_keys: ["Other"],
+    },
+    {
+      _id: "legacy-only",
+      status: "published",
+      tag_keys: ["自然"],
+    },
+  ]).service;
+
+  const normalizedPage = await normalized.fetchArtworksBySection(
+    { type: "signal", id: "signal-setting-nature", label: "自然" },
+    { pageSize: 20 },
+  );
+  assert.deepEqual(
+    normalizedPage.map((item) => item._id),
+    ["normalized"],
+  );
+
+  const legacy = loadArtworksService([
+    { _id: "legacy-only", status: "published", tag_keys: ["自然"] },
+  ]).service;
+  const legacyPage = await legacy.fetchArtworksBySection(
+    { type: "signal", id: "signal-setting-nature", label: "自然" },
+    { pageSize: 20 },
+  );
+  assert.deepEqual(
+    legacyPage.map((item) => item._id),
+    ["legacy-only"],
+  );
+  assert.equal(
+    await legacy.countArtworksBySection({
+      type: "signal",
+      id: "signal-setting-nature",
+      label: "自然",
+    }),
+    1,
+  );
 });
 
 test("getSelectedClassificationIds trims values in group order and removes duplicates", () => {
   const { service } = loadArtworksService([]);
 
   assert.deepEqual(
-    JSON.parse(JSON.stringify(service.getSelectedClassificationIds({
-      style: " style-a ",
-      subject: "style-a",
-      decade: " period-1900s ",
-      ignored: "subject-b",
-    }))),
+    JSON.parse(
+      JSON.stringify(
+        service.getSelectedClassificationIds({
+          style: " style-a ",
+          subject: "style-a",
+          decade: " period-1900s ",
+          ignored: "subject-b",
+        }),
+      ),
+    ),
     ["style-a", "period-1900s"],
   );
 });
@@ -216,16 +541,17 @@ test("category filters require all selected classification ids for fetch and cou
   const page = await service.fetchArtworksByCategoryFilters(filters, { pageSize: 20, skip: 0 });
   const total = await service.countArtworksByCategoryFilters(filters);
 
-  assert.deepEqual(page.map((item) => item._id), ["a"]);
+  assert.deepEqual(
+    page.map((item) => item._id),
+    ["a"],
+  );
   assert.equal(total, 1);
   assert.equal(counters.where.length, 2);
   assert.deepEqual(
     JSON.parse(JSON.stringify(counters.where[0].clause)),
     JSON.parse(JSON.stringify(counters.where[1].clause)),
   );
-  assert.deepEqual(JSON.parse(JSON.stringify(
-    counters.where[0].clause.classification_ids.__all,
-  )), [
+  assert.deepEqual(JSON.parse(JSON.stringify(counters.where[0].clause.classification_ids.__all)), [
     "style-a",
     "subject-a",
     "period-1900s",
@@ -245,11 +571,12 @@ test("empty category filters query all published artworks with the same fetch an
   const page = await service.fetchArtworksByCategoryFilters({}, { pageSize: 20, skip: 0 });
   const total = await service.countArtworksByCategoryFilters({});
 
-  assert.deepEqual(page.map((item) => item._id), ["a"]);
+  assert.deepEqual(
+    page.map((item) => item._id),
+    ["a"],
+  );
   assert.equal(total, 1);
-  assert.deepEqual(JSON.parse(JSON.stringify(
-    counters.where.map((entry) => entry.clause),
-  )), [
+  assert.deepEqual(JSON.parse(JSON.stringify(counters.where.map((entry) => entry.clause))), [
     { status: "published" },
     { status: "published" },
   ]);

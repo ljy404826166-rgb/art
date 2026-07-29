@@ -1,27 +1,29 @@
-import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 
-import { parseArgs, writeJsonLines } from './generate-artist-candidates.mjs';
-import { readJsonRecords } from './validate-reviewed-data.mjs';
+import { parseArgs, writeJsonLines } from "./generate-artist-candidates.mjs";
+import { readJsonRecords } from "./validate-reviewed-data.mjs";
 
-const DEFAULT_ARTWORKS_PATH = path.resolve('miniapp/data/artworks.cloudbase.json');
-const DEFAULT_ARTISTS_PATH = path.resolve('miniapp/data/review/candidate-artists.jsonl');
-const DEFAULT_VOCAB_PATH = path.resolve('miniapp/data/review/candidate-tags.jsonl');
-const DEFAULT_ARTIST_LINKS_OUT = path.resolve('miniapp/data/review/candidate-artwork-artist-links.jsonl');
-const DEFAULT_TAG_LINKS_OUT = path.resolve('miniapp/data/review/candidate-artwork-tag-links.jsonl');
+const DEFAULT_ARTWORKS_PATH = path.resolve("miniapp/data/artworks.cloudbase.json");
+const DEFAULT_ARTISTS_PATH = path.resolve("miniapp/data/review/candidate-artists.jsonl");
+const DEFAULT_VOCAB_PATH = path.resolve("miniapp/data/review/candidate-tags.jsonl");
+const DEFAULT_ARTIST_LINKS_OUT = path.resolve(
+  "miniapp/data/review/candidate-artwork-artist-links.jsonl",
+);
+const DEFAULT_TAG_LINKS_OUT = path.resolve("miniapp/data/review/candidate-artwork-tag-links.jsonl");
 
 function asArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
 function isNonEmptyString(value) {
-  return typeof value === 'string' && value.trim().length > 0;
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 function cleanText(value) {
-  return String(value ?? '')
-    .replace(/\uFEFF/g, '')
-    .replace(/\s+/g, ' ')
+  return String(value ?? "")
+    .replace(/\uFEFF/g, "")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
@@ -43,16 +45,22 @@ function uniqueValues(values = []) {
 
 export function normalizeLookupText(value) {
   return cleanText(value)
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[’']/g, '')
-    .replace(/&/g, 'and')
-    .replace(/[\p{P}\p{S}\s]+/gu, '')
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[’']/g, "")
+    .replace(/&/g, "and")
+    .replace(/[\p{P}\p{S}\s]+/gu, "")
     .toLocaleLowerCase();
 }
 
 function getArtworkId(artwork, index) {
-  return artwork?._id || artwork?.id || artwork?.source_id || artwork?.supabase_id || `artwork-${index + 1}`;
+  return (
+    artwork?._id ||
+    artwork?.id ||
+    artwork?.source_id ||
+    artwork?.supabase_id ||
+    `artwork-${index + 1}`
+  );
 }
 
 function splitBilingualArtistText(value) {
@@ -69,15 +77,15 @@ export function classifyArtworkArtistRelation(value) {
   const raw = cleanText(value);
   if (!raw) {
     return {
-      role: 'unknown',
-      targetText: '',
+      role: "unknown",
+      targetText: "",
     };
   }
 
   const afterMatch = raw.match(/^\s*after\s+(.+)$/i);
   if (afterMatch) {
     return {
-      role: 'after',
+      role: "after",
       targetText: cleanText(afterMatch[1]),
     };
   }
@@ -85,13 +93,13 @@ export function classifyArtworkArtistRelation(value) {
   const workshopMatch = raw.match(/^\s*(studio|workshop)\s+of\s+(.+)$/i);
   if (workshopMatch) {
     return {
-      role: 'workshop',
+      role: "workshop",
       targetText: cleanText(workshopMatch[2]),
     };
   }
 
   return {
-    role: 'creator',
+    role: "creator",
     targetText: raw,
   };
 }
@@ -158,12 +166,21 @@ function findArtistByText(lookup, text) {
 }
 
 function formatArtistLabel(artist, fallback) {
-  return cleanText(artist?.display_name || artist?.name_zh || artist?.name_en || fallback || 'unknown');
+  return cleanText(
+    artist?.display_name || artist?.name_zh || artist?.name_en || fallback || "unknown",
+  );
 }
 
-function createArtworkArtistLink({ artworkId, artist, role, matched, sourceArtistText, targetText }) {
-  const artistId = matched ? artist._id : 'unknown';
-  const finalRole = matched ? role : 'unknown';
+function createArtworkArtistLink({
+  artworkId,
+  artist,
+  role,
+  matched,
+  sourceArtistText,
+  targetText,
+}) {
+  const artistId = matched ? artist._id : "unknown";
+  const finalRole = matched ? role : "unknown";
 
   return {
     _id: `${artworkId}--${finalRole}--${artistId}`,
@@ -172,13 +189,13 @@ function createArtworkArtistLink({ artworkId, artist, role, matched, sourceArtis
     artist_label: formatArtistLabel(artist, targetText || sourceArtistText),
     role: finalRole,
     confidence: matched ? 0.9 : 0.25,
-    match_source: matched ? 'artist_text' : 'unmatched_artist_text',
+    match_source: matched ? "artist_text" : "unmatched_artist_text",
     matched,
-    source_field: 'artist',
+    source_field: "artist",
     source_text: sourceArtistText,
     source_artist_text: sourceArtistText,
     target_text: targetText,
-    review_status: 'candidate',
+    review_status: "candidate",
   };
 }
 
@@ -187,7 +204,9 @@ export function generateArtworkArtistLinks(artworks = [], artists = []) {
 
   return artworks.map((artwork, index) => {
     const artworkId = getArtworkId(artwork, index);
-    const sourceArtistText = cleanText(artwork?.artist || artwork?.artist_label || artwork?.creator);
+    const sourceArtistText = cleanText(
+      artwork?.artist || artwork?.artist_label || artwork?.creator,
+    );
     const relation = classifyArtworkArtistRelation(sourceArtistText);
     const artist = findArtistByText(lookup, relation.targetText);
 
@@ -238,11 +257,11 @@ function createArtworkTagLink({ artworkId, term, sourceTagText }) {
     tag_label: cleanText(term.label_zh || term.label_en || sourceTagText),
     tag_type: term.type,
     confidence: 0.9,
-    match_source: 'tag_text',
-    source_field: 'tag_keys',
+    match_source: "tag_text",
+    source_field: "tag_keys",
     source_text: sourceTagText,
     source_tag_text: sourceTagText,
-    review_status: 'candidate',
+    review_status: "candidate",
   };
 }
 
@@ -252,7 +271,11 @@ export function generateArtworkTagLinks(artworks = [], vocabTerms = []) {
 
   artworks.forEach((artwork, index) => {
     const artworkId = getArtworkId(artwork, index);
-    const tags = uniqueValues([...asArray(artwork?.tag_keys), ...asArray(artwork?.tags), ...asArray(artwork?.tag_labels)]);
+    const tags = uniqueValues([
+      ...asArray(artwork?.tag_keys),
+      ...asArray(artwork?.tags),
+      ...asArray(artwork?.tag_labels),
+    ]);
 
     tags.forEach((tag) => {
       const term = findVocabTerm(lookup, tag);
@@ -273,7 +296,7 @@ export function generateArtworkLinks({ artworks = [], artists = [], vocabTerms =
     artist_links_total: artistLinks.length,
     tag_links_total: tagLinks.length,
     unmatched_artist_count: artistLinks.filter((link) => !link.matched).length,
-    unknown_relation_count: artistLinks.filter((link) => link.role === 'unknown').length,
+    unknown_relation_count: artistLinks.filter((link) => link.role === "unknown").length,
   };
 
   return {
@@ -285,11 +308,13 @@ export function generateArtworkLinks({ artworks = [], artists = [], vocabTerms =
 
 export function runCli(argv = process.argv.slice(2)) {
   const args = parseArgs(argv);
-  const artworksPath = path.resolve(args.artworks || args.input || args.in || DEFAULT_ARTWORKS_PATH);
+  const artworksPath = path.resolve(
+    args.artworks || args.input || args.in || DEFAULT_ARTWORKS_PATH,
+  );
   const artistsPath = path.resolve(args.artists || DEFAULT_ARTISTS_PATH);
-  const vocabPath = path.resolve(args.vocab || args['vocab-terms'] || DEFAULT_VOCAB_PATH);
-  const artistOutputPath = path.resolve(args['artist-out'] || DEFAULT_ARTIST_LINKS_OUT);
-  const tagOutputPath = path.resolve(args['tag-out'] || DEFAULT_TAG_LINKS_OUT);
+  const vocabPath = path.resolve(args.vocab || args["vocab-terms"] || DEFAULT_VOCAB_PATH);
+  const artistOutputPath = path.resolve(args["artist-out"] || DEFAULT_ARTIST_LINKS_OUT);
+  const tagOutputPath = path.resolve(args["tag-out"] || DEFAULT_TAG_LINKS_OUT);
 
   const artworks = readJsonRecords(artworksPath);
   const artists = readJsonRecords(artistsPath);

@@ -1,4 +1,4 @@
-<view class="skeleton-list {{variant}}">
+<view class="skeleton-list {{variant}} {{inset ? '' : 'is-flush'}}">
   <block wx:for="{{items}}" wx:key="*this">
     <view class="skeleton-card">
       <view class="skeleton-image"></view>
