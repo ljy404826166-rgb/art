@@ -77,15 +77,9 @@ jobs:
         timeout-minutes: 5
         env:
           WECHAT_DEVTOOLS_CLI: ${{ vars.WECHAT_DEVTOOLS_CLI }}
-          WECHAT_DEVTOOLS_PORT: ${{ vars.WECHAT_DEVTOOLS_PORT }}
         run: |
           if ([string]::IsNullOrWhiteSpace($env:WECHAT_DEVTOOLS_CLI)) {
             throw "WECHAT_DEVTOOLS_CLI repository variable is required."
-          }
-          $servicePort = if ($env:WECHAT_DEVTOOLS_PORT) {
-            [int]$env:WECHAT_DEVTOOLS_PORT
-          } else {
-            32070
           }
           $projectPath = Join-Path $env:GITHUB_WORKSPACE "miniapp"
           $automationReady = Test-NetConnection `
@@ -95,7 +89,6 @@ jobs:
           if (-not $automationReady) {
             & $env:WECHAT_DEVTOOLS_CLI auto `
               --project $projectPath `
-              --port $servicePort `
               --auto-port 9420 `
               --trust-project
             if ($LASTEXITCODE -ne 0) {
