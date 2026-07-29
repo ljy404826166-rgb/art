@@ -1,0 +1,101 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://art-archive.local/schemas/vocab-terms.schema.json",
+  "title": "VocabularyTerm",
+  "type": "object",
+  "required": ["_id", "type", "label_zh", "review_status"],
+  "additionalProperties": true,
+  "properties": {
+    "_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "style",
+        "subject",
+        "medium",
+        "technique",
+        "support",
+        "period",
+        "format",
+        "series",
+        "rights",
+        "region",
+        "country",
+        "collection",
+        "source"
+      ]
+    },
+    "label_zh": {
+      "type": "string",
+      "minLength": 1
+    },
+    "label_en": {
+      "type": "string"
+    },
+    "period_kind": {
+      "type": "string",
+      "enum": ["", "decade", "century", "era"]
+    },
+    "aliases": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "parent_id": {
+      "type": ["string", "null"]
+    },
+    "artist_id": {
+      "type": ["string", "null"]
+    },
+    "review_status": {
+      "type": "string",
+      "enum": ["candidate", "reviewed", "rejected"]
+    },
+    "publish_status": {
+      "type": "string",
+      "enum": ["draft", "published", "archived"]
+    },
+    "display_enabled": {
+      "type": "boolean"
+    },
+    "usage_scopes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["classification_filter", "recommendation", "search", "metadata", "eligibility"]
+      },
+      "uniqueItems": true
+    },
+    "sort_order": {
+      "type": "integer"
+    },
+    "taxonomy_version": {
+      "type": "string"
+    },
+    "target_classification_version": {
+      "type": "string"
+    },
+    "merged_into_term_id": {
+      "type": ["string", "null"]
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "title": { "type": "string" },
+          "url": { "type": "string" },
+          "publisher": { "type": "string" },
+          "accessed_at": { "type": "string" }
+        }
+      }
+    }
+  }
+}

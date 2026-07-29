@@ -1,0 +1,46 @@
+{
+  "pilot_id": "portrait-pilot-20-v1",
+  "selection_rule": "12 P0 + 3 P1 + 3 representative P2 + 1 targeted representative-image recovery + 1 non-person boundary",
+  "artists": [
+    { "artist_id": "henri-matisse", "cohort": "P0", "case": "project_self_portrait" },
+    { "artist_id": "edgar-degas", "cohort": "P0", "case": "targeted_search_after_pipeline_rejection" },
+    { "artist_id": "vincent-van-gogh", "cohort": "P0", "case": "commons_self_portrait" },
+    { "artist_id": "edvard-munch", "cohort": "P0", "case": "commons_photograph" },
+    { "artist_id": "rembrandt-van-rijn", "cohort": "P0", "case": "commons_self_portrait" },
+    { "artist_id": "pierre-auguste-renoir", "cohort": "P0", "case": "commons_photograph" },
+    { "artist_id": "claude-monet", "cohort": "P0", "case": "commons_photograph_and_project_fallback" },
+    { "artist_id": "gustav-klimt", "cohort": "P0", "case": "commons_photograph_alternates" },
+    { "artist_id": "alphonse-mucha", "cohort": "P0", "case": "commons_photograph" },
+    { "artist_id": "katsushika-hokusai", "cohort": "P0", "case": "historical_drawing" },
+    { "artist_id": "jacques-louis-david", "cohort": "P0", "case": "commons_self_portrait" },
+    { "artist_id": "raphael", "cohort": "P0", "case": "historical_self_portrait" },
+    { "artist_id": "sandro-botticelli", "cohort": "P1", "case": "historical_self_portrait" },
+    { "artist_id": "johannes-vermeer", "cohort": "P1", "case": "canonical_associated_image" },
+    { "artist_id": "leonardo-da-vinci", "cohort": "P1", "case": "traditional_associated_portrait" },
+    { "artist_id": "edouard-manet", "cohort": "P2", "case": "commons_photograph_alternates" },
+    { "artist_id": "francisco-goya", "cohort": "P2", "case": "historical_portrait" },
+    { "artist_id": "eugene-delacroix", "cohort": "P2", "case": "self_portrait_and_photograph" },
+    { "artist_id": "corrado-ricci", "cohort": "recovery", "case": "targeted_high_resolution_portrait" },
+    { "artist_id": "t-va-i-d-sytina", "cohort": "boundary", "case": "non_person_entity" }
+  ],
+  "supplemental_commons_candidates": [
+    {
+      "artist_id": "edgar-degas",
+      "file_name": "Edgar Degas self portrait photograph.jpeg",
+      "identity_source_url": "https://harvardartmuseums.org/collections/object/262110",
+      "identity_note": "Commons description identifies a photographic self-portrait by Edgar Degas and cites Harvard Art Museums record HUAM173196."
+    },
+    {
+      "artist_id": "katsushika-hokusai",
+      "file_name": "Hokusai Katsushika, Selfportrait at the age of eighty-three (crop).png",
+      "identity_source_url": "https://www.britishmuseum.org/collection/object/P_2015-7091-1-a-b",
+      "identity_note": "The British Museum identifies the underlying 1842 drawing as Hokusai's self-portrait at age 83; this Commons file is a crop of that documented drawing."
+    },
+    {
+      "artist_id": "corrado-ricci",
+      "file_name": "Ettore tito, ritratto di corrado ricci, 1918.jpg",
+      "identity_source_url": "https://commons.wikimedia.org/wiki/File:Ettore_tito,_ritratto_di_corrado_ricci,_1918.jpg",
+      "identity_note": "Commons and the Ravenna Art Museum collection metadata identify the work as Ettore Tito's Portrait of Corrado Ricci; the image is accepted as an associated representative portrait."
+    }
+  ]
+}

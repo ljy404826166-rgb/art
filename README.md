@@ -1,65 +1,94 @@
-# 画廊 Art Archive
+# Art Archive
 
-面向移动端上线的绘画艺术资源库原型，用于欣赏、下载、收藏和科普公开领域艺术品。当前项目是 Vite + Capacitor 应用，数据源标准化接入 Supabase。
+Mobile-first artwork archive prototype for browsing, saving, downloading, and studying public-domain paintings. The app is a Vite + Supabase web client that can be packaged later through Capacitor.
 
-## 功能
+## Current Features
 
-- 首页推荐、搜索、标签内容流
-- 分类页标签筛选
-- 作品详情、艺术家作品页、标签作品页
-- 本地收藏与浏览历史，登录后可同步到 Supabase 用户表
-- Chicago Art Institute 官方 API 导入脚本
-- Artvee 页面元数据草稿导入脚本
+- Home recommendations, search, tag groups, artist routes, and artwork detail pages.
+- Supabase-backed `published_artworks` data view with normalized artwork/source/image tables.
+- Local favorites, browsing history, download records, profile settings, and account login.
+- Authenticated user tables for favorites, browsing history, downloads, settings, and profiles.
+- Artvee ingestion workflow for low-frequency draft imports that require source and rights review before publishing.
+- PWA build support through `vite-plugin-pwa`.
+- IIIF/image zoom support through `openseadragon` on artwork detail pages.
 
-## 快速开始
+## Canonical Project Entry
 
-```bash
+Run every command from the repository root. The root is the only supported project entry, even when the workspace is reached through a Windows Junction or symbolic link.
+
+```powershell
+npm.cmd install
+npm.cmd run check:entry
 npm.cmd run dev
 ```
 
-打开 `http://127.0.0.1:4173/`。
+Open `http://127.0.0.1:5173/`.
 
-## Supabase 初始化
+For the native WeChat mini program, import `<repository-root>/miniapp` into WeChat DevTools. This is the only supported WeChat project entry. Keep npm and data commands at the repository root; importing the repository root into DevTools makes it scan unrelated web dependencies and can restore an invalid cached project identity.
 
-1. 在 Supabase SQL Editor 执行 `supabase/schema.sql`。
-2. 在 Supabase SQL Editor 执行 `supabase/app_user_data.sql`。
-3. 复制 `.env.example` 为 `.env.local`，填入：
+DevTools automation uses the same root entry:
+
+```powershell
+cli.bat auto --project .\miniapp --auto-port 9421 --trust-project
+$env:WECHAT_AUTOMATOR_ENDPOINT = "ws://localhost:9421"
+npm.cmd run recommendation:devtools-smoke
+```
+
+`npm.cmd run check:entry` validates that the single WeChat project configuration lives inside `miniapp/`, rejects an accidental root config, and reports the real repository path, so `D:\art` and `E:\CodexProjects\art` cannot silently produce different build settings.
+
+## Environment
+
+Copy `.env.example` to `.env.local` and fill the browser-safe Supabase values:
 
 ```env
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=sb_publishable_xxx
 ```
 
-4. 如果要运行导入脚本，另行在本地 shell 或 `.env` 中提供：
+Only local scripts should receive privileged keys:
 
 ```env
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=service_role_key_never_commit_real_value
 ```
 
-不要把 service role key 放进 `src/`、`public/` 或任何前端可见文件。
+Do not commit `.env.local` or any real service role/API keys. `.gitignore` excludes local env files and generated data directories.
 
-## 数据导入
+## Supabase Setup
 
-```bash
-npm.cmd run db:ingest:artic
+Run these SQL files in order:
+
+```text
+supabase/schema.sql
+supabase/app_user_data.sql
 ```
+
+`schema.sql` creates the public artwork catalog and `published_artworks` view. `app_user_data.sql` creates authenticated user-owned tables and RLS policies for favorites, history, downloads, settings, and profiles.
+
+## Data Import
+
+Artvee low-frequency draft import:
 
 ```powershell
-$env:ARTVEE_URLS="https://artvee.com/..."; npm.cmd run db:ingest:artvee
+$env:ARTVEE_URLS="https://artvee.com/example-artwork/"
+npm.cmd run db:ingest:artvee
 ```
 
-Artvee 记录默认保持 `draft`，发布前需要人工确认来源、作者、年代、许可证和图片质量。
+Artvee records should remain `draft` until original source, rights status, artist, date, and image quality are manually reviewed.
 
 ## Verification
 
-Run before Android Studio testing:
+Run the project gate before handing work off:
 
 ```bash
-npm.cmd run check
-npx.cmd tsc --noEmit
-npm.cmd run build
-npx.cmd cap sync android
+npm.cmd run verify
 ```
 
-The web preview runs at `http://127.0.0.1:4173/`. Android Studio reads the synced `dist` output through Capacitor.
+This runs:
+
+- `npm.cmd run check`
+- `npm.cmd run typecheck`
+- `npm.cmd run test:artvee`
+- `npm.cmd run build`
+
+The web preview runs at `http://127.0.0.1:5173/`. Android Studio should consume the synced `dist` output when Capacitor is added back to the active workflow.

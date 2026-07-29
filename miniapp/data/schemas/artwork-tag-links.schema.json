@@ -1,0 +1,88 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://art-archive.local/schemas/artwork-tag-links.schema.json",
+  "title": "ArtworkTagLink",
+  "type": "object",
+  "required": [
+    "_id",
+    "artwork_id",
+    "tag_id",
+    "tag_type",
+    "review_status",
+    "classification_version"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "artwork_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "tag_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "tag_type": {
+      "type": "string",
+      "enum": [
+        "style",
+        "subject",
+        "period",
+        "medium",
+        "technique",
+        "support",
+        "format",
+        "series",
+        "rights",
+        "region",
+        "country"
+      ]
+    },
+    "period_kind": {
+      "type": "string",
+      "enum": ["", "century", "decade", "era"]
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "match_source": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_field": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_text": {
+      "type": "string"
+    },
+    "source_texts": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "evidence": {
+      "type": "string"
+    },
+    "review_status": {
+      "type": "string",
+      "enum": ["candidate", "reviewed", "rejected"]
+    },
+    "term_publish_status": {
+      "type": "string",
+      "enum": ["draft", "published", "retired"]
+    },
+    "classification_version": {
+      "type": "string",
+      "const": "classification-v6"
+    },
+    "vocabulary_version": {
+      "type": "string",
+      "const": "controlled-vocabulary-v1"
+    }
+  }
+}

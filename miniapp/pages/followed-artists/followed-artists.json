@@ -1,0 +1,7 @@
+{
+  "navigationBarTitleText": "关注画家",
+  "usingComponents": {
+    "artist-portrait": "/components/artist-portrait/artist-portrait",
+    "empty-state": "/components/empty-state/empty-state"
+  }
+}

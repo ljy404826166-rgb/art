@@ -1,0 +1,59 @@
+.library-page {
+  min-height: 100vh;
+  padding: 44rpx 34rpx 140rpx;
+  background: #faf9f7;
+}
+
+.library-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24rpx;
+  margin-bottom: 30rpx;
+}
+
+.library-title-wrap {
+  display: grid;
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: 6rpx;
+}
+
+.library-title {
+  color: #111111;
+  font-size: 46rpx;
+  font-weight: 950;
+  line-height: 58rpx;
+}
+
+.library-count {
+  color: #7a736d;
+  font-size: 25rpx;
+  line-height: 36rpx;
+}
+
+.clear-button {
+  display: flex;
+  flex: 0 0 108rpx;
+  box-sizing: border-box;
+  width: 108rpx;
+  min-width: 108rpx;
+  max-width: 108rpx;
+  height: 58rpx;
+  align-items: center;
+  justify-content: center;
+  margin: 0 0 0 auto;
+  border-radius: 999rpx;
+  padding: 0;
+  color: #5f5a55;
+  background: #efede9;
+  font-size: 24rpx;
+  font-weight: 850;
+  line-height: 32rpx;
+}
+
+.library-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 28rpx;
+}

@@ -1,0 +1,95 @@
+<view class="artist-detail-page">
+  <view wx:if="{{artist}}" class="artist-hero">
+    <artist-portrait artist="{{artist}}" size="detail" lazy-load="{{false}}" />
+    <text class="artist-name">{{artist.nameZh}}</text>
+    <text class="artist-en">{{artist.nameEn}}</text>
+    <text class="artist-life">{{artist.nameEn}} ({{artist.lifespan}})</text>
+    <view class="follow-button {{isFollowed ? 'is-active' : ''}}" bindtap="toggleFollowArtist">
+      <image class="follow-icon" src="/assets/icons/lucide/svg/user.svg" mode="aspectFit" />
+      <text>{{isFollowed ? '已关注' : '关注画家'}}</text>
+    </view>
+    <text class="artist-bio">{{artist.bio}}</text>
+  </view>
+
+  <view wx:if="{{artist}}" class="info-panel">
+    <view class="info-card">
+      <text class="info-label">国籍</text>
+      <text class="info-value">{{artist.country}}</text>
+    </view>
+    <view class="info-card">
+      <text class="info-label">流派</text>
+      <text class="info-value">{{artist.stylesText}}</text>
+    </view>
+    <view class="info-card">
+      <text class="info-label">活跃时期</text>
+      <text class="info-value">{{artist.activePeriod}}</text>
+    </view>
+    <view class="info-card">
+      <text class="info-label">代表作品</text>
+      <text class="info-value">{{artist.representativeWorksText}}</text>
+    </view>
+  </view>
+
+  <view wx:if="{{artist && artist.tagItems.length}}" class="tag-row">
+    <block wx:for="{{artist.tagItems}}" wx:key="label">
+      <text class="artist-tag" data-tag="{{item.label}}" data-tag-id="{{item.id}}" bindtap="openClassificationTag">{{item.label}}</text>
+    </block>
+  </view>
+
+  <error-state
+    wx:if="{{error}}"
+    title="作品读取失败"
+    message="{{usingFallback ? '已显示本地备用匹配结果。' : error}}"
+    show-retry="{{false}}"
+  />
+
+  <view wx:if="{{artist}}" class="works-head">
+    <text class="section-title">相关作品</text>
+  </view>
+
+  <view wx:if="{{loading}}" class="artist-detail-skeleton">
+    <view class="skeleton-hero">
+      <view class="skeleton-portrait"></view>
+      <view class="skeleton-line skeleton-name"></view>
+      <view class="skeleton-line skeleton-en"></view>
+      <view class="skeleton-line skeleton-life"></view>
+      <view class="skeleton-pill"></view>
+      <view class="skeleton-bio-line"></view>
+      <view class="skeleton-bio-line is-short"></view>
+    </view>
+    <view class="skeleton-info-panel">
+      <view class="skeleton-info-card"></view>
+      <view class="skeleton-info-card"></view>
+      <view class="skeleton-info-card"></view>
+      <view class="skeleton-info-card"></view>
+    </view>
+    <view class="skeleton-tag-row">
+      <view class="skeleton-tag"></view>
+      <view class="skeleton-tag"></view>
+      <view class="skeleton-tag"></view>
+    </view>
+    <view class="skeleton-works-head">
+      <view class="skeleton-section-title"></view>
+    </view>
+    <view class="skeleton-works-grid">
+      <view class="skeleton-work-card"></view>
+      <view class="skeleton-work-card"></view>
+    </view>
+  </view>
+
+  <view wx:elif="{{artworksLoading}}" class="works-grid works-grid-skeleton">
+    <view class="skeleton-work-card"></view>
+    <view class="skeleton-work-card"></view>
+  </view>
+
+  <empty-state wx:elif="{{artist && artworks.length === 0}}" title="暂未匹配到该画家的作品" description="画家简介仍可继续浏览。" />
+
+  <view wx:elif="{{artworks.length}}" class="works-grid">
+    <block wx:for="{{artworks}}" wx:key="id">
+      <artwork-card artwork="{{item}}" bindtapcard="openArtwork" />
+    </block>
+  </view>
+
+  <loading-more wx:if="{{loadingMore}}" text="继续加载..." />
+  <loading-more wx:elif="{{!hasMore && artworks.length}}" text="已显示全部作品" done="{{true}}" />
+</view>

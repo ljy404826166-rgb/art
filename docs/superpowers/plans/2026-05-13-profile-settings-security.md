@@ -1360,7 +1360,7 @@ $env:PORT="4174"
 D:\node\node.exe D:\art\server.mjs D:\art\dist
 ```
 
-Expected: output includes `Art Archive is running at http://localhost:4174`.
+Expected: output includes `Masterpiece is running at http://localhost:4174`.
 
 - [ ] **Step 3: Open Codex internal preview**
 
@@ -1465,4 +1465,3 @@ Manual Codex preview:
 - Verify Settings and Security Center route entry/exit.
 - Verify local interactions persist.
 - Verify placeholder rows are disabled or clearly marked.
-

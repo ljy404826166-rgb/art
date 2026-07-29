@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "release_version": "0.1.0",
+  "environment": "replace-with-production-environment-id",
+  "production_ready": false,
+  "artifacts": [
+    {
+      "name": "replace-with-a-real-backup",
+      "path": "replace-with-an-archived-artifact-path",
+      "sha256": "replace-with-a-64-character-sha256"
+    }
+  ],
+  "procedures": [
+    "Replace this example with the exact, reviewed recovery procedure before starting the formal release gate."
+  ]
+}

@@ -1,0 +1,92 @@
+<view class="detail-page">
+  <view wx:if="{{loading}}" class="detail-skeleton">
+    <view class="detail-skeleton-hero" style="{{heroFrameStyle}}"></view>
+    <view class="detail-skeleton-body">
+      <view class="detail-skeleton-line eyebrow-line"></view>
+      <view class="detail-skeleton-line title-line"></view>
+      <view class="detail-skeleton-line subtitle-line"></view>
+      <view class="detail-skeleton-pill"></view>
+      <view class="detail-skeleton-grid">
+        <view class="detail-skeleton-meta"></view>
+        <view class="detail-skeleton-meta"></view>
+        <view class="detail-skeleton-meta"></view>
+        <view class="detail-skeleton-meta"></view>
+      </view>
+    </view>
+  </view>
+
+  <error-state
+    wx:if="{{error}}"
+    title="详情读取失败"
+    message="{{usingFallback ? '已显示本地备用详情。' : error}}"
+    bindretry="retryLoad"
+  />
+
+  <block wx:if="{{artwork}}">
+    <view class="hero-image-wrap">
+      <artwork-image
+        artwork="{{artwork}}"
+        usage="detail"
+        mode="widthFix"
+        shape="plain"
+        frame-style="{{heroFrameStyle}}"
+        fallback-text="{{artwork.titleCn}}"
+        bindimageload="handleHeroImageLoad"
+      />
+    </view>
+
+    <view class="detail-body">
+      <text class="detail-title">{{artwork.titleCn}}</text>
+      <text class="detail-subtitle">{{artwork.titleEn}}</text>
+
+      <view class="detail-actions">
+        <view class="favorite-button {{isFavorite ? 'is-active' : ''}}" bindtap="toggleFavorite">
+          <image class="favorite-icon" src="/assets/icons/lucide/svg/heart.svg" mode="aspectFit" />
+          <text>{{isFavorite ? '已收藏' : '收藏'}}</text>
+        </view>
+        <view class="favorite-button download-button {{downloading ? 'is-disabled' : ''}}" bindtap="downloadArtwork">
+          <image class="favorite-icon" src="/assets/icons/lucide/svg/download.svg" mode="aspectFit" />
+          <text wx:if="{{downloading}}">下载中</text>
+          <text wx:else>下载</text>
+        </view>
+      </view>
+
+      <view class="artist-line" bindtap="openArtistFromArtwork">
+        <text>{{artistButtonText || artwork.artist}}</text>
+      </view>
+
+      <view class="meta-grid">
+        <view class="meta-item">
+          <text class="meta-label">创作年代</text>
+          <text class="meta-value">{{artwork.year}}</text>
+        </view>
+        <view class="meta-item">
+          <text class="meta-label">收藏地</text>
+          <text class="meta-value">{{artwork.location}}</text>
+        </view>
+        <view class="meta-item">
+          <text class="meta-label">媒介</text>
+          <text class="meta-value">{{artwork.medium}}</text>
+        </view>
+        <view class="meta-item">
+          <text class="meta-label">尺寸</text>
+          <text class="meta-value">{{artwork.dimensions}}</text>
+        </view>
+      </view>
+
+      <view class="description-card">
+        <view class="description-title">
+          <image class="description-icon" src="/assets/icons/lucide/svg/info.svg" mode="aspectFit" />
+          <text>作品说明</text>
+        </view>
+        <text class="detail-description">{{artwork.description}}</text>
+      </view>
+
+      <view class="tag-row" wx:if="{{artwork.classificationTags.length}}">
+        <block wx:for="{{artwork.classificationTags}}" wx:key="id">
+          <text class="detail-tag" data-tag="{{item.label}}" data-tag-id="{{item.id}}" bindtap="openClassificationTag">{{item.label}}</text>
+        </block>
+      </view>
+    </view>
+  </block>
+</view>

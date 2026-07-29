@@ -1,0 +1,245 @@
+.category-page {
+  min-height: 100vh;
+  padding: 56rpx 0 158rpx;
+  background: #ffffff;
+}
+
+.filter-panel {
+  display: grid;
+  gap: 46rpx;
+  padding: 0 0 16rpx;
+}
+
+.catalog-loading {
+  padding: 24rpx 34rpx 40rpx;
+  color: #8a837d;
+  font-size: 26rpx;
+  line-height: 36rpx;
+}
+
+.filter-section {
+  display: grid;
+  gap: 22rpx;
+}
+
+.filter-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 34rpx;
+}
+
+.filter-title {
+  color: #000000;
+  font-size: 38rpx;
+  font-weight: 900;
+  line-height: 48rpx;
+}
+
+.expand-button {
+  display: flex;
+  flex: 0 0 62rpx;
+  width: 62rpx;
+  min-width: 62rpx;
+  max-width: 62rpx;
+  height: 62rpx;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999rpx;
+  background: #f7f7f7;
+  transform: scale(1);
+  transform-origin: center;
+  transition:
+    transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 180ms ease-out;
+}
+
+.expand-button.is-pressed {
+  background: #eeeeec;
+  transform: scale(0.94);
+}
+
+.expand-icon {
+  display: block;
+  width: 28rpx;
+  height: 28rpx;
+  transform-origin: center;
+  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.expand-button.is-expanded .expand-icon {
+  transform: rotate(180deg);
+}
+
+.chip-clip {
+  width: 100%;
+  overflow: hidden;
+  transition: height 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: height;
+}
+
+.chip-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18rpx 20rpx;
+  padding: 0 34rpx;
+}
+
+.tag-chip {
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: auto;
+  min-width: auto;
+  max-width: 320rpx;
+  height: 54rpx;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999rpx;
+  padding: 0 28rpx;
+  color: #777777;
+  background: #f6f5f4;
+  font-size: 25rpx;
+  font-weight: 850;
+  line-height: 54rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transform: scale(1);
+  transform-origin: center;
+  transition:
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 180ms ease-out,
+    color 180ms ease-out;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.tag-label {
+  display: block;
+  max-width: 264rpx;
+  overflow: hidden;
+  line-height: 54rpx;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chip-wrap .tag-chip {
+  margin: 0;
+}
+
+.tag-chip.is-active {
+  color: #ffffff;
+  background: #202124;
+}
+
+.tag-chip.is-pressed {
+  transform: scale(0.96);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .expand-button,
+  .expand-icon,
+  .tag-chip,
+  .chip-clip {
+    transition: none;
+  }
+}
+
+.notice-card,
+.loading-state,
+.empty-state {
+  margin-left: 34rpx;
+  margin-right: 34rpx;
+}
+
+.result-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24rpx;
+  margin: 44rpx 0 24rpx;
+  padding: 0 34rpx;
+}
+
+.result-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 18rpx;
+}
+
+.clear-filter-button {
+  display: flex;
+  flex: 0 0 132rpx;
+  box-sizing: border-box;
+  width: 132rpx;
+  min-width: 132rpx;
+  max-width: 132rpx;
+  height: 48rpx;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  border: 0;
+  border-radius: 999rpx;
+  padding: 0;
+  color: #5d524c;
+  background: #f6f5f4;
+  font-size: 23rpx;
+  font-weight: 700;
+  line-height: 30rpx;
+}
+
+.section-title {
+  color: #000000;
+  font-size: 42rpx;
+  font-weight: 950;
+  line-height: 52rpx;
+}
+
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 28rpx;
+  align-items: start;
+  padding: 0 34rpx;
+}
+
+.paging-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16rpx;
+  padding: 34rpx 34rpx 10rpx;
+}
+
+.paging-error-text {
+  color: #8a837d;
+  font-size: 24rpx;
+  line-height: 34rpx;
+}
+
+.paging-retry-button {
+  width: auto;
+  min-width: 0;
+  height: 48rpx;
+  margin: 0;
+  border: 0;
+  border-radius: 999rpx;
+  padding: 0 20rpx;
+  color: #5d524c;
+  background: #f6f5f4;
+  font-size: 23rpx;
+  font-weight: 700;
+  line-height: 48rpx;
+}
+
+.paging-retry-button::after {
+  border: 0;
+}
+
+.load-more {
+  padding: 34rpx 0 10rpx;
+  color: #8a837d;
+  font-size: 24rpx;
+  line-height: 34rpx;
+  text-align: center;
+}

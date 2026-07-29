@@ -1,0 +1,285 @@
+.artists-page {
+  min-height: 100vh;
+  padding: 56rpx 0 158rpx;
+  background: #ffffff;
+}
+
+.artists-page button::after {
+  border: 0;
+}
+
+.search-shell {
+  display: flex;
+  box-sizing: border-box;
+  align-items: center;
+  gap: 14rpx;
+  height: 88rpx;
+  margin: 0 34rpx 34rpx;
+  border-radius: 999rpx;
+  padding: 0 28rpx;
+  background: #ffffff;
+  box-shadow: 0 18rpx 54rpx rgba(25, 25, 25, 0.06);
+}
+
+.search-icon {
+  display: flex;
+  flex: 0 0 48rpx;
+  width: 48rpx;
+  height: 88rpx;
+  align-items: center;
+  justify-content: center;
+}
+
+.search-glyph {
+  display: block;
+  width: 34rpx;
+  height: 34rpx;
+}
+
+.search-input {
+  display: block;
+  flex: 1 1 0%;
+  box-sizing: border-box;
+  width: 0;
+  min-width: 0;
+  max-width: 100%;
+  height: 88rpx;
+  color: #242424;
+  font-size: 29rpx;
+  line-height: 88rpx;
+}
+
+.search-placeholder {
+  color: #b6b0aa;
+}
+
+.search-action {
+  display: flex;
+  flex: 0 0 96rpx;
+  box-sizing: border-box;
+  width: 96rpx;
+  min-width: 96rpx;
+  max-width: 96rpx;
+  height: 64rpx;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  color: #1f2328;
+  font-size: 24rpx;
+  font-weight: 850;
+}
+
+.filter-panel {
+  display: grid;
+  gap: 46rpx;
+  padding: 0 0 16rpx;
+}
+
+.filter-section {
+  display: grid;
+  gap: 22rpx;
+}
+
+.filter-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 34rpx;
+}
+
+.filter-title {
+  color: #000000;
+  font-size: 38rpx;
+  font-weight: 900;
+  line-height: 48rpx;
+}
+
+.expand-button {
+  display: flex;
+  flex: 0 0 62rpx;
+  width: 62rpx;
+  min-width: 62rpx;
+  max-width: 62rpx;
+  height: 62rpx;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999rpx;
+  background: #f7f7f7;
+  transform: scale(1);
+  transform-origin: center;
+  transition:
+    transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 180ms ease-out;
+}
+
+.expand-button.is-pressed {
+  background: #eeeeec;
+  transform: scale(0.94);
+}
+
+.expand-icon {
+  display: block;
+  width: 28rpx;
+  height: 28rpx;
+  transform-origin: center;
+  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.expand-button.is-expanded .expand-icon {
+  transform: rotate(180deg);
+}
+
+.chip-clip {
+  width: 100%;
+  overflow: hidden;
+  transition: height 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: height;
+}
+
+.chip-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18rpx 20rpx;
+  padding: 0 34rpx;
+}
+
+.tag-chip {
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: auto;
+  min-width: auto;
+  max-width: 320rpx;
+  height: 54rpx;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999rpx;
+  padding: 0 28rpx;
+  color: #777777;
+  background: #f6f5f4;
+  font-size: 25rpx;
+  font-weight: 850;
+  line-height: 54rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transform: scale(1);
+  transform-origin: center;
+  transition:
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 180ms ease-out,
+    color 180ms ease-out;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.tag-label {
+  display: block;
+  max-width: 264rpx;
+  overflow: hidden;
+  line-height: 54rpx;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chip-wrap .tag-chip {
+  margin: 0;
+}
+
+.tag-chip.is-active {
+  color: #ffffff;
+  background: #202124;
+}
+
+.tag-chip.is-pressed {
+  transform: scale(0.96);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .expand-button,
+  .expand-icon,
+  .tag-chip,
+  .chip-clip {
+    transition: none;
+  }
+}
+
+.result-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24rpx;
+  margin: 44rpx 0 24rpx;
+  padding: 0 34rpx;
+}
+
+.section-title {
+  color: #000000;
+  font-size: 42rpx;
+  font-weight: 950;
+  line-height: 52rpx;
+}
+
+.artist-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24rpx;
+  padding: 0 34rpx;
+}
+
+.artist-card {
+  display: grid;
+  justify-items: center;
+  min-width: 0;
+  border-radius: 28rpx;
+  padding: 30rpx 20rpx 28rpx;
+  background: #ffffff;
+  box-shadow: 0 18rpx 42rpx rgba(31, 35, 40, 0.06);
+}
+
+.artist-copy {
+  display: grid;
+  justify-items: center;
+  min-width: 0;
+  margin-top: 18rpx;
+}
+
+.artist-name {
+  max-width: 100%;
+  overflow: hidden;
+  color: #151515;
+  font-size: 30rpx;
+  font-weight: 900;
+  line-height: 38rpx;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.artist-en,
+.artist-meta,
+.artist-count {
+  max-width: 100%;
+  overflow: hidden;
+  color: #77716b;
+  font-size: 22rpx;
+  line-height: 32rpx;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.artist-count {
+  margin-top: 8rpx;
+  color: #8b5a3d;
+  font-weight: 800;
+}
+
+.artist-more-state {
+  padding: 28rpx 34rpx 0;
+  color: #8a8178;
+  font-size: 24rpx;
+  line-height: 34rpx;
+  text-align: center;
+}
+
+.artist-more-state.is-end {
+  color: #b0aaa4;
+}

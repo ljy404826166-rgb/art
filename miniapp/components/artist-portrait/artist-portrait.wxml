@@ -1,0 +1,17 @@
+<view
+  class="artist-portrait-shell {{size}} {{showImage ? 'has-image' : 'has-fallback'}}"
+  role="img"
+  aria-label="{{ariaLabel}}"
+>
+  <view wx:if="{{loading}}" class="artist-portrait-loading"></view>
+  <image
+    wx:if="{{showImage}}"
+    class="artist-portrait-image {{loading ? 'is-loading' : ''}}"
+    src="{{imageSrc}}"
+    mode="aspectFill"
+    lazy-load="{{lazyLoad}}"
+    bindload="handleLoad"
+    binderror="handleError"
+  />
+  <text wx:else class="artist-portrait-fallback">{{displayText}}</text>
+</view>

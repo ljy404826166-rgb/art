@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Reviewed Artist",
+  "type": "object",
+  "required": [
+    "_id",
+    "name_zh",
+    "name_en",
+    "birth_year",
+    "death_year",
+    "lifespan_text",
+    "country",
+    "region",
+    "styles",
+    "periods",
+    "active_period",
+    "representative_works",
+    "aliases",
+    "bio_zh",
+    "tags",
+    "avatar_text",
+    "authority_ids",
+    "sources",
+    "review_status",
+    "reviewed_at",
+    "updated_at"
+  ],
+  "properties": {
+    "_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "name_zh": {
+      "type": "string",
+      "minLength": 1
+    },
+    "name_en": {
+      "type": "string",
+      "minLength": 1
+    },
+    "birth_year": {
+      "type": "integer"
+    },
+    "death_year": {
+      "type": "integer"
+    },
+    "lifespan_text": {
+      "type": "string",
+      "minLength": 1
+    },
+    "country": {
+      "type": "string",
+      "minLength": 1
+    },
+    "region": {
+      "type": "string",
+      "minLength": 1
+    },
+    "styles": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    },
+    "periods": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    },
+    "active_period": {
+      "type": "string",
+      "minLength": 1
+    },
+    "representative_works": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "aliases": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 2
+    },
+    "bio_zh": {
+      "type": "string",
+      "minLength": 20,
+      "maxLength": 220
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "avatar_text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2
+    },
+    "authority_ids": {
+      "type": "object",
+      "properties": {
+        "ulan": {
+          "type": "string"
+        },
+        "wikidata": {
+          "type": "string"
+        },
+        "viaf": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["title", "url", "fields"],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "url": {
+            "type": "string",
+            "minLength": 1
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          }
+        },
+        "additionalProperties": false
+      },
+      "minItems": 1
+    },
+    "review_status": {
+      "type": "string",
+      "enum": ["candidate", "reviewed", "rejected"]
+    },
+    "reviewed_by": {
+      "type": "string"
+    },
+    "reviewed_at": {
+      "type": "string"
+    },
+    "updated_at": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

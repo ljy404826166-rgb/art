@@ -1,0 +1,29 @@
+<view class="tag-page">
+  <error-state
+    wx:if="{{error}}"
+    title="标签作品读取失败"
+    message="{{usingFallback ? '已显示本地备用作品。' : error}}"
+    bindretry="retryLoad"
+  />
+
+  <view class="tag-head">
+    <text class="tag-title">{{tag}}</text>
+  </view>
+
+  <skeleton-card wx:if="{{loading}}" variant="grid" count="{{4}}" inset="{{false}}" />
+
+  <empty-state
+    wx:elif="{{artworks.length === 0}}"
+    title="暂无该标签作品"
+    description="返回首页选择其他分类继续浏览。"
+  />
+
+  <view wx:else class="tag-grid">
+    <block wx:for="{{artworks}}" wx:key="id">
+      <artwork-card artwork="{{item}}" bindtapcard="openDetail" />
+    </block>
+  </view>
+
+  <loading-more wx:if="{{loadingMore}}" text="继续加载..." />
+  <loading-more wx:elif="{{!hasMore && artworks.length}}" text="已显示全部作品" done="{{true}}" />
+</view>

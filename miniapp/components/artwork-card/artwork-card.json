@@ -1,0 +1,6 @@
+{
+  "component": true,
+  "usingComponents": {
+    "artwork-image": "../artwork-image/artwork-image"
+  }
+}

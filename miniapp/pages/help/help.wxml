@@ -1,0 +1,61 @@
+<view class="help-page">
+  <view class="intro">
+    <text class="intro-kicker">HELP & FEEDBACK</text>
+    <text class="intro-title">有什么可以帮你？</text>
+    <text class="intro-copy">
+      先查看常见问题；仍未解决时，可以直接通过微信客服发送问题和截图。
+    </text>
+  </view>
+
+  <view class="section">
+    <text class="section-title">常见问题</text>
+    <view class="faq-list">
+      <block wx:for="{{faqs}}" wx:key="id">
+        <view class="faq-item">
+          <view
+            class="faq-button"
+            data-id="{{item.id}}"
+            bindtap="toggleFaq"
+            hover-class="faq-button--pressed"
+            aria-role="button"
+            aria-label="{{item.question}}"
+            aria-expanded="{{item.expanded}}"
+          >
+            <view class="faq-question">{{item.question}}</view>
+            <view
+              class="faq-toggle {{item.expanded ? 'is-expanded' : ''}}"
+              aria-hidden="true"
+            >
+              <view class="faq-chevron"></view>
+            </view>
+          </view>
+          <view wx:if="{{item.expanded}}" class="faq-answer">
+            <text>{{item.answer}}</text>
+          </view>
+        </view>
+      </block>
+    </view>
+  </view>
+
+  <view class="contact-card">
+    <image class="contact-icon" src="/assets/icons/lucide/svg/circle-help.svg" mode="aspectFit" />
+    <view class="contact-copy">
+      <text class="contact-title">仍然需要帮助？</text>
+      <text class="contact-description">
+        建议提供作品名称、操作步骤和问题截图。客服人员上线后会尽快处理。
+      </text>
+    </view>
+    <button
+      class="contact-button"
+      open-type="contact"
+      session-from="masterpiece_help"
+      aria-label="联系 Masterpiece 微信客服"
+    >
+      联系人工客服
+    </button>
+  </view>
+
+  <text class="contact-footnote">
+    客服消息由微信提供会话能力；请勿发送身份证、银行卡等与问题无关的敏感信息。
+  </text>
+</view>

@@ -1,0 +1,20 @@
+<view class="artwork-card-shadow {{variant}} {{orientation}}" style="{{cardStyle}}" bindtap="handleTap">
+  <view class="artwork-shadow-fade"></view>
+  <view class="artwork-card">
+    <view class="image-frame" style="{{frameStyle}}">
+      <artwork-image
+        artwork="{{artwork}}"
+        usage="card"
+        mode="{{variant === 'row' ? 'aspectFit' : 'aspectFill'}}"
+        frame-style="{{frameStyle}}"
+        fallback-text="{{displayTitle}}"
+        bindimageload="handleImageLoad"
+      />
+    </view>
+
+    <view class="card-copy">
+      <text class="card-title">{{displayTitle}}</text>
+      <text class="card-artist">{{displayArtist}}</text>
+    </view>
+  </view>
+</view>

@@ -1,0 +1,33 @@
+.tag-page {
+  min-height: 100vh;
+  padding: 56rpx 34rpx 150rpx;
+  background: #ffffff;
+}
+
+.tag-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24rpx;
+  margin-bottom: 28rpx;
+}
+
+.tag-title {
+  color: #000000;
+  font-size: 46rpx;
+  font-weight: 950;
+  line-height: 58rpx;
+}
+
+.tag-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 28rpx;
+  align-items: start;
+}
+
+.tag-page .empty-state-panel,
+.tag-page .error-state-panel {
+  margin-left: 0;
+  margin-right: 0;
+}

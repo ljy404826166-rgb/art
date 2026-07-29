@@ -1,0 +1,49 @@
+<view class="privacy-page">
+  <view class="intro">
+    <text class="intro-kicker">PRIVACY & PERMISSIONS</text>
+    <text class="intro-title">你的数据，由你了解</text>
+    <text class="intro-copy">
+      浏览画作无需提供个人资料；只有在你主动使用相应功能时，才会处理必要信息。
+    </text>
+  </view>
+
+  <view class="official-card">
+    <view class="official-heading">
+      <image class="official-icon" src="/assets/icons/lucide/svg/shield.svg" mode="aspectFit" />
+      <view class="official-copy">
+        <text class="official-title">微信隐私保护指引</text>
+        <text class="official-hint">{{privacyState.hint}}</text>
+      </view>
+      <text class="official-status">{{loadingSetting ? '读取中' : privacyState.label}}</text>
+    </view>
+    <button
+      class="official-button"
+      loading="{{openingContract}}"
+      disabled="{{openingContract}}"
+      bindtap="openPrivacyContract"
+    >
+      {{openingContract ? '打开中…' : '查看官方隐私保护指引'}}
+    </button>
+  </view>
+
+  <view class="section">
+    <text class="section-title">我们如何使用数据</text>
+    <view class="data-list">
+      <block wx:for="{{dataGroups}}" wx:key="title">
+        <view class="data-card">
+          <image class="data-icon" src="{{item.icon}}" mode="aspectFit" />
+          <view class="data-copy">
+            <text class="data-title">{{item.title}}</text>
+            <text class="data-description">{{item.purpose}}</text>
+            <text class="data-storage">{{item.storage}}</text>
+          </view>
+        </view>
+      </block>
+    </view>
+  </view>
+
+  <view class="boundary-card">
+    <text class="boundary-title">明确的数据边界</text>
+    <text>我们不读取通讯录、手机号或位置；也不会将系统相册中的下载图片上传到账号云端。</text>
+  </view>
+</view>

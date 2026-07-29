@@ -1,0 +1,79 @@
+<view class="profile-edit-page">
+  <view class="intro">
+    <text class="intro-kicker">PERSONAL PROFILE</text>
+    <text class="intro-title">完善你的资料</text>
+    <text wx:if="{{!profileId}}" class="intro-copy">{{accountHint}}</text>
+  </view>
+
+  <view class="profile-form {{loading ? 'is-loading' : ''}}">
+    <view class="field-group avatar-field">
+      <text class="field-label">头像</text>
+      <view class="avatar-picker {{loading || saving ? 'is-disabled' : ''}}">
+        <view class="avatar-preview">
+          <image
+            wx:if="{{avatarPreviewUrl}}"
+            class="avatar-image"
+            src="{{avatarPreviewUrl}}"
+            mode="aspectFill"
+          />
+          <text wx:else class="avatar-text">{{avatarText}}</text>
+        </view>
+        <view class="avatar-action-copy">
+          <text class="avatar-action-title">使用微信登录</text>
+        </view>
+        <text class="avatar-action-arrow">›</text>
+        <button
+          class="avatar-picker-hitbox"
+          open-type="chooseAvatar"
+          bindchooseavatar="onChooseAvatar"
+          disabled="{{loading || saving}}"
+          aria-label="使用微信登录"
+        ></button>
+      </view>
+    </view>
+
+    <view class="field-divider"></view>
+
+    <view class="field-group nickname-field">
+      <label class="field-label" for="nickname">昵称</label>
+      <view class="nickname-control">
+        <input
+          id="nickname"
+          class="nickname-input"
+          type="nickname"
+          value="{{nickname}}"
+          maxlength="20"
+          placeholder="请输入昵称"
+          placeholder-class="nickname-placeholder"
+          bindinput="onNicknameInput"
+          bindblur="onNicknameBlur"
+          disabled="{{loading || saving}}"
+          confirm-type="done"
+        />
+        <view
+          wx:if="{{nickname && !loading && !saving}}"
+          class="nickname-clear"
+          bindtap="clearNickname"
+          aria-label="清空昵称"
+          aria-role="button"
+        >
+          <image
+            class="nickname-clear-icon"
+            src="/assets/icons/lucide/svg/x.svg"
+            mode="aspectFit"
+          />
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{formError}}" class="form-error" role="alert">
+      <image
+        class="form-error-icon"
+        src="/assets/icons/lucide/svg/circle-alert.svg"
+        mode="aspectFit"
+      />
+      <text>{{formError}}</text>
+    </view>
+  </view>
+
+</view>

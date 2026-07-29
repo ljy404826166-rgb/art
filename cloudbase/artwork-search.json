@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "searchTermsVersion": "search-terms-v1",
+  "collection": "artworks",
+  "indexes": [
+    {
+      "name": "status_created_tag_keys",
+      "unique": false,
+      "keys": [
+        { "name": "status", "direction": "1" },
+        { "name": "created_at", "direction": "-1" },
+        { "name": "tag_keys", "direction": "1" }
+      ]
+    },
+    {
+      "name": "status_created_search_terms",
+      "unique": false,
+      "keys": [
+        { "name": "status", "direction": "1" },
+        { "name": "created_at", "direction": "-1" },
+        { "name": "search_terms", "direction": "1" }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,91 @@
+<view class="category-page">
+  <view wx:if="{{catalogLoading && groupsView.length === 0}}" class="catalog-loading">
+    分类标签读取中...
+  </view>
+
+  <error-state
+    wx:if="{{catalogError}}"
+    title="分类标签读取失败"
+    message="{{catalogError}}"
+    bindretry="retryCatalog"
+  />
+
+  <view wx:if="{{groupsView.length}}" class="filter-panel">
+    <block wx:for="{{groupsView}}" wx:key="key">
+      <view class="filter-section {{item.expanded ? 'is-expanded' : ''}}">
+        <view class="filter-head">
+          <text class="filter-title">{{item.name}}</text>
+          <view
+            class="expand-button {{item.expanded ? 'is-expanded' : ''}}"
+            data-group="{{item.key}}"
+            bindtap="toggleGroup"
+            hover-class="is-pressed"
+            hover-start-time="0"
+            hover-stay-time="80"
+          >
+            <image class="expand-icon" src="/assets/icons/lucide/svg/chevron-down.svg" mode="aspectFit" />
+          </view>
+        </view>
+
+        <view class="chip-clip" style="{{item.panelStyle}}">
+          <view class="chip-wrap chip-measure">
+            <block wx:for="{{item.tags}}" wx:key="id" wx:for-item="tag">
+              <view
+                class="tag-chip {{tag.selected ? 'is-active' : ''}}"
+                bindtap="selectTag"
+                data-group="{{item.key}}"
+                data-tag-id="{{tag.id}}"
+                hover-class="is-pressed"
+                hover-start-time="0"
+                hover-stay-time="80"
+              >
+                <text class="tag-label">{{tag.label}}</text>
+              </view>
+            </block>
+          </view>
+        </view>
+      </view>
+    </block>
+  </view>
+
+  <view class="result-head">
+    <text class="section-title">分类结果</text>
+    <view wx:if="{{hasActiveFilters}}" class="result-meta">
+      <view
+        class="clear-filter-button"
+        aria-role="button"
+        bindtap="clearFilters"
+      >
+        清除筛选
+      </view>
+    </view>
+  </view>
+
+  <skeleton-card wx:if="{{loading}}" variant="grid" count="{{4}}" />
+
+  <error-state
+    wx:elif="{{resultError}}"
+    title="分类结果读取失败"
+    message="{{resultError}}"
+    bindretry="retryResults"
+  />
+
+  <empty-state
+    wx:elif="{{artworks.length === 0}}"
+    title="暂无符合条件的作品"
+    description="换一个标签或清除筛选试试。"
+  />
+
+  <view wx:else class="gallery-grid">
+    <block wx:for="{{artworks}}" wx:key="id">
+      <artwork-card artwork="{{item}}" bindtapcard="openDetail" />
+    </block>
+  </view>
+
+  <view wx:if="{{loadMoreError}}" class="paging-error">
+    <text class="paging-error-text">{{loadMoreError}}</text>
+    <button class="paging-retry-button" bindtap="retryLoadMore">重试</button>
+  </view>
+  <loading-more wx:elif="{{loadingMore}}" text="继续加载..." />
+  <loading-more wx:elif="{{!hasMore && artworks.length}}" text="已显示当前分类作品" done="{{true}}" />
+</view>

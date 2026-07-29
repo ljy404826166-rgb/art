@@ -1,0 +1,91 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://art-archive.local/schemas/recommendation-channels.schema.json",
+  "title": "RecommendationChannel",
+  "type": "object",
+  "required": [
+    "_id",
+    "channel_key",
+    "title",
+    "display_title",
+    "kind",
+    "source_type",
+    "query_field",
+    "query_value",
+    "channel_status",
+    "auto_feature_eligible",
+    "version"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "channel_key": {
+      "type": "string",
+      "minLength": 1
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "display_title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "kind": {
+      "type": "string",
+      "enum": ["signal", "artist", "controlled_term"]
+    },
+    "source_type": {
+      "type": "string",
+      "enum": [
+        "classification",
+        "controlled_metadata",
+        "artist",
+        "recommendation_signal",
+        "editorial"
+      ]
+    },
+    "query_field": {
+      "type": "string",
+      "enum": ["recommendation_signal_ids", "artist_ids", "classification_ids", "tag_ids"]
+    },
+    "query_value": {
+      "type": "string",
+      "minLength": 1
+    },
+    "channel_mode": {
+      "type": "string",
+      "enum": ["cross_artist", "artist_focus"]
+    },
+    "artist_scope_id": {
+      "type": "string"
+    },
+    "channel_status": {
+      "type": "string",
+      "enum": ["candidate", "published", "long_tail", "archived"]
+    },
+    "auto_feature_eligible": {
+      "type": "boolean"
+    },
+    "artwork_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "unique_artist_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "top_artist_share": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "version": {
+      "type": "string",
+      "const": "recommendation-channels-v1"
+    }
+  }
+}

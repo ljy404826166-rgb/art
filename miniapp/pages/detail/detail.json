@@ -1,0 +1,7 @@
+{
+  "usingComponents": {
+    "artwork-image": "../../components/artwork-image/artwork-image",
+    "error-state": "../../components/error-state/error-state",
+    "skeleton-card": "../../components/skeleton-card/skeleton-card"
+  }
+}

@@ -1,0 +1,104 @@
+.artwork-card-shadow {
+  display: block;
+  position: relative;
+  border-radius: 24rpx;
+  overflow: visible;
+  background: #ffffff;
+  box-shadow: 0 18rpx 44rpx rgba(30, 24, 18, 0.1);
+  transition: width 0.18s ease;
+}
+
+.artwork-shadow-fade {
+  position: absolute;
+  z-index: 0;
+  top: 18rpx;
+  right: 8rpx;
+  bottom: 20rpx;
+  left: 8rpx;
+  border-radius: 24rpx;
+  background: rgba(255, 255, 255, 0.01);
+  box-shadow: 0 24rpx 46rpx rgba(28, 28, 28, 0.07);
+  pointer-events: none;
+}
+
+.artwork-card {
+  display: block;
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+  border-radius: 24rpx;
+  background: #ffffff;
+}
+
+.artwork-card-shadow.grid .artwork-card {
+  height: 100%;
+}
+
+.artwork-card-shadow.row .artwork-card {
+  height: 100%;
+}
+
+.artwork-card-shadow.row {
+  box-shadow: 0 12rpx 30rpx rgba(30, 24, 18, 0.045);
+}
+
+.artwork-card-shadow.row .artwork-shadow-fade {
+  box-shadow: 0 16rpx 34rpx rgba(28, 28, 28, 0.035);
+}
+
+.image-frame {
+  overflow: hidden;
+  background: #eeeae4;
+}
+
+.card-copy {
+  display: grid;
+  gap: 8rpx;
+  min-width: 0;
+  overflow: hidden;
+  padding: 22rpx 24rpx 26rpx;
+}
+
+.artwork-card-shadow.grid .card-copy {
+  height: 136rpx;
+  box-sizing: border-box;
+}
+
+.artwork-card-shadow.row .card-copy {
+  height: 128rpx;
+  overflow: hidden;
+  gap: 6rpx;
+  box-sizing: border-box;
+  padding: 18rpx 22rpx 16rpx;
+}
+
+.artwork-card-shadow.row .card-title {
+  font-size: 31rpx;
+  line-height: 40rpx;
+}
+
+.artwork-card-shadow.row .card-artist {
+  font-size: 24rpx;
+  line-height: 34rpx;
+}
+
+.card-title {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  color: #151515;
+  font-size: 30rpx;
+  font-weight: 800;
+  line-height: 40rpx;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-artist {
+  overflow: hidden;
+  color: #6d6863;
+  font-size: 24rpx;
+  line-height: 32rpx;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

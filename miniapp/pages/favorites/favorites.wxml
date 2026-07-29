@@ -1,0 +1,19 @@
+<view class="library-page">
+  <view class="library-head">
+    <text class="library-title">我的收藏</text>
+    <text class="library-count">{{artworks.length}}件作品</text>
+  </view>
+
+  <empty-state
+    wx:if="{{artworks.length === 0}}"
+    title="还没有收藏作品"
+    description="在作品详情页点击收藏后，会保存在这里。"
+    show-action="{{false}}"
+  />
+
+  <view wx:else class="library-grid">
+    <block wx:for="{{artworks}}" wx:key="id">
+      <artwork-card artwork="{{item}}" bindtapcard="openArtwork" />
+    </block>
+  </view>
+</view>

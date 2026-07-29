@@ -1,0 +1,7 @@
+<view class="empty-state-panel">
+  <view class="empty-mark">
+    <image class="empty-icon" src="{{icon}}" mode="aspectFit" />
+  </view>
+  <text class="empty-title">{{title}}</text>
+  <text wx:if="{{description}}" class="empty-description">{{description}}</text>
+</view>

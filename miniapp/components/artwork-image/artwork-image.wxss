@@ -1,0 +1,78 @@
+.artwork-image-shell {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  min-height: 240rpx;
+  background: #eeeae4;
+}
+
+.artwork-image-shell.rounded {
+  border-radius: inherit;
+}
+
+.artwork-image-shell.circle {
+  border-radius: 999rpx;
+}
+
+.artwork-image-shell.plain {
+  border-radius: 0;
+}
+
+.artwork-image-shell.detail {
+  min-height: 420rpx;
+  background: #171313;
+}
+
+.artwork-image-node {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.artwork-image-shell.detail .artwork-image-node {
+  height: auto;
+}
+
+.artwork-image-node.is-loading {
+  opacity: 0;
+}
+
+.artwork-image-loading {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  background: linear-gradient(90deg, #eeeae4 0%, #f7f5f2 50%, #eeeae4 100%);
+}
+
+.artwork-image-fallback {
+  display: flex;
+  min-height: inherit;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  padding: 32rpx;
+  color: #1f2328;
+  background: linear-gradient(135deg, #f4f1ec, #e7e1da);
+  font-size: 30rpx;
+  font-weight: 800;
+  line-height: 40rpx;
+  text-align: center;
+}
+
+.artwork-image-fallback-text {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.artwork-image-shell.detail .artwork-image-fallback {
+  min-height: 520rpx;
+  padding: 42rpx;
+  font-size: 40rpx;
+  font-weight: 850;
+  line-height: 52rpx;
+}

@@ -1,0 +1,7 @@
+{
+  "navigationBarTitleText": "浏览历史",
+  "usingComponents": {
+    "artwork-card": "../../components/artwork-card/artwork-card",
+    "empty-state": "/components/empty-state/empty-state"
+  }
+}

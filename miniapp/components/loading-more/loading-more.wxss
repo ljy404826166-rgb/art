@@ -1,0 +1,20 @@
+.loading-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+  padding: 30rpx 28rpx 18rpx;
+  color: #8a837d;
+  font-size: 24rpx;
+  line-height: 34rpx;
+}
+
+.loading-more.is-done {
+  color: #b0aaa3;
+}
+
+.loading-icon {
+  display: block;
+  width: 26rpx;
+  height: 26rpx;
+}

@@ -1,0 +1,100 @@
+<view class="artists-page">
+  <view class="search-shell">
+    <view class="search-icon" aria-label="search">
+      <image class="search-glyph" src="/assets/icons/lucide/svg/search.svg" mode="aspectFit" />
+    </view>
+    <input
+      class="search-input"
+      value="{{query}}"
+      placeholder="搜索画家、流派、题材..."
+      placeholder-class="search-placeholder"
+      confirm-type="search"
+      bindinput="handleSearchInput"
+    />
+    <view
+      wx:if="{{query}}"
+      class="search-action"
+      aria-role="button"
+      bindtap="clearSearch"
+    >
+      清除
+    </view>
+  </view>
+
+  <view class="filter-panel">
+    <block wx:for="{{groups}}" wx:key="key">
+      <view class="filter-section {{item.expanded ? 'is-expanded' : ''}}">
+        <view class="filter-head">
+          <text class="filter-title">{{item.name}}</text>
+          <view
+            class="expand-button {{item.expanded ? 'is-expanded' : ''}}"
+            data-group="{{item.key}}"
+            bindtap="toggleGroup"
+            hover-class="is-pressed"
+            hover-start-time="0"
+            hover-stay-time="80"
+          >
+            <image class="expand-icon" src="/assets/icons/lucide/svg/chevron-down.svg" mode="aspectFit" />
+          </view>
+        </view>
+
+        <view class="chip-clip" style="{{item.panelStyle}}">
+          <view class="chip-wrap chip-measure">
+            <block wx:for="{{item.tags}}" wx:key="id" wx:for-item="tag">
+              <view
+                class="tag-chip {{tag.selected ? 'is-active' : ''}}"
+                bindtap="selectTag"
+                data-group="{{item.key}}"
+                data-tag-id="{{tag.id}}"
+                hover-class="is-pressed"
+                hover-start-time="0"
+                hover-stay-time="80"
+              >
+                <text class="tag-label">{{tag.label}}</text>
+              </view>
+            </block>
+          </view>
+        </view>
+      </view>
+    </block>
+  </view>
+
+  <view class="result-head">
+    <text class="section-title">画家结果</text>
+  </view>
+
+  <skeleton-card wx:if="{{loading}}" variant="grid" count="{{4}}" />
+
+  <error-state
+    wx:elif="{{error}}"
+    title="画家云数据库读取失败"
+    message="{{error}}"
+    retry-text="重试"
+    show-retry="{{true}}"
+    bindretry="loadArtists"
+  />
+
+  <empty-state
+    wx:elif="{{artists.length === 0}}"
+    title="暂无符合条件的画家"
+    description="换一个名称、地区、流派或作品题材试试。"
+  />
+
+  <view wx:else>
+    <view class="artist-grid">
+      <block wx:for="{{artists}}" wx:key="id">
+        <view class="artist-card" data-id="{{item.id}}" bindtap="openArtist">
+          <artist-portrait artist="{{item}}" size="list" lazy-load="{{true}}" />
+          <view class="artist-copy">
+            <text class="artist-name">{{item.nameZh}}</text>
+            <text class="artist-en">{{item.nameEn}}</text>
+            <text class="artist-meta">{{item.country}} · {{item.styles[0]}} · {{item.lifespan}}</text>
+            <text wx:if="{{item.artworkCount}}" class="artist-count">{{item.artworkCount}}件作品</text>
+          </view>
+        </view>
+      </block>
+    </view>
+    <view wx:if="{{loadingMore}}" class="artist-more-state">加载更多画家...</view>
+    <view wx:elif="{{!hasMoreArtists && artists.length > 0}}" class="artist-more-state is-end">已显示全部画家</view>
+  </view>
+</view>
