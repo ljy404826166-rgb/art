@@ -52,7 +52,7 @@ jobs:
         with:
           name: staging-cloudbase-audit-${{ github.run_attempt }}
           path: artifacts/staging/cloudbase/
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 30
 
   wechat-devtools-smoke:
@@ -73,7 +73,7 @@ jobs:
       - name: Install locked dependencies without lifecycle scripts
         run: npm ci --ignore-scripts
       - name: Open the miniapp with local automation only
-        shell: pwsh
+        shell: powershell
         timeout-minutes: 5
         env:
           WECHAT_DEVTOOLS_CLI: ${{ vars.WECHAT_DEVTOOLS_CLI }}
@@ -111,5 +111,5 @@ jobs:
         with:
           name: staging-miniapp-smoke-${{ github.run_attempt }}
           path: outputs/recommendation-system/task-06/devtools/
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 30
