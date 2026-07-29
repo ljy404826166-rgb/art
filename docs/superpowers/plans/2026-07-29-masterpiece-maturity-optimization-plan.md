@@ -129,7 +129,7 @@ Masterpiece 已经具备完整的作品浏览、搜索、分类、画家、收�
 | 任务三 | 修复生产分类与推荐数据漂移 | P0 | 已完成 | 任务二 |
 | 任务四 | 治理依赖安全风险 | P0/P1 | 已完成 | 任务二 |
 | 任务五 | 提升 CloudBase 审计工具可靠性 | P1 | 已完成 | 任务二 |
-| 任务六 | 建立持续集成和分层发布门禁 | P1 | 已完成（待远端启用） | 任务三、四、五 |
+| 任务六 | 建立持续集成和分层发布门禁 | P1 | 已完成 | 任务三、四、五 |
 | 任务七 | 建立产品观测与推荐质量闭环 | P1 | 待执行 | 任务六 |
 | 任务八 | 完成可访问性与交互命中区治理 | P2 | 待执行 | 任务六 |
 | 任务九 | 建立设计令牌和共享组件 | P2 | 待执行 | 任务八 |
@@ -655,8 +655,20 @@ npm run build
 - 干净环境执行 `npm ci --ignore-scripts` 与 `npm run ci:pr` 通过：528 项 Node 测试、7 项单元测试、1 项 Chromium E2E、Vite 构建及全部静态检查均通过；
 - 2026-07-29 20:31 的微信开发者工具真实冒烟报告为 `ok: true`。
 
-远端 GitHub Environment、Secret、Variable、自托管 runner 和 `main` required checks
-仍须由仓库管理员启用，因此当前状态记为“已完成（待远端启用）”。详细配置和发布操作见
+远端启用已于 2026-07-29 完成：
+
+- `main` 已要求 PR、最新分支、质量门禁和生产依赖审计通过；
+- `staging-readonly` 与 `production-readonly` Environment、独立 CAM 审计身份及
+  GitHub Secret 已配置；
+- `production-readonly` 已配置人工 reviewer；
+- Windows 自托管 runner 已注册、在线并设置为用户登录后自动启动；
+- 合并后运行
+  [30465059137](https://github.com/ljy404826166-rgb/art/actions/runs/30465059137)
+  的 staging CloudBase 全库审计与微信开发者工具真实冒烟均通过，证据已归档；
+- 正式发布工作流已在 `main` 上受保护并可手动触发，真实版本、回滚清单与
+  Android/iOS 人工签字将在任务十一正式发布验收时提供，不使用伪造输入提前放行。
+
+因此任务六状态更新为“已完成”。详细配置、权限边界和远端证据见
 `docs/operations/2026-07-29-task-06-ci-release-gates.md`。
 
 ---
