@@ -5,6 +5,10 @@ import path from "node:path";
 import { describe, it } from "node:test";
 
 import { runBuild } from "./build-classification-v6-migration.mjs";
+import {
+  buildControlledVocabulary,
+  CONTROLLED_VOCABULARY_VERSION,
+} from "./controlled-vocabulary-v1.mjs";
 
 const fixture = {
   artworks: [
@@ -31,8 +35,14 @@ const fixture = {
 describe("build-classification-v6-migration", () => {
   it("writes dry-run, review, and rollback artifacts without a cloud mutation", async () => {
     const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), "classification-v6-"));
-    const vocabularyPath = path.resolve(
-      "outputs/recommendation-system/task-02/controlled-vocabulary-v1.json",
+    const vocabularyPath = path.join(outputDir, "controlled-vocabulary-v1.json");
+    fs.writeFileSync(
+      vocabularyPath,
+      JSON.stringify({
+        version: CONTROLLED_VOCABULARY_VERSION,
+        terms: buildControlledVocabulary(),
+      }),
+      "utf8",
     );
     const { report } = await runBuild({
       envId: "fixture",

@@ -31,6 +31,13 @@ const REQUIRED_REVIEW_FIELDS = [
   "tags",
 ];
 
+function resolveCliPath(value) {
+  if (path.isAbsolute(value) || path.win32.isAbsolute(value) || path.posix.isAbsolute(value)) {
+    return value;
+  }
+  return path.resolve(value);
+}
+
 export function parsePublishArgs(argv) {
   const options = {
     run: false,
@@ -87,8 +94,8 @@ export function parsePublishArgs(argv) {
       throw new Error(`Missing value for --${name}`);
     if (inlineValue === undefined) index += 1;
 
-    if (name === "input") options.input = path.resolve(value);
-    else if (name === "report-dir") options.reportDir = path.resolve(value);
+    if (name === "input") options.input = resolveCliPath(value);
+    else if (name === "report-dir") options.reportDir = resolveCliPath(value);
     else if (name === "status") options.status = value;
     else if (name === "cos-bucket") options.cosBucket = value;
     else if (name === "cos-region") options.cosRegion = value;

@@ -179,6 +179,13 @@ const VALUE_FLAGS = new Set([
   "max-series-per-run",
 ]);
 
+function resolveCliPath(value) {
+  if (path.isAbsolute(value) || path.win32.isAbsolute(value) || path.posix.isAbsolute(value)) {
+    return value;
+  }
+  return path.resolve(value);
+}
+
 export function parseArgs(argv) {
   const [command, ...rest] = argv;
   const options = {
@@ -322,7 +329,7 @@ export function parseArgs(argv) {
     if (inlineValue === undefined) index += 1;
 
     if (name === "bucket") options.bucket = value;
-    if (name === "evidence-output") options.evidenceOutput = path.resolve(value);
+    if (name === "evidence-output") options.evidenceOutput = resolveCliPath(value);
     if (name === "cos-bucket") options.cosBucket = value;
     if (name === "cos-region") options.cosRegion = value;
     if (name === "cos-prefix") options.cosPrefix = value;
@@ -350,21 +357,21 @@ export function parseArgs(argv) {
     if (name === "scan-artist-start")
       options.scanArtistStart = parsePositiveInteger(value, "--scan-artist-start");
     if (name === "artists-url") options.artistsUrl = normalizeArtistsUrl(value);
-    if (name === "artist-priority-list") options.artistPriorityList = path.resolve(value);
+    if (name === "artist-priority-list") options.artistPriorityList = resolveCliPath(value);
     if (name === "per-artist") options.perArtist = parseNonNegativeInteger(value, "--per-artist");
     if (name === "model") options.model = value;
-    if (name === "out-dir") options.outputDir = path.resolve(value);
-    if (name === "output") options.output = path.resolve(value);
+    if (name === "out-dir") options.outputDir = resolveCliPath(value);
+    if (name === "output") options.output = resolveCliPath(value);
     if (name === "pages") options.pages = parsePositiveInteger(value, "--pages");
     if (name === "per-page") options.perPage = parsePositiveInteger(value, "--per-page");
     if (name === "provider") options.provider = value;
     if (name === "start") options.start = parsePositiveInteger(value, "--start");
     if (name === "status") options.status = value;
     if (name === "user-agent") options.userAgent = value;
-    if (name === "cache-dir") options.cacheDir = path.resolve(value);
-    if (name === "checkpoint-dir") options.checkpointDir = path.resolve(value);
-    if (name === "famous-list") options.famousList = path.resolve(value);
-    if (name === "existing-index") options.existingIndex = path.resolve(value);
+    if (name === "cache-dir") options.cacheDir = resolveCliPath(value);
+    if (name === "checkpoint-dir") options.checkpointDir = resolveCliPath(value);
+    if (name === "famous-list") options.famousList = resolveCliPath(value);
+    if (name === "existing-index") options.existingIndex = resolveCliPath(value);
     if (name === "max-artist-per-run")
       options.maxArtistPerRun = parsePositiveInteger(value, "--max-artist-per-run");
     if (name === "max-series-per-run")

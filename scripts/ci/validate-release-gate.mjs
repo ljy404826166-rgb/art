@@ -39,11 +39,17 @@ export function parseArgs(args) {
 }
 
 function repositoryPath(repositoryRoot, relativePath, label) {
-  if (!relativePath || path.isAbsolute(relativePath)) {
+  if (
+    !relativePath ||
+    path.isAbsolute(relativePath) ||
+    path.win32.isAbsolute(relativePath) ||
+    path.posix.isAbsolute(relativePath)
+  ) {
     throw new Error(`${label} must be a non-empty repository-relative path.`);
   }
   const resolvedRoot = path.resolve(repositoryRoot);
-  const resolvedPath = path.resolve(resolvedRoot, relativePath);
+  const portableRelativePath = relativePath.replaceAll("\\", path.sep).replaceAll("/", path.sep);
+  const resolvedPath = path.resolve(resolvedRoot, portableRelativePath);
   if (resolvedPath !== resolvedRoot && !resolvedPath.startsWith(`${resolvedRoot}${path.sep}`)) {
     throw new Error(`${label} must remain inside the repository.`);
   }

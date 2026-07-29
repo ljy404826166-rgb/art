@@ -5,6 +5,10 @@ import path from "node:path";
 import test from "node:test";
 
 import { runBuild } from "./build-recommendation-signals-v1.mjs";
+import {
+  buildControlledVocabulary,
+  CONTROLLED_VOCABULARY_VERSION,
+} from "./controlled-vocabulary-v1.mjs";
 
 function writeJsonl(filePath, rows) {
   fs.writeFileSync(filePath, `${rows.map((row) => JSON.stringify(row)).join("\n")}\n`, "utf8");
@@ -14,7 +18,16 @@ test("builds signal assignments, artist channels, eligibility, and rollback arti
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "recommendation-signals-"));
   const task3Dir = path.join(root, "task-03");
   const outputDir = path.join(root, "task-04");
+  const vocabularyPath = path.join(root, "controlled-vocabulary-v1.json");
   fs.mkdirSync(task3Dir, { recursive: true });
+  fs.writeFileSync(
+    vocabularyPath,
+    JSON.stringify({
+      version: CONTROLLED_VOCABULARY_VERSION,
+      terms: buildControlledVocabulary(),
+    }),
+    "utf8",
+  );
   const normalized = Array.from({ length: 8 }, (_, index) => ({
     _id: `artwork-${index}`,
     classification_ids: ["style-impressionism"],
@@ -50,9 +63,7 @@ test("builds signal assignments, artist channels, eligibility, and rollback arti
     envId: "fixture",
     task3Dir,
     outputDir,
-    vocabularyPath: path.resolve(
-      "outputs/recommendation-system/task-02/controlled-vocabulary-v1.json",
-    ),
+    vocabularyPath,
     generatedAt: "2026-07-28T00:00:00.000Z",
     dataProvider: async () => ({
       artworks: normalized.map((artwork) => ({
