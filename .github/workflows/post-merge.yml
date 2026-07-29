@@ -72,9 +72,9 @@ jobs:
           cache: npm
       - name: Install locked dependencies without lifecycle scripts
         run: npm ci --ignore-scripts
-      - name: Restart WeChat DevTools with clean automation
+      - name: Restart WeChat DevTools and run recommendation smoke
         shell: powershell
-        timeout-minutes: 5
+        timeout-minutes: 8
         env:
           WECHAT_DEVTOOLS_CLI: ${{ vars.WECHAT_DEVTOOLS_CLI }}
         run: |
@@ -103,9 +103,7 @@ jobs:
           if (-not $ready) {
             throw "WeChat DevTools automation port 9420 did not become ready."
           }
-      - name: Run miniapp recommendation smoke
-        timeout-minutes: 8
-        run: npm run recommendation:devtools-smoke
+          npm run recommendation:devtools-smoke
       - name: Archive miniapp smoke evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
