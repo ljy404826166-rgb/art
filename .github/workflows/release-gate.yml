@@ -162,18 +162,26 @@ jobs:
           $projectPath = Join-Path $env:GITHUB_WORKSPACE "miniapp"
           $artifactPath = Join-Path $env:GITHUB_WORKSPACE "artifacts\release\miniapp"
           New-Item -ItemType Directory -Force -Path $artifactPath | Out-Null
-          $automationReady = Test-NetConnection `
-            -ComputerName 127.0.0.1 `
-            -Port 9420 `
-            -InformationLevel Quiet
-          if (-not $automationReady) {
-            & $env:WECHAT_DEVTOOLS_CLI auto `
-              --project $projectPath `
-              --auto-port 9420 `
-              --trust-project
-            if ($LASTEXITCODE -ne 0) {
-              throw "WeChat DevTools automation failed to start."
+          & $env:WECHAT_DEVTOOLS_CLI quit
+          Start-Sleep -Seconds 3
+          & $env:WECHAT_DEVTOOLS_CLI auto `
+            --project $projectPath `
+            --port 32070 `
+            --auto-port 9420 `
+            --trust-project
+          if ($LASTEXITCODE -ne 0) {
+            throw "WeChat DevTools automation failed to start."
+          }
+          $ready = $false
+          for ($attempt = 0; $attempt -lt 30; $attempt += 1) {
+            if (Test-NetConnection 127.0.0.1 -Port 9420 -InformationLevel Quiet) {
+              $ready = $true
+              break
             }
+            Start-Sleep -Seconds 2
+          }
+          if (-not $ready) {
+            throw "WeChat DevTools automation port 9420 did not become ready."
           }
           npm run recommendation:devtools-smoke
           & $env:WECHAT_DEVTOOLS_CLI preview `

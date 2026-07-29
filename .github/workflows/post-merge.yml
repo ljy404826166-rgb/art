@@ -72,7 +72,7 @@ jobs:
           cache: npm
       - name: Install locked dependencies without lifecycle scripts
         run: npm ci --ignore-scripts
-      - name: Open the miniapp with local automation only
+      - name: Restart WeChat DevTools with clean automation
         shell: powershell
         timeout-minutes: 5
         env:
@@ -82,18 +82,26 @@ jobs:
             throw "WECHAT_DEVTOOLS_CLI repository variable is required."
           }
           $projectPath = Join-Path $env:GITHUB_WORKSPACE "miniapp"
-          $automationReady = Test-NetConnection `
-            -ComputerName 127.0.0.1 `
-            -Port 9420 `
-            -InformationLevel Quiet
-          if (-not $automationReady) {
-            & $env:WECHAT_DEVTOOLS_CLI auto `
-              --project $projectPath `
-              --auto-port 9420 `
-              --trust-project
-            if ($LASTEXITCODE -ne 0) {
-              throw "WeChat DevTools automation failed to start."
+          & $env:WECHAT_DEVTOOLS_CLI quit
+          Start-Sleep -Seconds 3
+          & $env:WECHAT_DEVTOOLS_CLI auto `
+            --project $projectPath `
+            --port 32070 `
+            --auto-port 9420 `
+            --trust-project
+          if ($LASTEXITCODE -ne 0) {
+            throw "WeChat DevTools automation failed to start."
+          }
+          $ready = $false
+          for ($attempt = 0; $attempt -lt 30; $attempt += 1) {
+            if (Test-NetConnection 127.0.0.1 -Port 9420 -InformationLevel Quiet) {
+              $ready = $true
+              break
             }
+            Start-Sleep -Seconds 2
+          }
+          if (-not $ready) {
+            throw "WeChat DevTools automation port 9420 did not become ready."
           }
       - name: Run miniapp recommendation smoke
         timeout-minutes: 8
